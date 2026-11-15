@@ -1,0 +1,49 @@
+# === Secrets, API Tokens & Local Environment ===
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+*.secret
+*.token
+*secret*.json
+*credentials*.json
+data/config.json
+data/config.*.json
+config.local.*
+
+# === Local Databases & User Runtime Data (Do Not Track) ===
+data/*.db
+data/*.db-wal
+data/*.db-shm
+data/*.sqlite
+data/*.sqlite3
+data/oc_avatars/
+
+# === Generated Artworks, Artist Previews & Large Media ===
+outputs/
+artists/
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.gif
+*.psd
+*.zip
+*.tar
+*.gz
+
+# === Logs, Temp, Checkpoints & Caches ===
+logs/
+tmp/
+*.log
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.DS_Store
+Thumbs.db

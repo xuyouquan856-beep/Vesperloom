@@ -1,0 +1,5 @@
+sunset, lens flare
+backlighting, rim lighting
+dappled sunlight, bokeh
+moonlight, starry sky
+tyndall effect, golden hour
