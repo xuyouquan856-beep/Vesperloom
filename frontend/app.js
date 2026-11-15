@@ -361,12 +361,12 @@ function renderModelSelectMenu() {
         <button type="button" onclick="selectModel('${m.id}')" class="glass-select-option ${active}">
           <div class="flex flex-col gap-0.5 min-w-0">
             <div class="flex items-center gap-1.5">
-              <span class="px-1.5 py-0.2 rounded border text-[10px] font-mono ${famCls}">${m.short_name}</span>
+              <span class="px-1.5 py-0.5 rounded border text-[12px] font-mono ${famCls}">${m.short_name}</span>
               <span class="font-semibold truncate">${escapeHtml(m.name)}</span>
             </div>
-            <span class="text-[10px] text-[var(--muted-foreground)] line-clamp-1">${escapeHtml(m.description)}</span>
+            <span class="text-[12px] text-[var(--muted-foreground)] line-clamp-1">${escapeHtml(m.description)}</span>
           </div>
-          <span class="text-[10px] px-1.5 py-0.5 rounded glass-field shrink-0 font-mono text-emerald-300">${escapeHtml(m.badge)}</span>
+          <span class="text-[12px] px-1.5 py-0.5 rounded glass-field shrink-0 font-mono text-emerald-300">${escapeHtml(m.badge)}</span>
         </button>
       `;
     })
@@ -462,7 +462,7 @@ function selectModel(modelId, notify = true) {
     // V5: Neither Vibe nor Precise Ref is supported
     if (refCapPill) {
       refCapPill.textContent = `${spec.short_name} 暂不支持参考图`;
-      refCapPill.className = "text-[10px] px-2 py-0.5 rounded-md glass-field text-amber-300";
+      refCapPill.className = "text-[12px] px-2 py-0.5 rounded-md glass-field text-amber-300";
     }
     v5UnsupBox?.classList.remove("hidden");
     vibeSupBox?.classList.add("hidden");
@@ -472,14 +472,14 @@ function selectModel(modelId, notify = true) {
     if (spec.vibe_raw_image_free) {
       if (refCapPill) {
         refCapPill.textContent = "✨ V3 专属：原图 Vibe 0点数免费";
-        refCapPill.className = "text-[10px] px-2 py-0.5 rounded-md glass-field text-emerald-300";
+        refCapPill.className = "text-[12px] px-2 py-0.5 rounded-md glass-field text-emerald-300";
       }
       if (vibeCostHint) vibeCostHint.textContent = "上传任意 PNG/JPG 均 0 Anlas 免费";
       if (vibeUploadLabel) vibeUploadLabel.textContent = "📂 上传参考图 PNG/JPG (V3 0点数免费)";
     } else {
       if (refCapPill) {
         refCapPill.textContent = spec.supports_precise_ref ? "支持 Vibe + Precise 参考" : "支持 Vibe 风格参考";
-        refCapPill.className = "text-[10px] px-2 py-0.5 rounded-md glass-field text-sky-300";
+        refCapPill.className = "text-[12px] px-2 py-0.5 rounded-md glass-field text-sky-300";
       }
       if (vibeCostHint) vibeCostHint.textContent = "导入 .naiv4vibe 0点数免费 (原图编码需 2 Anlas)";
       if (vibeUploadLabel) vibeUploadLabel.textContent = "📂 导入 .naiv4vibe (0点数) 或参考图";
@@ -609,8 +609,8 @@ function renderResolutionButtons() {
         : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]";
       return `
         <button type="button" onclick="selectResolution(${r.width}, ${r.height})" class="spring-btn py-1.5 px-1 rounded-xl glass-field text-center ${cls}">
-          <div class="text-xs leading-tight">${escapeHtml(r.label)}</div>
-          <div class="text-[10px] font-mono opacity-80">${r.sub}</div>
+          <div class="text-[12.5px] leading-tight">${escapeHtml(r.label)}</div>
+          <div class="text-[12px] font-mono opacity-80">${r.sub}</div>
         </button>
       `;
     })
@@ -724,8 +724,8 @@ async function updateCostEstimate() {
     if (badge) {
       badge.textContent = est.badge;
       badge.className = est.is_opus_free
-        ? "hidden sm:inline-block text-[11px] px-2.5 py-1 rounded-xl glass-field text-emerald-300 font-mono whitespace-nowrap"
-        : "hidden sm:inline-block text-[11px] px-2.5 py-1 rounded-xl glass-field text-amber-300 font-mono whitespace-nowrap";
+        ? "hidden sm:inline-block text-[12px] px-2 py-1 rounded-xl glass-field text-emerald-300 font-mono whitespace-nowrap"
+        : "hidden sm:inline-block text-[12px] px-2 py-1 rounded-xl glass-field text-amber-300 font-mono whitespace-nowrap";
     }
   } catch (e) {}
 }
@@ -947,7 +947,7 @@ function renderSnippetsBar() {
           ? `<span onclick="event.stopPropagation();deleteSnippetRecord(${s.id})" class="ml-1 text-rose-300/80 hover:text-rose-300" title="删除自定义积木">✕</span>`
           : "";
       return `
-      <button type="button" onclick="toggleSnippetTag('${escapeHtml(s.tags)}')" class="spring-btn inline-flex items-center px-2.5 py-1 rounded-xl glass-field text-[11px] hover:border-[var(--glass-border-strong)]">
+      <button type="button" onclick="toggleSnippetTag('${escapeHtml(s.tags)}')" class="spring-btn inline-flex items-center px-2.5 py-1 rounded-xl glass-field text-[12px] hover:border-[var(--glass-border-strong)]">
         <span>${escapeHtml(s.label)}</span>${delBtn}
       </button>
     `;
@@ -1018,7 +1018,7 @@ function renderCharacterSlots() {
   const wrap = document.getElementById("char-slots-list");
   if (!wrap) return;
   if (!state.characters.length) {
-    wrap.innerHTML = `<div class="text-[11px] text-[var(--muted-foreground)]">单画面模式中。多人同框可点击「+ 添加角色」按 5×5 坐标拆分站位，并可在中央画布直接拖拽彩色标点！</div>`;
+    wrap.innerHTML = `<div class="text-[12.5px] text-[var(--muted-foreground)]">单画面模式中。多人同框可点击「+ 添加角色」按 5×5 坐标拆分站位，并可在中央画布直接拖拽彩色标点！</div>`;
     renderCharStageOverlay();
     return;
   }
@@ -1714,13 +1714,13 @@ function renderWorkbenchHistory() {
           <img src="${item.image_url}" alt="thumb" class="w-14 h-20 rounded-lg object-cover shrink-0 border border-white/15" />
           <div class="min-w-0 flex-1 space-y-1">
             <div class="flex items-center justify-between gap-1">
-              <span class="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 font-mono">${escapeHtml(item.model_short)}</span>
-              <span class="text-[10px] font-mono text-[var(--muted-foreground)]">#${item.seed}</span>
+              <span class="text-[12px] px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 font-mono">${escapeHtml(item.model_short)}</span>
+              <span class="text-[12px] font-mono text-[var(--muted-foreground)]">#${item.seed}</span>
             </div>
-            <p class="text-[11px] text-[var(--muted-foreground)] line-clamp-2 font-mono">${escapeHtml(item.prompt)}</p>
+            <p class="text-[12.5px] text-[var(--muted-foreground)] line-clamp-2 font-mono">${escapeHtml(item.prompt)}</p>
           </div>
         </div>
-        <div class="grid grid-cols-3 gap-1.5 text-[11px]">
+        <div class="grid grid-cols-3 gap-1.5 text-[12px]">
           <button onclick="setStageFromGalleryItem(state.gallery.find(x=>x.id===${item.id}), true)" class="spring-btn py-1 rounded-lg glass-field hover:border-sky-400">恢复配方</button>
           <button onclick="sendGalleryItemToI2I(${item.id})" class="spring-btn py-1 rounded-lg glass-field hover:border-sky-400">送入重绘</button>
           <button onclick="rerollGalleryItem(${item.id})" class="spring-btn py-1 rounded-lg glass-field hover:border-sky-400">换种再抽</button>
@@ -1979,27 +1979,27 @@ function renderArtistsGrid() {
       const previewHtml = a.preview_url
         ? `<img src="${a.preview_url}" alt="${escapeHtml(a.name)}" class="w-full h-52 object-cover object-top transition-transform duration-500 group-hover:scale-105" />`
         : `<div class="w-full h-52 flex flex-col items-center justify-center p-4 text-center" style="background:linear-gradient(135deg,${c1},${c2})">
-             <div class="text-sm font-bold text-white/95">${escapeHtml(a.name)}</div>
-             <div class="text-[11px] font-mono text-white/75 mt-1">${escapeHtml(a.tag)}</div>
-             <div class="mt-3 text-[10px] px-2.5 py-1 rounded-full bg-black/35 text-white/90">点击下方「⚡ 实测跑卡」生成真图</div>
+             <div class="ui-title text-white/95">${escapeHtml(a.name)}</div>
+             <div class="text-[12.5px] font-mono text-white/85 mt-1">${escapeHtml(a.tag)}</div>
+             <div class="mt-3 text-[12px] px-2.5 py-1 rounded-full bg-black/35 text-white/95">点击下方「⚡ 实测跑卡」生成真图</div>
            </div>`;
 
       return `
         <div class="rounded-2xl glass-field overflow-hidden flex flex-col justify-between group hover:border-[var(--glass-border-strong)] transition-all">
           <div class="relative overflow-hidden">
             ${previewHtml}
-            <span class="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-lg liquid-popover text-[10px] font-medium">${escapeHtml(a.category)}</span>
-            <button onclick="toggleArtistFav(${a.id})" class="spring-btn absolute top-2.5 right-2.5 w-7 h-7 rounded-full liquid-popover flex items-center justify-center text-xs ${a.favorite ? "text-amber-300" : "text-white/70"}">
+            <span class="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-lg liquid-popover text-[12px] font-medium">${escapeHtml(a.category)}</span>
+            <button onclick="toggleArtistFav(${a.id})" class="spring-btn absolute top-2.5 right-2.5 w-7 h-7 rounded-full liquid-popover flex items-center justify-center text-sm ${a.favorite ? "text-amber-300" : "text-white/70"}">
               ${a.favorite ? "★" : "☆"}
             </button>
           </div>
           <div class="p-3 space-y-2">
             <div class="flex items-center justify-between gap-1">
-              <span class="font-semibold text-xs truncate">${escapeHtml(a.name)}</span>
-              <span class="selectable-text text-[10px] font-mono text-sky-300 truncate">${escapeHtml(a.tag)}</span>
+              <span class="ui-section truncate">${escapeHtml(a.name)}</span>
+              <span class="selectable-text text-[12px] font-mono text-sky-300 truncate">${escapeHtml(a.tag)}</span>
             </div>
-            <p class="text-[11px] text-[var(--muted-foreground)] line-clamp-2 leading-relaxed">${escapeHtml(a.desc)}</p>
-            <div class="grid grid-cols-3 gap-1.5 pt-1 text-[11px]">
+            <p class="text-[12.5px] text-[var(--muted-foreground)] line-clamp-2 leading-relaxed">${escapeHtml(a.desc)}</p>
+            <div class="grid grid-cols-3 gap-1.5 pt-1 text-[12.5px]">
               <button onclick="useSingleArtist('${escapeHtml(a.tag)}', '${escapeHtml(a.name)}')" class="spring-btn py-1 rounded-lg glass-field hover:border-sky-400">单用画风</button>
               <button onclick="addArtistToMixer('${escapeHtml(a.tag)}', '${escapeHtml(a.name)}')" class="spring-btn py-1 rounded-lg glass-field text-sky-300 hover:border-sky-400">+ 混搭</button>
               <button id="gen-card-btn-${a.id}" onclick="generateArtistCard(${a.id})" class="spring-btn py-1 rounded-lg glass-field text-emerald-300 hover:border-emerald-400" title="调用 NovelAI 官方接口 0点数生成该画师标准预览图">⚡ 实测跑卡</button>
@@ -2094,7 +2094,7 @@ function renderMixer() {
   if (!wrap || !out) return;
 
   if (!state.mixerItems.length) {
-    wrap.innerHTML = `<div class="text-xs text-[var(--muted-foreground)] py-4 text-center">从左侧点击「+ 混搭」添加多位画师调配比例</div>`;
+    wrap.innerHTML = `<div class="ui-body text-[var(--muted-foreground)] py-4 text-center">从左侧点击「+ 混搭」添加多位画师调配比例</div>`;
     out.textContent = "尚未选择混搭画师";
     return;
   }
@@ -2103,13 +2103,13 @@ function renderMixer() {
     .map(
       (it, idx) => `
       <div class="p-2.5 rounded-xl glass-field space-y-1.5">
-        <div class="flex items-center justify-between text-xs">
-          <span class="font-semibold">${escapeHtml(it.name)} <span class="text-[10px] font-mono text-[var(--muted-foreground)]">(${escapeHtml(it.tag)})</span></span>
-          <button onclick="state.mixerItems.splice(${idx},1);renderMixer()" class="text-[11px] text-rose-300">移除</button>
+        <div class="flex items-center justify-between ui-body">
+          <span class="font-semibold">${escapeHtml(it.name)} <span class="text-[12px] font-mono text-[var(--muted-foreground)]">(${escapeHtml(it.tag)})</span></span>
+          <button onclick="state.mixerItems.splice(${idx},1);renderMixer()" class="text-[12.5px] text-rose-300">移除</button>
         </div>
         <div class="flex items-center gap-2.5">
           <input type="range" min="0.1" max="2.0" step="0.05" value="${it.weight}" oninput="state.mixerItems[${idx}].weight=parseFloat(this.value);renderMixer()" class="flex-1" />
-          <span class="font-mono text-xs w-10 text-right text-sky-300">${Number(it.weight).toFixed(2)}</span>
+          <span class="font-mono text-[13px] w-11 text-right text-sky-300">${Number(it.weight).toFixed(2)}</span>
         </div>
       </div>
     `
@@ -2158,12 +2158,12 @@ function renderMixPresets() {
   wrap.innerHTML = state.mixPresets
     .map(
       p => `
-      <div class="flex items-center justify-between gap-2 p-2 rounded-xl glass-field text-xs">
+      <div class="flex items-center justify-between gap-2 p-2 rounded-xl glass-field text-[13px]">
         <div class="truncate">
           <div class="font-medium truncate">${escapeHtml(p.name)}</div>
-          <div class="text-[10px] font-mono text-[var(--muted-foreground)] truncate">${escapeHtml(formatMixString(p.items || []))}</div>
+          <div class="text-[12px] font-mono text-[var(--muted-foreground)] truncate">${escapeHtml(formatMixString(p.items || []))}</div>
         </div>
-        <button onclick='loadMixPreset(${JSON.stringify(p.items || [])})' class="spring-btn px-2.5 py-1 rounded-lg glass-field text-[11px] text-sky-300 shrink-0">载入</button>
+        <button onclick='loadMixPreset(${JSON.stringify(p.items || [])})' class="spring-btn px-2.5 py-1 rounded-lg glass-field text-[12px] text-sky-300 shrink-0">载入</button>
       </div>
     `
     )
@@ -2316,7 +2316,7 @@ async function renderFullGallery(reloadFromServer = false) {
   }
 
   if (!items.length) {
-    grid.innerHTML = `<div class="col-span-full text-center py-12 text-xs text-[var(--muted-foreground)]">没有匹配的本地图库记录</div>`;
+    grid.innerHTML = `<div class="col-span-full text-center py-12 ui-body text-[var(--muted-foreground)]">没有匹配的本地图库记录</div>`;
     return;
   }
 
@@ -2326,19 +2326,19 @@ async function renderFullGallery(reloadFromServer = false) {
       <div class="rounded-2xl glass-field overflow-hidden flex flex-col justify-between group hover:border-[var(--glass-border-strong)] transition-all">
         <div class="relative overflow-hidden bg-black/20">
           <img src="${it.image_url}" alt="artwork" class="w-full h-60 object-cover object-top transition-transform duration-500 group-hover:scale-105 cursor-pointer" onclick="setStageFromGalleryItem(state.gallery.find(x=>x.id===${it.id}), false);switchTab('workbench')" />
-          <span class="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-lg liquid-popover text-[10px] font-mono text-sky-300">${escapeHtml(it.model_short)}</span>
-          <button onclick="toggleGalleryFav(${it.id})" class="spring-btn absolute top-2.5 right-2.5 w-7 h-7 rounded-full liquid-popover flex items-center justify-center text-xs ${it.favorite ? "text-amber-300" : "text-white/70"}">
+          <span class="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-lg liquid-popover text-[12px] font-mono text-sky-300">${escapeHtml(it.model_short)}</span>
+          <button onclick="toggleGalleryFav(${it.id})" class="spring-btn absolute top-2.5 right-2.5 w-7 h-7 rounded-full liquid-popover flex items-center justify-center text-sm ${it.favorite ? "text-amber-300" : "text-white/70"}">
             ${it.favorite ? "★" : "☆"}
           </button>
         </div>
         <div class="p-3 space-y-2">
-          <div class="flex items-center justify-between text-[11px] font-mono text-[var(--muted-foreground)]">
+          <div class="flex items-center justify-between text-[12.5px] font-mono text-[var(--muted-foreground)]">
             <span>Seed: #${it.seed}</span>
             <span>${it.width}×${it.height} · ${it.generation_time || 0}s</span>
           </div>
-          ${it.notes ? `<div class="text-[10px] px-2 py-0.5 rounded bg-sky-500/15 text-sky-300 truncate">📝 ${escapeHtml(it.notes)}</div>` : ""}
-          <p class="selectable-text text-[11px] font-mono text-[var(--foreground)] line-clamp-2">${escapeHtml(it.prompt)}</p>
-          <div class="grid grid-cols-4 gap-1 pt-1 text-[11px]">
+          ${it.notes ? `<div class="text-[12px] px-2 py-0.5 rounded bg-sky-500/15 text-sky-300 truncate">📝 ${escapeHtml(it.notes)}</div>` : ""}
+          <p class="selectable-text text-[12.5px] font-mono text-[var(--foreground)] line-clamp-2">${escapeHtml(it.prompt)}</p>
+          <div class="grid grid-cols-4 gap-1 pt-1 text-[12.5px]">
             <button onclick="setStageFromGalleryItem(state.gallery.find(x=>x.id===${it.id}), true)" class="spring-btn py-1 rounded-lg glass-field text-sky-300">还原</button>
             <button onclick="editGalleryNotes(${it.id})" class="spring-btn py-1 rounded-lg glass-field">备注</button>
             <a href="${it.image_url}" download="${escapeHtml(it.filename)}" class="spring-btn py-1 rounded-lg glass-field text-center">下载</a>
@@ -2656,7 +2656,7 @@ function renderTagPillsBar() {
   const segments = parsePromptSegments(ta.value);
   if (cnt) cnt.textContent = `${segments.length} tags` + (state.mutedTags.size ? ` (${state.mutedTags.size} 静音)` : "");
   if (!segments.length) {
-    bar.innerHTML = `<span class="text-[10px] text-[var(--muted-foreground)]">输入提示词后自动生成可拖拽排序的 Tag 胶囊...</span>`;
+    bar.innerHTML = `<span class="text-[12px] text-[var(--muted-foreground)]">输入提示词后自动生成可拖拽排序的 Tag 胶囊...</span>`;
     return;
   }
 
@@ -2672,8 +2672,8 @@ function renderTagPillsBar() {
         <span class="${cls}" draggable="true" ondragstart="handleTagDragStart(${idx}, event)" ondragover="handleTagDragOver(event)" ondragleave="handleTagDragLeave(event)" ondrop="handleTagDrop(${idx}, event)" onclick="toggleMuteTagPill('${escapeHtml(seg)}')" title="单击静音/恢复，拖拽调整词序，右侧 +/- 调权重">
           <span class="font-mono">${escapeHtml(seg)}</span>
           ${cn ? `<span class="tag-pill-cn">${escapeHtml(cn)}</span>` : ""}
-          <button type="button" onclick="event.stopPropagation();adjustTagPillWeight(${idx}, 1)" class="px-1 rounded hover:bg-sky-500/25 text-[10px] font-bold" title="增加权重">+</button>
-          <button type="button" onclick="event.stopPropagation();adjustTagPillWeight(${idx}, -1)" class="px-1 rounded hover:bg-rose-500/25 text-[10px] font-bold" title="降低权重">−</button>
+          <button type="button" onclick="event.stopPropagation();adjustTagPillWeight(${idx}, 1)" class="px-1 rounded hover:bg-sky-500/25 text-[12px] font-bold" title="增加权重">+</button>
+          <button type="button" onclick="event.stopPropagation();adjustTagPillWeight(${idx}, -1)" class="px-1 rounded hover:bg-rose-500/25 text-[12px] font-bold" title="降低权重">−</button>
         </span>
       `;
     })
@@ -2830,14 +2830,14 @@ function renderInlineMenu() {
   menu.innerHTML = state.inlineMatches
     .map(
       (m, i) => `
-      <button type="button" onclick="acceptInlineSuggestion(${i})" class="w-full flex items-center justify-between px-2.5 py-1 rounded-lg text-left text-[11px] ${
+      <button type="button" onclick="acceptInlineSuggestion(${i})" class="w-full flex items-center justify-between px-2.5 py-1 rounded-lg text-left text-[12.5px] ${
         i === state.inlineSelIdx ? "bg-sky-500/25 border border-sky-400/40" : "hover:bg-white/10"
       }">
         <div class="truncate">
           <span class="font-mono font-semibold text-sky-300">${escapeHtml(m.tag)}</span>
           <span class="ml-2 text-[var(--muted-foreground)]">${escapeHtml(m.cn || "")}</span>
         </div>
-        <span class="text-[10px] font-mono text-[var(--muted-foreground)] shrink-0">${m.count ? (m.count / 1000).toFixed(0) + "k" : m.cat || ""}</span>
+        <span class="text-[12px] font-mono text-[var(--muted-foreground)] shrink-0">${m.count ? (m.count / 1000).toFixed(0) + "k" : m.cat || ""}</span>
       </button>
     `
     )
