@@ -272,13 +272,13 @@ function renderAccountHeader() {
     if (anlasEl) anlasEl.textContent = (acc.anlas ?? 0).toLocaleString();
     if (connPill) {
       connPill.textContent = `● 已连接 ${acc.is_opus ? "Opus (0点数免费激活)" : acc.tier_name}`;
-      connPill.className = "px-2.5 py-1 rounded-xl glass-field text-emerald-300 text-xs font-mono";
+      connPill.className = "px-2.5 py-1 rounded-xl ui-badge text-emerald-300 text-[12px] font-mono";
     }
   } else {
     if (tierEl) tierEl.textContent = "未连接";
     if (connPill) {
       connPill.textContent = "○ 连接异常";
-      connPill.className = "px-2.5 py-1 rounded-xl glass-field text-rose-300 text-xs font-mono";
+      connPill.className = "px-2.5 py-1 rounded-xl ui-badge text-rose-300 text-[12px] font-mono";
     }
   }
 
@@ -289,8 +289,8 @@ function renderAccountHeader() {
   const sw = document.getElementById("settings-opus-switch");
   if (pill && label) {
     pill.className = guardOn
-      ? "spring-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl glass-field border border-emerald-400/40 text-emerald-300"
-      : "spring-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl glass-field border border-amber-400/40 text-amber-300";
+      ? "spring-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl ui-chip border-emerald-400/40 text-emerald-300 whitespace-nowrap"
+      : "spring-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl ui-chip border-amber-400/40 text-amber-300 whitespace-nowrap";
     label.textContent = guardOn ? "🛡 Opus 0点数保护: 开" : "⚠ Opus 0点数保护: 关";
   }
   if (sw) sw.classList.toggle("on", guardOn);
@@ -366,7 +366,7 @@ function renderModelSelectMenu() {
             </div>
             <span class="text-[12px] text-[var(--muted-foreground)] line-clamp-1">${escapeHtml(m.description)}</span>
           </div>
-          <span class="text-[12px] px-1.5 py-0.5 rounded glass-field shrink-0 font-mono text-emerald-300">${escapeHtml(m.badge)}</span>
+          <span class="text-[12px] px-1.5 py-0.5 rounded ui-badge shrink-0 font-mono text-emerald-300">${escapeHtml(m.badge)}</span>
         </button>
       `;
     })
@@ -390,25 +390,25 @@ function selectModel(modelId, notify = true) {
   const capEl = document.getElementById("model-cap-badges");
   const badges = [];
   if (spec.supports_multi_char) {
-    badges.push(`<span class="px-2 py-0.5 rounded-md glass-field text-emerald-300">✓ 多角色站位 (${spec.max_characters}人)</span>`);
+    badges.push(`<span class="px-2 py-0.5 rounded-md ui-badge text-emerald-300">✓ 多角色站位 (${spec.max_characters}人)</span>`);
   } else {
-    badges.push(`<span class="px-2 py-0.5 rounded-md glass-field text-amber-300">⊘ 无多角色分区</span>`);
+    badges.push(`<span class="px-2 py-0.5 rounded-md ui-badge text-amber-300">⊘ 无多角色分区</span>`);
   }
   if (spec.supports_alpha_transparency) {
-    badges.push(`<span class="px-2 py-0.5 rounded-md glass-field text-sky-300">✨ 原生透明底</span>`);
+    badges.push(`<span class="px-2 py-0.5 rounded-md ui-badge text-sky-300">✨ 原生透明底</span>`);
   }
   if (spec.supports_vibe) {
     badges.push(
-      `<span class="px-2 py-0.5 rounded-md glass-field text-emerald-300">✓ Vibe 参考${spec.vibe_raw_image_free ? " (原图免费)" : ""}</span>`
+      `<span class="px-2 py-0.5 rounded-md ui-badge text-emerald-300">✓ Vibe 参考${spec.vibe_raw_image_free ? " (原图免费)" : ""}</span>`
     );
   } else {
-    badges.push(`<span class="px-2 py-0.5 rounded-md glass-field text-amber-300">⊘ V5 暂不支持 Vibe/Precise</span>`);
+    badges.push(`<span class="px-2 py-0.5 rounded-md ui-badge text-amber-300">⊘ V5 暂不支持 Vibe/Precise</span>`);
   }
   if (spec.supports_precise_ref) {
-    badges.push(`<span class="px-2 py-0.5 rounded-md glass-field text-sky-300">✓ Precise 精准参考</span>`);
+    badges.push(`<span class="px-2 py-0.5 rounded-md ui-badge text-sky-300">✓ Precise 精准参考</span>`);
   }
   if (spec.supports_smea) {
-    badges.push(`<span class="px-2 py-0.5 rounded-md glass-field text-purple-300">✓ SMEA/DYN</span>`);
+    badges.push(`<span class="px-2 py-0.5 rounded-md ui-badge text-purple-300">✓ SMEA/DYN</span>`);
   }
   capEl.innerHTML = badges.join("");
 
@@ -462,7 +462,7 @@ function selectModel(modelId, notify = true) {
     // V5: Neither Vibe nor Precise Ref is supported
     if (refCapPill) {
       refCapPill.textContent = `${spec.short_name} 暂不支持参考图`;
-      refCapPill.className = "text-[12px] px-2 py-0.5 rounded-md glass-field text-amber-300";
+      refCapPill.className = "text-[12px] px-2 py-0.5 rounded-md ui-badge text-amber-300";
     }
     v5UnsupBox?.classList.remove("hidden");
     vibeSupBox?.classList.add("hidden");
@@ -472,14 +472,14 @@ function selectModel(modelId, notify = true) {
     if (spec.vibe_raw_image_free) {
       if (refCapPill) {
         refCapPill.textContent = "✨ V3 专属：原图 Vibe 0点数免费";
-        refCapPill.className = "text-[12px] px-2 py-0.5 rounded-md glass-field text-emerald-300";
+        refCapPill.className = "text-[12px] px-2 py-0.5 rounded-md ui-badge text-emerald-300";
       }
       if (vibeCostHint) vibeCostHint.textContent = "上传任意 PNG/JPG 均 0 Anlas 免费";
       if (vibeUploadLabel) vibeUploadLabel.textContent = "📂 上传参考图 PNG/JPG (V3 0点数免费)";
     } else {
       if (refCapPill) {
         refCapPill.textContent = spec.supports_precise_ref ? "支持 Vibe + Precise 参考" : "支持 Vibe 风格参考";
-        refCapPill.className = "text-[12px] px-2 py-0.5 rounded-md glass-field text-sky-300";
+        refCapPill.className = "text-[12px] px-2 py-0.5 rounded-md ui-badge text-sky-300";
       }
       if (vibeCostHint) vibeCostHint.textContent = "导入 .naiv4vibe 0点数免费 (原图编码需 2 Anlas)";
       if (vibeUploadLabel) vibeUploadLabel.textContent = "📂 导入 .naiv4vibe (0点数) 或参考图";
@@ -605,10 +605,10 @@ function renderResolutionButtons() {
     .map(r => {
       const isAct = r.width === state.width && r.height === state.height;
       const cls = isAct
-        ? "border-[var(--primary)] bg-sky-500/20 text-[var(--foreground)] font-semibold"
+        ? "is-active"
         : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]";
       return `
-        <button type="button" onclick="selectResolution(${r.width}, ${r.height})" class="spring-btn py-1.5 px-1 rounded-xl glass-field text-center ${cls}">
+        <button type="button" onclick="selectResolution(${r.width}, ${r.height})" class="spring-btn py-1.5 px-1 rounded-xl ui-btn text-center ${cls}">
           <div class="text-[12.5px] leading-tight">${escapeHtml(r.label)}</div>
           <div class="text-[12px] font-mono opacity-80">${r.sub}</div>
         </button>
@@ -724,8 +724,8 @@ async function updateCostEstimate() {
     if (badge) {
       badge.textContent = est.badge;
       badge.className = est.is_opus_free
-        ? "hidden sm:inline-block text-[12px] px-2 py-1 rounded-xl glass-field text-emerald-300 font-mono whitespace-nowrap"
-        : "hidden sm:inline-block text-[12px] px-2 py-1 rounded-xl glass-field text-amber-300 font-mono whitespace-nowrap";
+        ? "hidden sm:inline-block text-[12px] px-2 py-1 rounded-xl ui-badge text-emerald-300 font-mono whitespace-nowrap"
+        : "hidden sm:inline-block text-[12px] px-2 py-1 rounded-xl ui-badge text-amber-300 font-mono whitespace-nowrap";
     }
   } catch (e) {}
 }
@@ -783,20 +783,20 @@ async function runPromptLinter() {
 
     if (data.issue_count > 0) {
       btn.textContent = `✨ 发现 ${data.issue_count} 处可规范`;
-      btn.className = "spring-btn text-[11px] px-2 py-0.5 rounded-lg glass-field text-amber-300 border border-amber-400/40";
+      btn.className = "spring-btn text-[12px] px-2 py-0.5 rounded-lg ui-btn text-amber-300 border-amber-400/40";
       listEl.innerHTML = data.issues
         .map(
           (iss, idx) => `
           <div class="flex items-center justify-between gap-2 py-1 px-2 rounded-lg bg-black/20">
             <span class="truncate text-[var(--muted-foreground)]">${escapeHtml(iss.message)}</span>
-            <button onclick="applySingleLintFix(${idx})" class="shrink-0 text-[10px] px-2 py-0.5 rounded glass-field text-sky-300 hover:border-sky-400">修复</button>
+            <button onclick="applySingleLintFix(${idx})" class="shrink-0 text-[12px] px-2 py-0.5 rounded ui-btn text-sky-300">修复</button>
           </div>
         `
         )
         .join("");
     } else {
       btn.textContent = "✓ 格式规范";
-      btn.className = "spring-btn text-[11px] px-2 py-0.5 rounded-lg glass-field text-[var(--success)]";
+      btn.className = "spring-btn text-[12px] px-2 py-0.5 rounded-lg ui-btn text-[var(--success)]";
       document.getElementById("lint-drawer")?.classList.add("hidden");
     }
   } catch (e) {}
@@ -947,7 +947,7 @@ function renderSnippetsBar() {
           ? `<span onclick="event.stopPropagation();deleteSnippetRecord(${s.id})" class="ml-1 text-rose-300/80 hover:text-rose-300" title="删除自定义积木">✕</span>`
           : "";
       return `
-      <button type="button" onclick="toggleSnippetTag('${escapeHtml(s.tags)}')" class="spring-btn inline-flex items-center px-2.5 py-1 rounded-xl glass-field text-[12px] hover:border-[var(--glass-border-strong)]">
+      <button type="button" onclick="toggleSnippetTag('${escapeHtml(s.tags)}')" class="spring-btn inline-flex items-center px-2.5 py-1 rounded-xl ui-btn text-[12px]">
         <span>${escapeHtml(s.label)}</span>${delBtn}
       </button>
     `;
@@ -1026,35 +1026,35 @@ function renderCharacterSlots() {
     .map((ch, idx) => {
       let gridHtml = "";
       if (state.useCoords) {
-        gridHtml = `<div class="grid grid-cols-5 gap-1 p-1.5 rounded-xl glass-field shrink-0" title="点击格子指定角色在画布中的 5×5 站位坐标">`;
+        gridHtml = `<div class="grid grid-cols-5 gap-1 p-1.5 rounded-xl ui-subgroup shrink-0" title="点击格子指定角色在画布中的 5×5 站位坐标">`;
         for (const gy of GRID_COORDS) {
           for (const gx of GRID_COORDS) {
             const act = Math.abs(ch.x - gx) < 0.08 && Math.abs(ch.y - gy) < 0.08;
-            const cls = act ? "bg-sky-400 shadow-[0_0_6px_#38bdf8]" : "bg-white/15 hover:bg-white/35";
+            const cls = act ? "bg-sky-400 ring-1 ring-sky-300/60" : "bg-white/15 hover:bg-white/35";
             gridHtml += `<button type="button" onclick="setCharCoord(${idx}, ${gx}, ${gy})" class="w-3.5 h-3.5 rounded-sm ${cls}"></button>`;
           }
         }
         gridHtml += `</div>`;
       }
       return `
-        <div class="rounded-xl glass-field p-2.5 space-y-2 border border-sky-400/25">
+        <div class="rounded-xl ui-card p-2.5 space-y-2 border-sky-400/25">
           <div class="flex items-center justify-between text-xs">
             <div class="flex items-center gap-2">
               ${ch.avatar_url ? `<img src="${escapeHtml(ch.avatar_url)}" alt="" class="w-5 h-5 rounded-md object-cover border border-white/25" />` : ""}
               <span class="font-semibold text-sky-300">角色 #${idx + 1}${ch.oc_name ? ` · ${escapeHtml(ch.oc_name)}` : ""} ${state.useCoords ? `(X:${Number(ch.x).toFixed(2)} Y:${Number(ch.y).toFixed(2)})` : "(AI自动站位)"}</span>
             </div>
-            <div class="flex items-center gap-1 text-[10px]">
-              <button type="button" onclick="appendCharInteraction(${idx}, 'source#hugging')" class="px-1.5 py-0.5 rounded glass-field hover:border-sky-400" title="主动动作">source#</button>
-              <button type="button" onclick="appendCharInteraction(${idx}, 'target#hugging')" class="px-1.5 py-0.5 rounded glass-field hover:border-sky-400" title="被动动作">target#</button>
-              <button type="button" onclick="appendCharInteraction(${idx}, 'mutual#holding hands')" class="px-1.5 py-0.5 rounded glass-field hover:border-sky-400" title="双方互动">mutual#</button>
+            <div class="flex items-center gap-1 text-[12px]">
+              <button type="button" onclick="appendCharInteraction(${idx}, 'source#hugging')" class="px-1.5 py-0.5 rounded ui-btn" title="主动动作">source#</button>
+              <button type="button" onclick="appendCharInteraction(${idx}, 'target#hugging')" class="px-1.5 py-0.5 rounded ui-btn" title="被动动作">target#</button>
+              <button type="button" onclick="appendCharInteraction(${idx}, 'mutual#holding hands')" class="px-1.5 py-0.5 rounded ui-btn" title="双方互动">mutual#</button>
               <button type="button" onclick="removeCharacterSlot(${idx})" class="ml-1 text-rose-300 hover:underline">删除</button>
             </div>
           </div>
           <div class="flex items-start gap-2.5">
             ${gridHtml}
             <div class="flex-1 space-y-1.5">
-              <textarea rows="2" oninput="state.characters[${idx}].prompt=this.value" placeholder="角色 #${idx + 1} 外貌、服饰与动作提示词..." class="char-prompt-ta w-full glass-field rounded-lg p-1.5 text-[11px] font-mono">${escapeHtml(ch.prompt)}</textarea>
-              <input type="text" value="${escapeHtml(ch.uc)}" oninput="state.characters[${idx}].uc=this.value" placeholder="该角色专属排除词 (防止特征串色)" class="w-full glass-field rounded-lg px-2 py-1 text-[11px] font-mono" />
+              <textarea rows="2" oninput="state.characters[${idx}].prompt=this.value" placeholder="角色 #${idx + 1} 外貌、服饰与动作提示词..." class="char-prompt-ta w-full ui-well rounded-lg p-1.5 text-[12px] font-mono">${escapeHtml(ch.prompt)}</textarea>
+              <input type="text" value="${escapeHtml(ch.uc)}" oninput="state.characters[${idx}].uc=this.value" placeholder="该角色专属排除词 (防止特征串色)" class="w-full ui-well rounded-lg px-2 py-1 text-[12px] font-mono" />
             </div>
           </div>
         </div>
@@ -1130,26 +1130,26 @@ function renderPreciseRefList() {
   const wrap = document.getElementById("precise-refs-list");
   if (!wrap) return;
   if (!state.preciseRefs.length) {
-    wrap.innerHTML = `<div class="text-[10px] text-[var(--muted-foreground)]">未添加精准参考图（适合锁定特定角色脸型与服装细节）</div>`;
+    wrap.innerHTML = `<div class="text-[12px] text-[var(--muted-foreground)]">未添加精准参考图（适合锁定特定角色脸型与服装细节）</div>`;
     return;
   }
   wrap.innerHTML = state.preciseRefs
     .map(
       (r, i) => `
-      <div class="p-2 rounded-lg glass-field space-y-1.5 border border-sky-400/20">
+      <div class="p-2 rounded-lg ui-card space-y-1.5 border-sky-400/20">
         <div class="flex items-center justify-between gap-2">
           <div class="flex items-center gap-2 min-w-0">
             <img src="${r.image}" alt="" class="w-8 h-8 rounded object-cover shrink-0 border border-white/20" />
-            <span class="truncate font-mono text-[10px]">${escapeHtml(r.name || `Ref #${i + 1}`)}</span>
+            <span class="truncate font-mono text-[12px]">${escapeHtml(r.name || `Ref #${i + 1}`)}</span>
           </div>
-          <select onchange="state.preciseRefs[${i}].mode=this.value" class="glass-field rounded px-1.5 py-0.5 text-[10px]">
+          <select onchange="state.preciseRefs[${i}].mode=this.value" class="ui-well rounded px-1.5 py-0.5 text-[12px]">
             <option value="character&style" ${r.mode === "character&style" ? "selected" : ""}>角色+画风</option>
             <option value="character" ${r.mode === "character" ? "selected" : ""}>仅角色</option>
             <option value="style" ${r.mode === "style" ? "selected" : ""}>仅画风</option>
           </select>
-          <button type="button" onclick="removePreciseRef(${i})" class="text-rose-300 text-[10px] shrink-0">移除</button>
+          <button type="button" onclick="removePreciseRef(${i})" class="text-rose-300 text-[12px] shrink-0">移除</button>
         </div>
-        <div class="grid grid-cols-2 gap-2 text-[10px]">
+        <div class="grid grid-cols-2 gap-2 text-[12px]">
           <label class="flex items-center gap-1">强度 <input type="range" min="0.1" max="1.0" step="0.05" value="${r.strength}" oninput="state.preciseRefs[${i}].strength=parseFloat(this.value)" class="flex-1" /></label>
           <label class="flex items-center gap-1">保真 <input type="range" min="0.1" max="1.0" step="0.05" value="${r.fidelity}" oninput="state.preciseRefs[${i}].fidelity=parseFloat(this.value)" class="flex-1" /></label>
         </div>
@@ -1171,12 +1171,12 @@ function renderVibeList() {
   wrap.innerHTML = state.vibes
     .map(
       (v, i) => `
-      <div class="p-2 rounded-lg glass-field space-y-1">
-        <div class="flex justify-between text-[11px]">
+      <div class="p-2 rounded-lg ui-card space-y-1">
+        <div class="flex justify-between text-[12px]">
           <span class="truncate font-mono">${escapeHtml(v.name || `Vibe #${i + 1}`)}</span>
           <span class="text-emerald-300 font-mono">${v.encoding ? "已编码 0点数" : v.anlas_cost + " Anlas"}</span>
         </div>
-        <div class="flex items-center gap-2 text-[10px]">
+        <div class="flex items-center gap-2 text-[12px]">
           <span>强度</span>
           <input type="range" min="0.1" max="1.0" step="0.05" value="${v.strength || 0.6}" oninput="state.vibes[${i}].strength=parseFloat(this.value)" class="flex-1" />
         </div>
@@ -1194,8 +1194,8 @@ function setWorkbenchAction(act) {
     if (btn) {
       btn.className =
         k === act
-          ? "spring-btn px-2.5 py-1.5 rounded-xl glass-field border-[var(--glass-border-strong)] font-semibold whitespace-nowrap"
-          : "spring-btn px-2.5 py-1.5 rounded-xl hover:bg-white/10 whitespace-nowrap";
+          ? "spring-btn px-2 py-1.5 rounded-xl ui-btn-ghost is-active whitespace-nowrap"
+          : "spring-btn px-2 py-1.5 rounded-xl ui-btn-ghost whitespace-nowrap";
     }
   });
 
@@ -1231,15 +1231,15 @@ function toggleFocusInpaint() {
   if (btn) {
     btn.textContent = state.focusInpaint ? "🎯 Focus高清: 开" : "🎯 Focus高清: 关";
     btn.className = state.focusInpaint
-      ? "spring-btn px-2 py-1 rounded-lg glass-field border-emerald-400/50 text-emerald-300 text-[11px]"
-      : "spring-btn px-2 py-1 rounded-lg glass-field text-[var(--muted-foreground)] text-[11px]";
+      ? "spring-btn px-2 py-1 rounded-lg ui-btn border-emerald-400/50 text-emerald-300 text-[12px]"
+      : "spring-btn px-2 py-1 rounded-lg ui-btn text-[var(--muted-foreground)] text-[12px]";
   }
 }
 
 function setOutpaintDir(dir) {
   state.outpaintDir = dir;
   document.querySelectorAll(".outpaint-dir-btn").forEach(b => {
-    b.classList.toggle("border-sky-400", b.dataset.dir === dir);
+    b.classList.toggle("is-active", b.dataset.dir === dir);
   });
 }
 
@@ -1270,8 +1270,8 @@ function handleI2IFileUpload(event) {
 // Inpaint Canvas Setup (Continuous Brush + Eraser + Ctrl+Z Undo Stack)
 function setInpaintMode(mode) {
   state.inpaintMode = mode === "eraser" ? "eraser" : "brush";
-  document.getElementById("inpaint-brush-btn")?.classList.toggle("border-sky-400", state.inpaintMode === "brush");
-  document.getElementById("inpaint-eraser-btn")?.classList.toggle("border-sky-400", state.inpaintMode === "eraser");
+  document.getElementById("inpaint-brush-btn")?.classList.toggle("is-active", state.inpaintMode === "brush");
+  document.getElementById("inpaint-eraser-btn")?.classList.toggle("is-active", state.inpaintMode === "eraser");
 }
 
 function pushInpaintUndo() {
@@ -1709,7 +1709,7 @@ function renderWorkbenchHistory() {
     .slice(0, 20)
     .map(
       item => `
-      <div class="rounded-xl glass-field p-2.5 space-y-2 hover:border-[var(--glass-border-strong)] transition-colors">
+      <div class="rounded-xl ui-card p-2.5 space-y-2">
         <div class="flex gap-2.5 cursor-pointer" onclick="setStageFromGalleryItem(state.gallery.find(x=>x.id===${item.id}), false)">
           <img src="${item.image_url}" alt="thumb" class="w-14 h-20 rounded-lg object-cover shrink-0 border border-white/15" />
           <div class="min-w-0 flex-1 space-y-1">
@@ -1721,9 +1721,9 @@ function renderWorkbenchHistory() {
           </div>
         </div>
         <div class="grid grid-cols-3 gap-1.5 text-[12px]">
-          <button onclick="setStageFromGalleryItem(state.gallery.find(x=>x.id===${item.id}), true)" class="spring-btn py-1 rounded-lg glass-field hover:border-sky-400">恢复配方</button>
-          <button onclick="sendGalleryItemToI2I(${item.id})" class="spring-btn py-1 rounded-lg glass-field hover:border-sky-400">送入重绘</button>
-          <button onclick="rerollGalleryItem(${item.id})" class="spring-btn py-1 rounded-lg glass-field hover:border-sky-400">换种再抽</button>
+          <button onclick="setStageFromGalleryItem(state.gallery.find(x=>x.id===${item.id}), true)" class="spring-btn py-1 rounded-lg ui-btn">恢复配方</button>
+          <button onclick="sendGalleryItemToI2I(${item.id})" class="spring-btn py-1 rounded-lg ui-btn">送入重绘</button>
+          <button onclick="rerollGalleryItem(${item.id})" class="spring-btn py-1 rounded-lg ui-btn">换种再抽</button>
         </div>
       </div>
     `
@@ -1898,15 +1898,15 @@ function openDiffModal(idxA = 0, idxB = 1) {
 
   document.getElementById("diff-content").innerHTML = `
     <div class="grid grid-cols-2 gap-2.5">
-      <div class="p-2 rounded-xl glass-field space-y-1">
+      <div class="p-2 rounded-xl ui-subgroup space-y-1">
         <div class="text-sky-300 font-semibold">左侧图 A</div>
-        <select onchange="openDiffModal(Number(this.value), ${safeB})" class="w-full glass-field rounded-lg px-2 py-1 text-[11px] bg-transparent">${optHtml(safeA)}</select>
-        <div class="text-[10px] text-[var(--muted-foreground)] font-mono">${a.width}×${a.height} · Steps ${a.steps} · CFG ${a.scale} · ${escapeHtml(a.sampler)}</div>
+        <select onchange="openDiffModal(Number(this.value), ${safeB})" class="w-full ui-well rounded-lg px-2 py-1 text-[12px]">${optHtml(safeA)}</select>
+        <div class="text-[12px] text-[var(--muted-foreground)] font-mono">${a.width}×${a.height} · Steps ${a.steps} · CFG ${a.scale} · ${escapeHtml(a.sampler)}</div>
       </div>
-      <div class="p-2 rounded-xl glass-field space-y-1">
+      <div class="p-2 rounded-xl ui-subgroup space-y-1">
         <div class="text-emerald-300 font-semibold">右侧图 B</div>
-        <select onchange="openDiffModal(${safeA}, Number(this.value))" class="w-full glass-field rounded-lg px-2 py-1 text-[11px] bg-transparent">${optHtml(safeB)}</select>
-        <div class="text-[10px] text-[var(--muted-foreground)] font-mono">${b.width}×${b.height} · Steps ${b.steps} · CFG ${b.scale} · ${escapeHtml(b.sampler)}</div>
+        <select onchange="openDiffModal(${safeA}, Number(this.value))" class="w-full ui-well rounded-lg px-2 py-1 text-[12px]">${optHtml(safeB)}</select>
+        <div class="text-[12px] text-[var(--muted-foreground)] font-mono">${b.width}×${b.height} · Steps ${b.steps} · CFG ${b.scale} · ${escapeHtml(b.sampler)}</div>
       </div>
     </div>
 
@@ -1916,11 +1916,11 @@ function openDiffModal(idxA = 0, idxB = 1) {
       <img id="diff-top-img" src="${a.image_url}" alt="Image A" style="clip-path: inset(0 50% 0 0);" />
       <div id="diff-divider" class="diff-compare-divider" style="left: 50%;"></div>
       <div id="diff-handle" class="diff-compare-handle" style="left: 50%;">⇆</div>
-      <span class="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-md liquid-popover text-[10px] font-mono">A: #${a.seed}</span>
-      <span class="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-md liquid-popover text-[10px] font-mono">B: #${b.seed}</span>
+      <span class="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-md liquid-popover text-[12px] font-mono">A: #${a.seed}</span>
+      <span class="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-md liquid-popover text-[12px] font-mono">B: #${b.seed}</span>
     </div>
 
-    <div class="p-2.5 rounded-xl glass-field space-y-1 font-mono">
+    <div class="p-2.5 rounded-xl ui-subgroup space-y-1 font-mono">
       <div class="text-emerald-300">+ A 相比 B 新增 (${added.length})：${added.length ? escapeHtml(added.join(", ")) : "无变化"}</div>
       <div class="text-rose-300">− A 相比 B 移除 (${removed.length})：${removed.length ? escapeHtml(removed.join(", ")) : "无变化"}</div>
     </div>
@@ -1954,7 +1954,7 @@ function moveDiffSwipe(e) {
 function filterArtistsByCat(cat) {
   state.artistCatFilter = cat;
   document.querySelectorAll(".artist-cat-btn").forEach(b => {
-    b.classList.toggle("border-[var(--glass-border-strong)]", b.dataset.cat === cat);
+    b.classList.toggle("is-active", b.dataset.cat === cat);
   });
   renderArtistsGrid();
 }
@@ -1977,7 +1977,7 @@ function renderArtistsGrid() {
     .map(a => {
       const [c1, c2] = a.palette || ["#0284c7", "#38bdf8"];
       const previewHtml = a.preview_url
-        ? `<img src="${a.preview_url}" alt="${escapeHtml(a.name)}" class="w-full h-52 object-cover object-top transition-transform duration-500 group-hover:scale-105" />`
+        ? `<img src="${a.preview_url}" alt="${escapeHtml(a.name)}" class="w-full h-52 object-cover object-top transition-opacity duration-150 group-hover:opacity-95" />`
         : `<div class="w-full h-52 flex flex-col items-center justify-center p-4 text-center" style="background:linear-gradient(135deg,${c1},${c2})">
              <div class="ui-title text-white/95">${escapeHtml(a.name)}</div>
              <div class="text-[12.5px] font-mono text-white/85 mt-1">${escapeHtml(a.tag)}</div>
@@ -1985,7 +1985,7 @@ function renderArtistsGrid() {
            </div>`;
 
       return `
-        <div class="rounded-2xl glass-field overflow-hidden flex flex-col justify-between group hover:border-[var(--glass-border-strong)] transition-all">
+        <div class="rounded-2xl ui-card overflow-hidden flex flex-col justify-between group">
           <div class="relative overflow-hidden">
             ${previewHtml}
             <span class="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-lg liquid-popover text-[12px] font-medium">${escapeHtml(a.category)}</span>
@@ -2000,9 +2000,9 @@ function renderArtistsGrid() {
             </div>
             <p class="text-[12.5px] text-[var(--muted-foreground)] line-clamp-2 leading-relaxed">${escapeHtml(a.desc)}</p>
             <div class="grid grid-cols-3 gap-1.5 pt-1 text-[12.5px]">
-              <button onclick="useSingleArtist('${escapeHtml(a.tag)}', '${escapeHtml(a.name)}')" class="spring-btn py-1 rounded-lg glass-field hover:border-sky-400">单用画风</button>
-              <button onclick="addArtistToMixer('${escapeHtml(a.tag)}', '${escapeHtml(a.name)}')" class="spring-btn py-1 rounded-lg glass-field text-sky-300 hover:border-sky-400">+ 混搭</button>
-              <button id="gen-card-btn-${a.id}" onclick="generateArtistCard(${a.id})" class="spring-btn py-1 rounded-lg glass-field text-emerald-300 hover:border-emerald-400" title="调用 NovelAI 官方接口 0点数生成该画师标准预览图">⚡ 实测跑卡</button>
+              <button onclick="useSingleArtist('${escapeHtml(a.tag)}', '${escapeHtml(a.name)}')" class="spring-btn py-1 rounded-lg ui-btn">单用画风</button>
+              <button onclick="addArtistToMixer('${escapeHtml(a.tag)}', '${escapeHtml(a.name)}')" class="spring-btn py-1 rounded-lg ui-btn text-sky-300">+ 混搭</button>
+              <button id="gen-card-btn-${a.id}" onclick="generateArtistCard(${a.id})" class="spring-btn py-1 rounded-lg ui-btn text-emerald-300" title="调用 NovelAI 官方接口 0点数生成该画师标准预览图">⚡ 实测跑卡</button>
             </div>
           </div>
         </div>
@@ -2102,7 +2102,7 @@ function renderMixer() {
   wrap.innerHTML = state.mixerItems
     .map(
       (it, idx) => `
-      <div class="p-2.5 rounded-xl glass-field space-y-1.5">
+      <div class="p-2.5 rounded-xl ui-card space-y-1.5">
         <div class="flex items-center justify-between ui-body">
           <span class="font-semibold">${escapeHtml(it.name)} <span class="text-[12px] font-mono text-[var(--muted-foreground)]">(${escapeHtml(it.tag)})</span></span>
           <button onclick="state.mixerItems.splice(${idx},1);renderMixer()" class="text-[12.5px] text-rose-300">移除</button>
@@ -2158,12 +2158,12 @@ function renderMixPresets() {
   wrap.innerHTML = state.mixPresets
     .map(
       p => `
-      <div class="flex items-center justify-between gap-2 p-2 rounded-xl glass-field text-[13px]">
+      <div class="flex items-center justify-between gap-2 p-2 rounded-xl ui-card text-[13px]">
         <div class="truncate">
           <div class="font-medium truncate">${escapeHtml(p.name)}</div>
           <div class="text-[12px] font-mono text-[var(--muted-foreground)] truncate">${escapeHtml(formatMixString(p.items || []))}</div>
         </div>
-        <button onclick='loadMixPreset(${JSON.stringify(p.items || [])})' class="spring-btn px-2.5 py-1 rounded-lg glass-field text-[12px] text-sky-300 shrink-0">载入</button>
+        <button onclick='loadMixPreset(${JSON.stringify(p.items || [])})' class="spring-btn px-2.5 py-1 rounded-lg ui-btn text-[12px] text-sky-300 shrink-0">载入</button>
       </div>
     `
     )
@@ -2244,7 +2244,10 @@ function debouncedGallerySearch() {
 function toggleGalleryFavFilter() {
   state.galleryFavOnly = !state.galleryFavOnly;
   const btn = document.getElementById("gallery-fav-filter-btn");
-  if (btn) btn.textContent = state.galleryFavOnly ? "★ 仅看收藏" : "☆ 仅看收藏";
+  if (btn) {
+    btn.textContent = state.galleryFavOnly ? "★ 仅看收藏" : "☆ 仅看收藏";
+    btn.classList.toggle("is-active", state.galleryFavOnly);
+  }
   renderFullGallery(true);
 }
 
@@ -2323,9 +2326,9 @@ async function renderFullGallery(reloadFromServer = false) {
   grid.innerHTML = items
     .map(
       it => `
-      <div class="rounded-2xl glass-field overflow-hidden flex flex-col justify-between group hover:border-[var(--glass-border-strong)] transition-all">
+      <div class="rounded-2xl ui-card overflow-hidden flex flex-col justify-between group">
         <div class="relative overflow-hidden bg-black/20">
-          <img src="${it.image_url}" alt="artwork" class="w-full h-60 object-cover object-top transition-transform duration-500 group-hover:scale-105 cursor-pointer" onclick="setStageFromGalleryItem(state.gallery.find(x=>x.id===${it.id}), false);switchTab('workbench')" />
+          <img src="${it.image_url}" alt="artwork" class="w-full h-60 object-cover object-top transition-opacity duration-150 group-hover:opacity-95 cursor-pointer" onclick="setStageFromGalleryItem(state.gallery.find(x=>x.id===${it.id}), false);switchTab('workbench')" />
           <span class="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-lg liquid-popover text-[12px] font-mono text-sky-300">${escapeHtml(it.model_short)}</span>
           <button onclick="toggleGalleryFav(${it.id})" class="spring-btn absolute top-2.5 right-2.5 w-7 h-7 rounded-full liquid-popover flex items-center justify-center text-sm ${it.favorite ? "text-amber-300" : "text-white/70"}">
             ${it.favorite ? "★" : "☆"}
@@ -2339,10 +2342,10 @@ async function renderFullGallery(reloadFromServer = false) {
           ${it.notes ? `<div class="text-[12px] px-2 py-0.5 rounded bg-sky-500/15 text-sky-300 truncate">📝 ${escapeHtml(it.notes)}</div>` : ""}
           <p class="selectable-text text-[12.5px] font-mono text-[var(--foreground)] line-clamp-2">${escapeHtml(it.prompt)}</p>
           <div class="grid grid-cols-4 gap-1 pt-1 text-[12.5px]">
-            <button onclick="setStageFromGalleryItem(state.gallery.find(x=>x.id===${it.id}), true)" class="spring-btn py-1 rounded-lg glass-field text-sky-300">还原</button>
-            <button onclick="editGalleryNotes(${it.id})" class="spring-btn py-1 rounded-lg glass-field">备注</button>
-            <a href="${it.image_url}" download="${escapeHtml(it.filename)}" class="spring-btn py-1 rounded-lg glass-field text-center">下载</a>
-            <button onclick="deleteGalleryRecord(${it.id})" class="spring-btn py-1 rounded-lg glass-field text-rose-300">删除</button>
+            <button onclick="setStageFromGalleryItem(state.gallery.find(x=>x.id===${it.id}), true)" class="spring-btn py-1 rounded-lg ui-btn text-sky-300">还原</button>
+            <button onclick="editGalleryNotes(${it.id})" class="spring-btn py-1 rounded-lg ui-btn">备注</button>
+            <a href="${it.image_url}" download="${escapeHtml(it.filename)}" class="spring-btn py-1 rounded-lg ui-btn text-center">下载</a>
+            <button onclick="deleteGalleryRecord(${it.id})" class="spring-btn py-1 rounded-lg ui-btn text-rose-300">删除</button>
           </div>
         </div>
       </div>
@@ -3173,23 +3176,23 @@ function renderOcCardsList() {
   wrap.innerHTML = state.ocCards
     .map(
       c => `
-      <div class="p-2.5 rounded-xl glass-field flex items-start gap-2.5">
+      <div class="p-2.5 rounded-xl ui-card flex items-start gap-2.5">
         ${
           c.avatar_url
             ? `<img src="${escapeHtml(c.avatar_url)}" alt="" class="w-11 h-11 rounded-xl object-cover shrink-0 border border-white/20" />`
-            : `<div class="w-11 h-11 rounded-xl glass-field flex items-center justify-center text-xs text-[var(--muted-foreground)] shrink-0">👤</div>`
+            : `<div class="w-11 h-11 rounded-xl ui-subgroup flex items-center justify-center text-xs text-[var(--muted-foreground)] shrink-0">👤</div>`
         }
         <div class="flex-1 min-w-0 space-y-1">
           <div class="flex items-center justify-between gap-1">
             <span class="font-semibold text-sky-300 truncate">${escapeHtml(c.name)}</span>
-            <div class="flex items-center gap-1.5 text-[10px] shrink-0">
-              <button onclick="bindOcAvatarFromStage(${c.id})" class="spring-btn px-1.5 py-0.5 rounded glass-field" title="用当前画布图像作为该 OC 头像">设当前图为头像</button>
-              <button onclick="injectOcAsCharSlot(${c.id})" class="spring-btn px-2 py-0.5 rounded glass-field text-emerald-300">+ 塞入多角色槽</button>
-              <button onclick="injectOcIntoPrompt(${c.id})" class="spring-btn px-2 py-0.5 rounded glass-field text-sky-300">覆盖主提示词</button>
+            <div class="flex items-center gap-1.5 text-[12px] shrink-0">
+              <button onclick="bindOcAvatarFromStage(${c.id})" class="spring-btn px-1.5 py-0.5 rounded ui-btn" title="用当前画布图像作为该 OC 头像">设当前图为头像</button>
+              <button onclick="injectOcAsCharSlot(${c.id})" class="spring-btn px-2 py-0.5 rounded ui-btn text-emerald-300">+ 塞入多角色槽</button>
+              <button onclick="injectOcIntoPrompt(${c.id})" class="spring-btn px-2 py-0.5 rounded ui-btn text-sky-300">覆盖主提示词</button>
               <button onclick="deleteOcCardRecord(${c.id})" class="text-rose-300 hover:underline px-1">删除</button>
             </div>
           </div>
-          <div class="selectable-text font-mono text-[10px] text-[var(--muted-foreground)] line-clamp-2">${escapeHtml(c.prompt)}</div>
+          <div class="selectable-text font-mono text-[12px] text-[var(--muted-foreground)] line-clamp-2">${escapeHtml(c.prompt)}</div>
         </div>
       </div>
     `
@@ -3698,12 +3701,12 @@ function renderSnapshotList() {
   wrap.innerHTML = snaps
     .map(
       (s, i) => `
-      <div class="p-2.5 rounded-xl glass-field space-y-1">
-        <div class="flex items-center justify-between text-[11px]">
+      <div class="p-2.5 rounded-xl ui-card space-y-1">
+        <div class="flex items-center justify-between text-[12px]">
           <span class="font-semibold text-sky-300">${escapeHtml(s.label)} · ${escapeHtml(s.time)}</span>
-          <button onclick="restorePromptSnapshot(${i})" class="spring-btn px-2.5 py-0.5 rounded-lg glass-field text-emerald-300 text-[10px]">恢复此配方</button>
+          <button onclick="restorePromptSnapshot(${i})" class="spring-btn px-2.5 py-0.5 rounded-lg ui-btn text-emerald-300 text-[12px]">恢复此配方</button>
         </div>
-        <div class="selectable-text font-mono text-[10px] text-[var(--muted-foreground)] line-clamp-2">${escapeHtml(s.prompt)}</div>
+        <div class="selectable-text font-mono text-[12px] text-[var(--muted-foreground)] line-clamp-2">${escapeHtml(s.prompt)}</div>
       </div>
     `
     )
