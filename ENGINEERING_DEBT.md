@@ -6,7 +6,7 @@
 
 ## 1. 前端静态资源缓存失效机制（硬编码版本参数）
 
-- **现状**：[frontend/index.html](file:///D:/NAI-Studio/frontend/index.html) 中手动使用硬编码查询参数（当前为 `?v=phase1c-1`）加载 `/static/styles.css` 与 `/static/app.js`，FastAPI 仅通过默认 `StaticFiles` 挂载 `/static`，浏览器易命中强缓存或 `304 Not Modified`。
+- **现状**：[frontend/index.html](file:///D:/NAI-Studio/frontend/index.html) 中手动使用硬编码查询参数（当前为 `?v=phase1d-1`）加载 `/static/styles.css` 与 `/static/app.js`，FastAPI 仅通过默认 `StaticFiles` 挂载 `/static`，浏览器易命中强缓存或 `304 Not Modified`。
 - **影响**：每次更新 `styles.css` 或 `app.js` 均需人工同步修改 `index.html` 的 `?v=...` 参数；遗漏时本地 Edge / Chrome 会静默加载旧前端资源。
 - **建议方案**：后续由后端在渲染入口注入基于文件 mtime / SHA-256 短哈希的版本参数，或对 `/static/*.css`、`/static/*.js` 设置 `Cache-Control: no-cache`（协商缓存 / ETag 验证）。
 
@@ -18,8 +18,8 @@
 - **影响**：
   - 强依赖外网 CDN 可达性；无网或代理受限环境下页面排版会完全退化。
   - 首屏存在运行时 CSS 编译开销，且动态模板字符串（[frontend/app.js](file:///D:/NAI-Studio/frontend/app.js)）中的类名需依赖 Play CDN `MutationObserver` 实时生成。
-  - 与 `styles.css` 的原生语义类混用时，部分深色尾缀类（如 `text-sky-300`、`text-emerald-300`）需在 `html.light` 中通过 `!important` 覆盖。
-- **建议方案**：在确认合适阶段时改为预编译产出的本地静态 `tailwind.generated.css`（无需引入重型前端框架），或逐步将残留颜色工具类迁入 `styles.css` 的 CSS 变量语义类中，消除 `html.light` 下的 `!important` 覆盖。
+  - 与 `styles.css` 的原生语义类混用，部分间距、字号等布局工具类仍依赖 CDN 运行时扫描，离线环境下会失去网格/响应式布局能力。
+- **建议方案**：在确认合适阶段时改为预编译产出的本地静态 `tailwind.generated.css`（无需引入重型前端框架），减少外网 CDN 强依赖。
 
 ---
 

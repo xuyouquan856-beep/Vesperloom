@@ -107,6 +107,10 @@ function escapeHtml(str) {
     .replace(/"/g, "&quot;");
 }
 
+function uiIcon(name, cls = "") {
+  return `<svg class="ui-ic ${cls}" aria-hidden="true"><use href="#ic-${name}"/></svg>`;
+}
+
 // ================= Custom Glass Dropdown System (No Native <select>) =================
 function toggleGlassSelect(id, force) {
   const trigger = document.getElementById(`${id}-trigger`);
@@ -182,9 +186,14 @@ async function bootstrapApp() {
     // Apply saved appearance
     if (state.config.theme === "light") {
       document.documentElement.classList.add("light");
-      document.getElementById("theme-label").textContent = "🌙 深色晶透";
+      document.getElementById("theme-label").textContent = "深色模式";
+      document.getElementById("theme-icon-use")?.setAttribute("href", "#ic-moon");
+    } else {
+      document.getElementById("theme-label").textContent = "浅色模式";
+      document.getElementById("theme-icon-use")?.setAttribute("href", "#ic-sun");
     }
-    applyBgHex(state.config.bg_hex || "#0b262c", null, false);
+    const savedBg = !state.config.bg_hex || state.config.bg_hex === "#0b262c" ? "#0b0c0e" : state.config.bg_hex;
+    applyBgHex(savedBg, null, false);
     setGlassClarity(state.config.glass_clarity || 88, false);
 
     renderAccountHeader();
@@ -234,7 +243,7 @@ function switchTab(tab) {
   const activeBtn = document.querySelector(`.tab-btn[data-tab="${tab}"]`);
   document.querySelectorAll(".tab-btn").forEach(btn => {
     const isAct = btn.dataset.tab === tab;
-    btn.style.color = isAct ? "#ffffff" : "var(--muted-foreground)";
+    btn.style.color = isAct ? "var(--cta-fg)" : "var(--text-muted)";
   });
   if (activeBtn && indicator) {
     indicator.style.width = `${activeBtn.offsetWidth}px`;
@@ -271,14 +280,14 @@ function renderAccountHeader() {
     }
     if (anlasEl) anlasEl.textContent = (acc.anlas ?? 0).toLocaleString();
     if (connPill) {
-      connPill.textContent = `● 已连接 ${acc.is_opus ? "Opus (0点数免费激活)" : acc.tier_name}`;
-      connPill.className = "px-2.5 py-1 rounded-xl ui-badge text-emerald-300 text-[12px] font-mono";
+      connPill.textContent = `已连接 ${acc.is_opus ? "Opus (0点数免费激活)" : acc.tier_name}`;
+      connPill.className = "px-2 py-1 rounded-[6px] ui-badge text-[var(--status-success)] text-[12px] font-mono";
     }
   } else {
     if (tierEl) tierEl.textContent = "未连接";
     if (connPill) {
-      connPill.textContent = "○ 连接异常";
-      connPill.className = "px-2.5 py-1 rounded-xl ui-badge text-rose-300 text-[12px] font-mono";
+      connPill.textContent = "连接异常";
+      connPill.className = "px-2 py-1 rounded-[6px] ui-badge text-[var(--status-danger)] text-[12px] font-mono";
     }
   }
 
@@ -288,10 +297,10 @@ function renderAccountHeader() {
   const label = document.getElementById("opus-guard-label");
   const sw = document.getElementById("settings-opus-switch");
   if (pill && label) {
-    pill.className = guardOn
-      ? "spring-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl ui-chip border-emerald-400/40 text-emerald-300 whitespace-nowrap"
-      : "spring-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl ui-chip border-amber-400/40 text-amber-300 whitespace-nowrap";
-    label.textContent = guardOn ? "🛡 Opus 0点数保护: 开" : "⚠ Opus 0点数保护: 关";
+    pill.className = "spring-btn inline-flex items-center gap-2 px-3 py-1 rounded-[6px] ui-chip whitespace-nowrap";
+    pill.querySelector("svg")?.setAttribute("class", `ui-ic ${guardOn ? "text-[var(--status-success)]" : "text-[var(--status-warning)]"}`);
+    pill.querySelector("use")?.setAttribute("href", guardOn ? "#ic-shield" : "#ic-alert");
+    label.textContent = guardOn ? "Opus 免费保护: 开" : "Opus 免费保护: 关";
   }
   if (sw) sw.classList.toggle("on", guardOn);
 }
@@ -347,26 +356,19 @@ function renderStorageBadges() {
 function renderModelSelectMenu() {
   const menu = document.getElementById("model-select-menu");
   if (!menu) return;
-  const familyColors = {
-    v5: "bg-sky-500/25 border-sky-400/40 text-sky-200",
-    v4_5: "bg-emerald-500/25 border-emerald-400/40 text-emerald-200",
-    v4: "bg-indigo-500/25 border-indigo-400/40 text-indigo-200",
-    v3: "bg-purple-500/25 border-purple-400/40 text-purple-200",
-  };
   menu.innerHTML = Object.values(state.models)
     .map(m => {
       const active = m.id === state.currentModel ? "active" : "";
-      const famCls = familyColors[m.family] || familyColors.v5;
       return `
         <button type="button" onclick="selectModel('${m.id}')" class="glass-select-option ${active}">
-          <div class="flex flex-col gap-0.5 min-w-0">
-            <div class="flex items-center gap-1.5">
-              <span class="px-1.5 py-0.5 rounded border text-[12px] font-mono ${famCls}">${m.short_name}</span>
+          <div class="flex flex-col gap-1 min-w-0">
+            <div class="flex items-center gap-2">
+              <span class="px-2 py-0 rounded-[6px] bg-[var(--accent-tint)] border border-[var(--border-control)] text-[12px] font-mono text-[var(--text-primary)]">${m.short_name}</span>
               <span class="font-semibold truncate">${escapeHtml(m.name)}</span>
             </div>
-            <span class="text-[12px] text-[var(--muted-foreground)] line-clamp-1">${escapeHtml(m.description)}</span>
+            <span class="text-[12px] text-[var(--text-muted)] line-clamp-1">${escapeHtml(m.description)}</span>
           </div>
-          <span class="text-[12px] px-1.5 py-0.5 rounded ui-badge shrink-0 font-mono text-emerald-300">${escapeHtml(m.badge)}</span>
+          <span class="text-[12px] px-2 py-1 rounded-[6px] ui-badge shrink-0 font-mono text-[var(--status-success)]">${escapeHtml(m.badge)}</span>
         </button>
       `;
     })
@@ -390,25 +392,25 @@ function selectModel(modelId, notify = true) {
   const capEl = document.getElementById("model-cap-badges");
   const badges = [];
   if (spec.supports_multi_char) {
-    badges.push(`<span class="px-2 py-0.5 rounded-md ui-badge text-emerald-300">✓ 多角色站位 (${spec.max_characters}人)</span>`);
+    badges.push(`<span class="inline-flex items-center gap-1 px-2 py-1 rounded-[6px] ui-badge text-[var(--text-secondary)]">${uiIcon("check", "ui-ic-sm text-[var(--status-success)]")}多角色站位 (${spec.max_characters}人)</span>`);
   } else {
-    badges.push(`<span class="px-2 py-0.5 rounded-md ui-badge text-amber-300">⊘ 无多角色分区</span>`);
+    badges.push(`<span class="inline-flex items-center gap-1 px-2 py-1 rounded-[6px] ui-badge text-[var(--text-muted)]">无多角色分区</span>`);
   }
   if (spec.supports_alpha_transparency) {
-    badges.push(`<span class="px-2 py-0.5 rounded-md ui-badge text-sky-300">✨ 原生透明底</span>`);
+    badges.push(`<span class="inline-flex items-center gap-1 px-2 py-1 rounded-[6px] ui-badge text-[var(--text-secondary)]">${uiIcon("check", "ui-ic-sm text-[var(--status-success)]")}原生透明底</span>`);
   }
   if (spec.supports_vibe) {
     badges.push(
-      `<span class="px-2 py-0.5 rounded-md ui-badge text-emerald-300">✓ Vibe 参考${spec.vibe_raw_image_free ? " (原图免费)" : ""}</span>`
+      `<span class="inline-flex items-center gap-1 px-2 py-1 rounded-[6px] ui-badge text-[var(--text-secondary)]">${uiIcon("check", "ui-ic-sm text-[var(--status-success)]")}Vibe 参考${spec.vibe_raw_image_free ? " (原图免费)" : ""}</span>`
     );
   } else {
-    badges.push(`<span class="px-2 py-0.5 rounded-md ui-badge text-amber-300">⊘ V5 暂不支持 Vibe/Precise</span>`);
+    badges.push(`<span class="inline-flex items-center gap-1 px-2 py-1 rounded-[6px] ui-badge text-[var(--text-muted)]">V5 暂不支持 Vibe/Precise</span>`);
   }
   if (spec.supports_precise_ref) {
-    badges.push(`<span class="px-2 py-0.5 rounded-md ui-badge text-sky-300">✓ Precise 精准参考</span>`);
+    badges.push(`<span class="inline-flex items-center gap-1 px-2 py-1 rounded-[6px] ui-badge text-[var(--text-secondary)]">${uiIcon("check", "ui-ic-sm text-[var(--status-success)]")}Precise 精准参考</span>`);
   }
   if (spec.supports_smea) {
-    badges.push(`<span class="px-2 py-0.5 rounded-md ui-badge text-purple-300">✓ SMEA/DYN</span>`);
+    badges.push(`<span class="inline-flex items-center gap-1 px-2 py-1 rounded-[6px] ui-badge text-[var(--text-secondary)]">${uiIcon("check", "ui-ic-sm text-[var(--status-success)]")}SMEA/DYN</span>`);
   }
   capEl.innerHTML = badges.join("");
 
@@ -462,7 +464,7 @@ function selectModel(modelId, notify = true) {
     // V5: Neither Vibe nor Precise Ref is supported
     if (refCapPill) {
       refCapPill.textContent = `${spec.short_name} 暂不支持参考图`;
-      refCapPill.className = "text-[12px] px-2 py-0.5 rounded-md ui-badge text-amber-300";
+      refCapPill.className = "text-[12px] px-2 py-1 rounded-[6px] ui-badge text-[var(--status-warning)]";
     }
     v5UnsupBox?.classList.remove("hidden");
     vibeSupBox?.classList.add("hidden");
@@ -471,18 +473,18 @@ function selectModel(modelId, notify = true) {
     vibeSupBox?.classList.remove("hidden");
     if (spec.vibe_raw_image_free) {
       if (refCapPill) {
-        refCapPill.textContent = "✨ V3 专属：原图 Vibe 0点数免费";
-        refCapPill.className = "text-[12px] px-2 py-0.5 rounded-md ui-badge text-emerald-300";
+        refCapPill.textContent = "V3 原图 Vibe 0点数免费";
+        refCapPill.className = "text-[12px] px-2 py-1 rounded-[6px] ui-badge text-[var(--status-success)]";
       }
       if (vibeCostHint) vibeCostHint.textContent = "上传任意 PNG/JPG 均 0 Anlas 免费";
-      if (vibeUploadLabel) vibeUploadLabel.textContent = "📂 上传参考图 PNG/JPG (V3 0点数免费)";
+      if (vibeUploadLabel) vibeUploadLabel.textContent = "上传参考图 PNG/JPG (V3 0点数免费)";
     } else {
       if (refCapPill) {
         refCapPill.textContent = spec.supports_precise_ref ? "支持 Vibe + Precise 参考" : "支持 Vibe 风格参考";
-        refCapPill.className = "text-[12px] px-2 py-0.5 rounded-md ui-badge text-sky-300";
+        refCapPill.className = "text-[12px] px-2 py-1 rounded-[6px] ui-badge text-[var(--text-primary)]";
       }
       if (vibeCostHint) vibeCostHint.textContent = "导入 .naiv4vibe 0点数免费 (原图编码需 2 Anlas)";
-      if (vibeUploadLabel) vibeUploadLabel.textContent = "📂 导入 .naiv4vibe (0点数) 或参考图";
+      if (vibeUploadLabel) vibeUploadLabel.textContent = "导入 .naiv4vibe (0点数) 或参考图";
     }
     precSupBox?.classList.toggle("hidden", !spec.supports_precise_ref);
   }
@@ -608,7 +610,7 @@ function renderResolutionButtons() {
         ? "is-active"
         : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]";
       return `
-        <button type="button" onclick="selectResolution(${r.width}, ${r.height})" class="spring-btn py-1.5 px-1 rounded-xl ui-btn text-center ${cls}">
+        <button type="button" onclick="selectResolution(${r.width}, ${r.height})" class="spring-btn py-2 px-1 rounded-[6px] ui-btn text-center ${cls}">
           <div class="text-[12.5px] leading-tight">${escapeHtml(r.label)}</div>
           <div class="text-[12px] font-mono opacity-80">${r.sub}</div>
         </button>
@@ -645,17 +647,23 @@ function stepParam(key, delta) {
   updateCostEstimate();
 }
 
+function updateSeedLockBtn() {
+  const btn = document.getElementById("lock-seed-btn");
+  if (!btn) return;
+  btn.innerHTML = `${uiIcon(state.seedLocked ? "lock" : "unlock")}<span>${state.seedLocked ? "锁定" : "未锁"}</span>`;
+  btn.classList.toggle("is-active", state.seedLocked);
+}
+
 function randomizeSeed() {
   state.seed = 0;
   state.seedLocked = false;
   document.getElementById("seed-input").value = "0";
-  document.getElementById("lock-seed-btn").textContent = "🔓 未锁";
+  updateSeedLockBtn();
 }
 
 function toggleSeedLock() {
   state.seedLocked = !state.seedLocked;
-  const btn = document.getElementById("lock-seed-btn");
-  if (btn) btn.textContent = state.seedLocked ? "🔒 锁定" : "🔓 未锁";
+  updateSeedLockBtn();
 }
 
 function toggleAlphaTransparency() {
@@ -724,8 +732,8 @@ async function updateCostEstimate() {
     if (badge) {
       badge.textContent = est.badge;
       badge.className = est.is_opus_free
-        ? "hidden sm:inline-block text-[12px] px-2 py-1 rounded-xl ui-badge text-emerald-300 font-mono whitespace-nowrap"
-        : "hidden sm:inline-block text-[12px] px-2 py-1 rounded-xl ui-badge text-amber-300 font-mono whitespace-nowrap";
+        ? "hidden sm:inline-block text-[12px] px-2 py-1 rounded-[6px] ui-badge text-[var(--status-success)] font-mono whitespace-nowrap"
+        : "hidden sm:inline-block text-[12px] px-2 py-1 rounded-[6px] ui-badge text-[var(--status-warning)] font-mono whitespace-nowrap";
     }
   } catch (e) {}
 }
@@ -807,21 +815,21 @@ async function runPromptLinter() {
     updateDynamicPromptIndicator();
 
     if (data.issue_count > 0) {
-      btn.textContent = `✨ 发现 ${data.issue_count} 处可规范`;
-      btn.className = "spring-btn text-[12px] px-2 py-0.5 rounded-lg ui-btn text-amber-300 border-amber-400/40";
+      btn.innerHTML = `${uiIcon("alert", "ui-ic-sm")}<span>发现 ${data.issue_count} 处可规范</span>`;
+      btn.className = "spring-btn inline-flex items-center gap-1 text-[12px] px-2 py-1 rounded-[6px] ui-btn text-[var(--status-warning)] border-[var(--status-warning)]";
       listEl.innerHTML = data.issues
         .map(
           (iss, idx) => `
-          <div class="flex items-center justify-between gap-2 py-1 px-2 rounded-lg ui-subgroup">
-            <span class="truncate text-[var(--muted-foreground)]">${escapeHtml(iss.message)}</span>
-            <button onclick="applySingleLintFix(${idx})" class="shrink-0 text-[12px] px-2 py-0.5 rounded ui-btn text-sky-300">修复</button>
+          <div class="flex items-center justify-between gap-2 py-1 px-2 rounded-[6px] ui-subgroup">
+            <span class="truncate text-[var(--text-secondary)]">${escapeHtml(iss.message)}</span>
+            <button onclick="applySingleLintFix(${idx})" class="shrink-0 text-[12px] px-2 py-1 rounded-[6px] ui-btn">修复</button>
           </div>
         `
         )
         .join("");
     } else {
-      btn.textContent = "✓ 格式规范";
-      btn.className = "spring-btn text-[12px] px-2 py-0.5 rounded-lg ui-btn text-[var(--success)]";
+      btn.innerHTML = `${uiIcon("check", "ui-ic-sm")}<span>格式规范</span>`;
+      btn.className = "spring-btn inline-flex items-center gap-1 text-[12px] px-2 py-1 rounded-[6px] ui-btn text-[var(--status-success)]";
       document.getElementById("lint-drawer")?.classList.add("hidden");
     }
   } catch (e) {}
@@ -939,12 +947,12 @@ async function queryTagSuggestions(query) {
     menu.innerHTML = tags
       .map(
         t => `
-        <button type="button" onclick="insertTagFromSearch('${escapeHtml(t.tag)}')" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-sky-500/20 text-left text-xs">
+        <button type="button" onclick="insertTagFromSearch('${escapeHtml(t.tag)}')" class="ui-menu-item w-full flex items-center justify-between px-3 py-2 text-left text-[12.5px]">
           <div>
-            <span class="font-mono font-semibold text-sky-300">${escapeHtml(t.tag)}</span>
-            <span class="ml-2 text-[11px] text-[var(--muted-foreground)]">${escapeHtml(t.cn || "")}</span>
+            <span class="font-mono font-semibold text-[var(--text-primary)]">${escapeHtml(t.tag)}</span>
+            <span class="ml-2 text-[12px] text-[var(--text-muted)]">${escapeHtml(t.cn || "")}</span>
           </div>
-          <span class="text-[10px] font-mono text-[var(--muted-foreground)]">${t.count ? (t.count / 1000).toFixed(0) + "k" : t.cat || ""}</span>
+          <span class="text-[12px] font-mono text-[var(--text-muted)]">${t.count ? (t.count / 1000).toFixed(0) + "k" : t.cat || ""}</span>
         </button>
       `
       )
@@ -969,10 +977,10 @@ function renderSnippetsBar() {
     .map(s => {
       const delBtn =
         s.cat === "custom"
-          ? `<span onclick="event.stopPropagation();deleteSnippetRecord(${s.id})" class="ml-1 text-rose-300/80 hover:text-rose-300" title="删除自定义积木">✕</span>`
+          ? `<span onclick="event.stopPropagation();deleteSnippetRecord(${s.id})" class="ml-1 text-[var(--status-danger)] hover:opacity-80" title="删除自定义积木">×</span>`
           : "";
       return `
-      <button type="button" onclick="toggleSnippetTag('${escapeHtml(s.tags)}')" class="spring-btn inline-flex items-center px-2.5 py-1 rounded-xl ui-btn text-[12px]">
+      <button type="button" onclick="toggleSnippetTag('${escapeHtml(s.tags)}')" class="spring-btn inline-flex items-center px-2 py-1 rounded-[6px] ui-btn text-[12px]">
         <span>${escapeHtml(s.label)}</span>${delBtn}
       </button>
     `;
@@ -1001,7 +1009,10 @@ const GRID_COORDS = [0.1, 0.3, 0.5, 0.7, 0.9];
 function toggleUseCoords() {
   state.useCoords = !state.useCoords;
   const btn = document.getElementById("use-coords-btn");
-  if (btn) btn.textContent = state.useCoords ? "📍 站位: 开" : "🤖 自动站位";
+  if (btn) {
+    btn.innerHTML = `${uiIcon(state.useCoords ? "pin" : "compass", "ui-ic-sm")}<span>${state.useCoords ? "站位: 开" : "自动站位"}</span>`;
+    btn.classList.toggle("is-active", state.useCoords);
+  }
   renderCharacterSlots();
 }
 
@@ -1043,7 +1054,7 @@ function renderCharacterSlots() {
   const wrap = document.getElementById("char-slots-list");
   if (!wrap) return;
   if (!state.characters.length) {
-    wrap.innerHTML = `<div class="text-[12.5px] text-[var(--muted-foreground)]">单画面模式中。多人同框可点击「+ 添加角色」按 5×5 坐标拆分站位，并可在中央画布直接拖拽彩色标点！</div>`;
+    wrap.innerHTML = `<div class="text-[12.5px] text-[var(--text-muted)]">单画面模式。多人同框可点击「+ 添加角色」按 5×5 坐标拆分站位，并可在中央画布直接拖拽标点。</div>`;
     renderCharStageOverlay();
     return;
   }
@@ -1051,35 +1062,35 @@ function renderCharacterSlots() {
     .map((ch, idx) => {
       let gridHtml = "";
       if (state.useCoords) {
-        gridHtml = `<div class="grid grid-cols-5 gap-1 p-1.5 rounded-xl ui-subgroup shrink-0" title="点击格子指定角色在画布中的 5×5 站位坐标">`;
+        gridHtml = `<div class="grid grid-cols-5 gap-1 p-2 rounded-[10px] ui-subgroup shrink-0" title="点击格子指定角色在画布中的 5×5 站位坐标">`;
         for (const gy of GRID_COORDS) {
           for (const gx of GRID_COORDS) {
             const act = Math.abs(ch.x - gx) < 0.08 && Math.abs(ch.y - gy) < 0.08;
-            const cls = act ? "bg-sky-400 ring-1 ring-sky-300/60" : "bg-white/15 hover:bg-white/35";
-            gridHtml += `<button type="button" onclick="setCharCoord(${idx}, ${gx}, ${gy})" class="w-3.5 h-3.5 rounded-sm ${cls}"></button>`;
+            const cls = act ? "bg-[var(--cta-bg)] border border-[var(--cta-bg)]" : "bg-[var(--border-control)] hover:bg-[var(--border-hover)]";
+            gridHtml += `<button type="button" onclick="setCharCoord(${idx}, ${gx}, ${gy})" class="w-3 h-3 rounded-[3px] ${cls}"></button>`;
           }
         }
         gridHtml += `</div>`;
       }
       return `
-        <div class="rounded-xl ui-card p-2.5 space-y-2 border-sky-400/25">
-          <div class="flex items-center justify-between text-xs">
+        <div class="rounded-[10px] ui-card p-3 space-y-2">
+          <div class="flex items-center justify-between text-[12px]">
             <div class="flex items-center gap-2">
-              ${ch.avatar_url ? `<img src="${escapeHtml(ch.avatar_url)}" alt="" class="w-5 h-5 rounded-md object-cover border border-white/25" />` : ""}
-              <span class="font-semibold text-sky-300">角色 #${idx + 1}${ch.oc_name ? ` · ${escapeHtml(ch.oc_name)}` : ""} ${state.useCoords ? `(X:${Number(ch.x).toFixed(2)} Y:${Number(ch.y).toFixed(2)})` : "(AI自动站位)"}</span>
+              ${ch.avatar_url ? `<img src="${escapeHtml(ch.avatar_url)}" alt="" class="w-5 h-5 rounded-[6px] object-cover border border-[var(--border-control)]" />` : ""}
+              <span class="font-semibold text-[var(--text-primary)]">角色 #${idx + 1}${ch.oc_name ? ` · ${escapeHtml(ch.oc_name)}` : ""} ${state.useCoords ? `(X:${Number(ch.x).toFixed(2)} Y:${Number(ch.y).toFixed(2)})` : "(自动站位)"}</span>
             </div>
             <div class="flex items-center gap-1 text-[12px]">
-              <button type="button" onclick="appendCharInteraction(${idx}, 'source#hugging')" class="px-1.5 py-0.5 rounded ui-btn" title="主动动作">source#</button>
-              <button type="button" onclick="appendCharInteraction(${idx}, 'target#hugging')" class="px-1.5 py-0.5 rounded ui-btn" title="被动动作">target#</button>
-              <button type="button" onclick="appendCharInteraction(${idx}, 'mutual#holding hands')" class="px-1.5 py-0.5 rounded ui-btn" title="双方互动">mutual#</button>
-              <button type="button" onclick="removeCharacterSlot(${idx})" class="ml-1 text-rose-300 hover:underline">删除</button>
+              <button type="button" onclick="appendCharInteraction(${idx}, 'source#hugging')" class="px-2 py-1 rounded-[6px] ui-btn" title="主动动作">source#</button>
+              <button type="button" onclick="appendCharInteraction(${idx}, 'target#hugging')" class="px-2 py-1 rounded-[6px] ui-btn" title="被动动作">target#</button>
+              <button type="button" onclick="appendCharInteraction(${idx}, 'mutual#holding hands')" class="px-2 py-1 rounded-[6px] ui-btn" title="双方互动">mutual#</button>
+              <button type="button" onclick="removeCharacterSlot(${idx})" class="ml-1 text-[var(--status-danger)] hover:underline">删除</button>
             </div>
           </div>
-          <div class="flex items-start gap-2.5">
+          <div class="flex items-start gap-2">
             ${gridHtml}
-            <div class="flex-1 space-y-1.5">
-              <textarea rows="2" oninput="state.characters[${idx}].prompt=this.value" placeholder="角色 #${idx + 1} 外貌、服饰与动作提示词..." class="char-prompt-ta w-full ui-well rounded-lg p-1.5 text-[12px] font-mono">${escapeHtml(ch.prompt)}</textarea>
-              <input type="text" value="${escapeHtml(ch.uc)}" oninput="state.characters[${idx}].uc=this.value" placeholder="该角色专属排除词 (防止特征串色)" class="w-full ui-well rounded-lg px-2 py-1 text-[12px] font-mono" />
+            <div class="flex-1 space-y-2">
+              <textarea rows="2" oninput="state.characters[${idx}].prompt=this.value" placeholder="角色 #${idx + 1} 外貌、服饰与动作提示词..." class="char-prompt-ta w-full ui-well rounded-[6px] p-2 text-[12px] font-mono">${escapeHtml(ch.prompt)}</textarea>
+              <input type="text" value="${escapeHtml(ch.uc)}" oninput="state.characters[${idx}].uc=this.value" placeholder="该角色专属排除词" class="w-full ui-well rounded-[6px] px-2 py-1 text-[12px] font-mono" />
             </div>
           </div>
         </div>
@@ -1161,18 +1172,18 @@ function renderPreciseRefList() {
   wrap.innerHTML = state.preciseRefs
     .map(
       (r, i) => `
-      <div class="p-2 rounded-lg ui-card space-y-1.5 border-sky-400/20">
+      <div class="p-2 rounded-[10px] ui-card space-y-2">
         <div class="flex items-center justify-between gap-2">
           <div class="flex items-center gap-2 min-w-0">
-            <img src="${r.image}" alt="" class="w-8 h-8 rounded object-cover shrink-0 border border-white/20" />
+            <img src="${r.image}" alt="" class="w-8 h-8 rounded-[6px] object-cover shrink-0 border border-[var(--border-control)]" />
             <span class="truncate font-mono text-[12px]">${escapeHtml(r.name || `Ref #${i + 1}`)}</span>
           </div>
-          <select onchange="state.preciseRefs[${i}].mode=this.value" class="ui-well rounded px-1.5 py-0.5 text-[12px]">
+          <select onchange="state.preciseRefs[${i}].mode=this.value" class="ui-well rounded-[6px] px-2 py-1 text-[12px]">
             <option value="character&style" ${r.mode === "character&style" ? "selected" : ""}>角色+画风</option>
             <option value="character" ${r.mode === "character" ? "selected" : ""}>仅角色</option>
             <option value="style" ${r.mode === "style" ? "selected" : ""}>仅画风</option>
           </select>
-          <button type="button" onclick="removePreciseRef(${i})" class="text-rose-300 text-[12px] shrink-0">移除</button>
+          <button type="button" onclick="removePreciseRef(${i})" class="text-[var(--status-danger)] text-[12px] shrink-0">移除</button>
         </div>
         <div class="grid grid-cols-2 gap-2 text-[12px]">
           <label class="flex items-center gap-1">强度 <input type="range" min="0.1" max="1.0" step="0.05" value="${r.strength}" oninput="state.preciseRefs[${i}].strength=parseFloat(this.value)" class="flex-1" /></label>
@@ -1196,10 +1207,10 @@ function renderVibeList() {
   wrap.innerHTML = state.vibes
     .map(
       (v, i) => `
-      <div class="p-2 rounded-lg ui-card space-y-1">
+      <div class="p-2 rounded-[10px] ui-card space-y-1">
         <div class="flex justify-between text-[12px]">
           <span class="truncate font-mono">${escapeHtml(v.name || `Vibe #${i + 1}`)}</span>
-          <span class="text-emerald-300 font-mono">${v.encoding ? "已编码 0点数" : v.anlas_cost + " Anlas"}</span>
+          <span class="text-[var(--status-success)] font-mono">${v.encoding ? "已编码 0点数" : v.anlas_cost + " Anlas"}</span>
         </div>
         <div class="flex items-center gap-2 text-[12px]">
           <span>强度</span>
@@ -1219,8 +1230,8 @@ function setWorkbenchAction(act) {
     if (btn) {
       btn.className =
         k === act
-          ? "spring-btn px-2 py-1.5 rounded-xl ui-btn-ghost is-active whitespace-nowrap"
-          : "spring-btn px-2 py-1.5 rounded-xl ui-btn-ghost whitespace-nowrap";
+          ? "spring-btn px-2 py-1 rounded-[6px] ui-btn-ghost is-active whitespace-nowrap"
+          : "spring-btn px-2 py-1 rounded-[6px] ui-btn-ghost whitespace-nowrap";
     }
   });
 
@@ -1254,10 +1265,10 @@ function toggleFocusInpaint() {
   state.focusInpaint = !state.focusInpaint;
   const btn = document.getElementById("focus-inpaint-btn");
   if (btn) {
-    btn.textContent = state.focusInpaint ? "🎯 Focus高清: 开" : "🎯 Focus高清: 关";
+    btn.textContent = state.focusInpaint ? "Focus高清: 开" : "Focus高清: 关";
     btn.className = state.focusInpaint
-      ? "spring-btn px-2 py-1 rounded-lg ui-btn border-emerald-400/50 text-emerald-300 text-[12px]"
-      : "spring-btn px-2 py-1 rounded-lg ui-btn text-[var(--muted-foreground)] text-[12px]";
+      ? "spring-btn px-2 py-1 rounded-[6px] ui-btn text-[var(--status-success)] text-[12px]"
+      : "spring-btn px-2 py-1 rounded-[6px] ui-btn text-[var(--text-muted)] text-[12px]";
   }
 }
 
@@ -1468,8 +1479,8 @@ function setBatchCount(n) {
   document.querySelectorAll(".batch-btn").forEach(b => {
     const active = Number(b.dataset.batch) === state.batchCount;
     b.className = active
-      ? "batch-btn px-2 py-1 rounded-lg font-mono bg-sky-500/25 text-[var(--foreground)] font-semibold"
-      : "batch-btn px-2 py-1 rounded-lg font-mono text-[var(--muted-foreground)]";
+      ? "batch-btn px-2 py-1 rounded-[6px] font-mono bg-[var(--accent-tint)] text-[var(--text-primary)] font-semibold"
+      : "batch-btn px-2 py-1 rounded-[6px] font-mono text-[var(--text-muted)]";
   });
 }
 
@@ -1497,7 +1508,7 @@ async function triggerGenerate() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "启动连抽队列失败");
       startQueuePolling();
-      showToast(state.batchCount === 0 ? "🎲 已开启 Opus 0点数无限自动连抽！" : `🎲 已开启 ${state.batchCount} 张连续自动出图`);
+      showToast(state.batchCount === 0 ? "已开启 Opus 无限自动连抽" : `已开启 ${state.batchCount} 张连续自动出图`);
     } catch (err) {
       showToast(err.message || "队列启动失败");
     }
@@ -1536,7 +1547,7 @@ async function triggerGenerate() {
     renderStorageBadges();
     renderWorkbenchHistory();
     renderFullGallery();
-    showToast(`✨ 出图完成 (${data.item.generation_time}s) · 已自动保存至 D:\\NAI-Studio\\outputs`);
+    showToast(`出图完成 (${data.item.generation_time}s) · 已保存至 D:\\NAI-Studio\\outputs`);
   } catch (err) {
     showToast(err.message || "生成失败", 4200);
   } finally {
@@ -1602,11 +1613,11 @@ function startQueuePolling() {
         if (q.last_error) {
           showToast(`队列中止：${q.last_error}`, 4500);
         } else if (isArtistQueue) {
-          showToast(`🎨 画师预览卡补齐完成！共更新 ${q.completed} 位画师`);
+          showToast(`画师预览卡补齐完成，共更新 ${q.completed} 位画师`);
         } else if (q.queue_kind === "xyz_matrix") {
-          showToast(`📊 X/Y 参数矩阵已完成并自动拼接大图！`);
+          showToast("X/Y 参数矩阵已完成并拼接大图");
         } else {
-          showToast(`✨ 队列完成！共生成 ${q.completed} 张作品`);
+          showToast(`队列完成，共生成 ${q.completed} 张作品`);
         }
       }
     } catch (e) {}
@@ -1662,7 +1673,7 @@ async function runDirectorTool(reqType, extra = {}) {
     renderAccountHeader();
     renderStorageBadges();
     renderWorkbenchHistory();
-    showToast(`✨ Director (${reqType}) 处理完成 (0 Anlas)`);
+    showToast(`Director (${reqType}) 处理完成 (0 Anlas)`);
   } catch (err) {
     showToast(err.message || "Director 工具执行失败", 4000);
   } finally {
@@ -1727,28 +1738,28 @@ function renderWorkbenchHistory() {
   const wrap = document.getElementById("workbench-history-list");
   if (!wrap) return;
   if (!state.gallery.length) {
-    wrap.innerHTML = `<div class="text-xs text-[var(--muted-foreground)] text-center py-8">暂无生成记录，点击中央「⚡ 生成图片」开始创作</div>`;
+    wrap.innerHTML = `<div class="text-[12.5px] text-[var(--text-muted)] text-center py-8">暂无生成记录，点击「生成图片」开始创作</div>`;
     return;
   }
   wrap.innerHTML = state.gallery
     .slice(0, 20)
     .map(
       item => `
-      <div class="rounded-xl ui-card p-2.5 space-y-2">
-        <div class="flex gap-2.5 cursor-pointer" onclick="setStageFromGalleryItem(state.gallery.find(x=>x.id===${item.id}), false)">
-          <img src="${item.image_url}" alt="thumb" class="w-14 h-20 rounded-lg object-cover shrink-0 border border-white/15" />
+      <div class="rounded-[10px] ui-card p-3 space-y-2">
+        <div class="flex gap-3 cursor-pointer" onclick="setStageFromGalleryItem(state.gallery.find(x=>x.id===${item.id}), false)">
+          <img src="${item.image_url}" alt="thumb" class="w-14 h-20 rounded-[6px] object-cover shrink-0 border border-[var(--border-hairline)]" />
           <div class="min-w-0 flex-1 space-y-1">
             <div class="flex items-center justify-between gap-1">
-              <span class="text-[12px] px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 font-mono">${escapeHtml(item.model_short)}</span>
-              <span class="text-[12px] font-mono text-[var(--muted-foreground)]">#${item.seed}</span>
+              <span class="text-[12px] px-2 py-0 rounded-[6px] ui-badge text-[var(--text-primary)] font-mono">${escapeHtml(item.model_short)}</span>
+              <span class="text-[12px] font-mono text-[var(--text-muted)]">#${item.seed}</span>
             </div>
-            <p class="text-[12.5px] text-[var(--muted-foreground)] line-clamp-2 font-mono">${escapeHtml(item.prompt)}</p>
+            <p class="text-[12.5px] text-[var(--text-secondary)] line-clamp-2 font-mono">${escapeHtml(item.prompt)}</p>
           </div>
         </div>
-        <div class="grid grid-cols-3 gap-1.5 text-[12px]">
-          <button onclick="setStageFromGalleryItem(state.gallery.find(x=>x.id===${item.id}), true)" class="spring-btn py-1 rounded-lg ui-btn">恢复配方</button>
-          <button onclick="sendGalleryItemToI2I(${item.id})" class="spring-btn py-1 rounded-lg ui-btn">送入重绘</button>
-          <button onclick="rerollGalleryItem(${item.id})" class="spring-btn py-1 rounded-lg ui-btn">换种再抽</button>
+        <div class="grid grid-cols-3 gap-2 text-[12px]">
+          <button onclick="setStageFromGalleryItem(state.gallery.find(x=>x.id===${item.id}), true)" class="spring-btn py-1 rounded-[6px] ui-btn">恢复配方</button>
+          <button onclick="sendGalleryItemToI2I(${item.id})" class="spring-btn py-1 rounded-[6px] ui-btn">送入重绘</button>
+          <button onclick="rerollGalleryItem(${item.id})" class="spring-btn py-1 rounded-[6px] ui-btn">换种再抽</button>
         </div>
       </div>
     `
@@ -1820,10 +1831,10 @@ function openInspectPngModal(meta) {
   const sum = document.getElementById("inspect-png-summary");
   if (sum) {
     sum.innerHTML = `
-      <div><span class="text-sky-300">来源:</span> ${meta.metadata_source === "stealth_lsb" ? "Stealth Alpha 隐写层" : "PNG 原生元数据"} · 尺寸: ${meta.width || "?"}×${meta.height || "?"}</div>
-      <div><span class="text-sky-300">模型:</span> ${escapeHtml(meta.model || "未知")} · <span class="text-sky-300">Seed:</span> #${meta.seed || 0} · Steps ${meta.steps || 28} · CFG ${meta.scale || 5.0}</div>
-      <div class="pt-1 border-t border-white/10"><span class="text-emerald-300">Prompt:</span> ${escapeHtml(meta.prompt || "(空)")}</div>
-      ${meta.uc ? `<div><span class="text-rose-300">UC:</span> ${escapeHtml(meta.uc)}</div>` : ""}
+      <div><span class="text-[var(--text-primary)] font-semibold">来源:</span> ${meta.metadata_source === "stealth_lsb" ? "Stealth Alpha 隐写层" : "PNG 原生元数据"} · 尺寸: ${meta.width || "?"}×${meta.height || "?"}</div>
+      <div><span class="text-[var(--text-primary)] font-semibold">模型:</span> ${escapeHtml(meta.model || "未知")} · <span class="text-[var(--text-primary)] font-semibold">Seed:</span> #${meta.seed || 0} · Steps ${meta.steps || 28} · CFG ${meta.scale || 5.0}</div>
+      <div class="pt-1 border-t border-[var(--border-hairline)]"><span class="text-[var(--status-success)] font-semibold">Prompt:</span> ${escapeHtml(meta.prompt || "(空)")}</div>
+      ${meta.uc ? `<div><span class="text-[var(--status-danger)] font-semibold">UC:</span> ${escapeHtml(meta.uc)}</div>` : ""}
     `;
   }
   document.getElementById("inspect-png-modal")?.classList.remove("hidden");
@@ -1870,8 +1881,7 @@ function confirmInspectPngRestore() {
   restoreRecipeToWorkbench(filtered);
   if (useSeed && meta.seed) {
     state.seedLocked = true;
-    const lockBtn = document.getElementById("seed-lock-btn");
-    if (lockBtn) lockBtn.textContent = "🔒 锁定";
+    updateSeedLockBtn();
   }
 
   if (imgB64) {
@@ -1886,7 +1896,7 @@ function confirmInspectPngRestore() {
   }
 
   closeInspectPngModal();
-  showToast("✨ 已按你的勾选项精准还原配方！");
+  showToast("已按勾选项还原配方");
 }
 
 function downloadCurrentStageImage() {
@@ -1922,32 +1932,31 @@ function openDiffModal(idxA = 0, idxB = 1) {
       .join("");
 
   document.getElementById("diff-content").innerHTML = `
-    <div class="grid grid-cols-2 gap-2.5">
-      <div class="p-2 rounded-xl ui-subgroup space-y-1">
-        <div class="text-sky-300 font-semibold">左侧图 A</div>
-        <select onchange="openDiffModal(Number(this.value), ${safeB})" class="w-full ui-well rounded-lg px-2 py-1 text-[12px]">${optHtml(safeA)}</select>
-        <div class="text-[12px] text-[var(--muted-foreground)] font-mono">${a.width}×${a.height} · Steps ${a.steps} · CFG ${a.scale} · ${escapeHtml(a.sampler)}</div>
+    <div class="grid grid-cols-2 gap-3">
+      <div class="p-3 rounded-[10px] ui-subgroup space-y-1">
+        <div class="text-[var(--text-primary)] font-semibold">左侧图 A</div>
+        <select onchange="openDiffModal(Number(this.value), ${safeB})" class="w-full ui-well rounded-[6px] px-2 py-1 text-[12px]">${optHtml(safeA)}</select>
+        <div class="text-[12px] text-[var(--text-muted)] font-mono">${a.width}×${a.height} · Steps ${a.steps} · CFG ${a.scale} · ${escapeHtml(a.sampler)}</div>
       </div>
-      <div class="p-2 rounded-xl ui-subgroup space-y-1">
-        <div class="text-emerald-300 font-semibold">右侧图 B</div>
-        <select onchange="openDiffModal(${safeA}, Number(this.value))" class="w-full ui-well rounded-lg px-2 py-1 text-[12px]">${optHtml(safeB)}</select>
-        <div class="text-[12px] text-[var(--muted-foreground)] font-mono">${b.width}×${b.height} · Steps ${b.steps} · CFG ${b.scale} · ${escapeHtml(b.sampler)}</div>
+      <div class="p-3 rounded-[10px] ui-subgroup space-y-1">
+        <div class="text-[var(--text-primary)] font-semibold">右侧图 B</div>
+        <select onchange="openDiffModal(${safeA}, Number(this.value))" class="w-full ui-well rounded-[6px] px-2 py-1 text-[12px]">${optHtml(safeB)}</select>
+        <div class="text-[12px] text-[var(--text-muted)] font-mono">${b.width}×${b.height} · Steps ${b.steps} · CFG ${b.scale} · ${escapeHtml(b.sampler)}</div>
       </div>
     </div>
 
-    <!-- Before/After Interactive Swipe Curtain -->
     <div id="diff-swipe-box" class="diff-compare-wrap" onpointerdown="startDiffSwipe(event)" onpointermove="moveDiffSwipe(event)">
       <img src="${b.image_url}" alt="Image B" />
       <img id="diff-top-img" src="${a.image_url}" alt="Image A" style="clip-path: inset(0 50% 0 0);" />
       <div id="diff-divider" class="diff-compare-divider" style="left: 50%;"></div>
       <div id="diff-handle" class="diff-compare-handle" style="left: 50%;">⇆</div>
-      <span class="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-md liquid-popover text-[12px] font-mono">A: #${a.seed}</span>
-      <span class="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-md liquid-popover text-[12px] font-mono">B: #${b.seed}</span>
+      <span class="absolute top-2 left-2 px-2 py-1 rounded-[6px] liquid-popover text-[12px] font-mono">A: #${a.seed}</span>
+      <span class="absolute top-2 right-2 px-2 py-1 rounded-[6px] liquid-popover text-[12px] font-mono">B: #${b.seed}</span>
     </div>
 
-    <div class="p-2.5 rounded-xl ui-subgroup space-y-1 font-mono">
-      <div class="text-emerald-300">+ A 相比 B 新增 (${added.length})：${added.length ? escapeHtml(added.join(", ")) : "无变化"}</div>
-      <div class="text-rose-300">− A 相比 B 移除 (${removed.length})：${removed.length ? escapeHtml(removed.join(", ")) : "无变化"}</div>
+    <div class="p-3 rounded-[10px] ui-subgroup space-y-1 font-mono">
+      <div class="text-[var(--status-success)]">+ A 相比 B 新增 (${added.length})：${added.length ? escapeHtml(added.join(", ")) : "无变化"}</div>
+      <div class="text-[var(--status-danger)]">− A 相比 B 移除 (${removed.length})：${removed.length ? escapeHtml(removed.join(", ")) : "无变化"}</div>
     </div>
   `;
   document.getElementById("diff-modal").classList.remove("hidden");
@@ -2000,34 +2009,33 @@ function renderArtistsGrid() {
 
   grid.innerHTML = filtered
     .map(a => {
-      const [c1, c2] = a.palette || ["#0284c7", "#38bdf8"];
       const previewHtml = a.preview_url
         ? `<img src="${a.preview_url}" alt="${escapeHtml(a.name)}" class="w-full h-52 object-cover object-top transition-opacity duration-150 group-hover:opacity-95" />`
-        : `<div class="w-full h-52 flex flex-col items-center justify-center p-4 text-center" style="background:linear-gradient(135deg,${c1},${c2})">
-             <div class="ui-title text-white/95">${escapeHtml(a.name)}</div>
-             <div class="text-[12.5px] font-mono text-white/85 mt-1">${escapeHtml(a.tag)}</div>
-             <div class="mt-3 text-[12px] px-2.5 py-1 rounded-full bg-black/35 text-white/95">点击下方「⚡ 实测跑卡」生成真图</div>
+        : `<div class="w-full h-52 ui-stage-well flex flex-col items-center justify-center p-4 text-center border-b border-[var(--border-hairline)]">
+             <div class="ui-title text-[var(--text-primary)]">${escapeHtml(a.name)}</div>
+             <div class="text-[12.5px] font-mono text-[var(--text-secondary)] mt-1">${escapeHtml(a.tag)}</div>
+             <div class="mt-3 text-[12px] px-3 py-1 rounded-[6px] ui-badge text-[var(--text-muted)]">点击下方「实测跑卡」生成预览图</div>
            </div>`;
 
       return `
-        <div class="rounded-2xl ui-card overflow-hidden flex flex-col justify-between group">
+        <div class="rounded-[10px] ui-card overflow-hidden flex flex-col justify-between group">
           <div class="relative overflow-hidden">
             ${previewHtml}
-            <span class="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-lg liquid-popover text-[12px] font-medium">${escapeHtml(a.category)}</span>
-            <button onclick="toggleArtistFav(${a.id})" class="spring-btn absolute top-2.5 right-2.5 w-7 h-7 rounded-full liquid-popover flex items-center justify-center text-sm ${a.favorite ? "text-amber-300" : "text-white/70"}">
-              ${a.favorite ? "★" : "☆"}
+            <span class="absolute top-2 left-2 px-2 py-1 rounded-[6px] liquid-popover text-[12px] font-medium">${escapeHtml(a.category)}</span>
+            <button onclick="toggleArtistFav(${a.id})" aria-label="收藏画师" class="spring-btn absolute top-2 right-2 w-7 h-7 rounded-[6px] liquid-popover flex items-center justify-center ${a.favorite ? "text-[var(--status-warning)]" : "text-[var(--text-muted)]"}">
+              ${uiIcon("star")}
             </button>
           </div>
           <div class="p-3 space-y-2">
-            <div class="flex items-center justify-between gap-1">
+            <div class="flex items-center justify-between gap-2">
               <span class="ui-section truncate">${escapeHtml(a.name)}</span>
-              <span class="selectable-text text-[12px] font-mono text-sky-300 truncate">${escapeHtml(a.tag)}</span>
+              <span class="selectable-text text-[12px] font-mono text-[var(--text-secondary)] truncate">${escapeHtml(a.tag)}</span>
             </div>
-            <p class="text-[12.5px] text-[var(--muted-foreground)] line-clamp-2 leading-relaxed">${escapeHtml(a.desc)}</p>
-            <div class="grid grid-cols-3 gap-1.5 pt-1 text-[12.5px]">
-              <button onclick="useSingleArtist('${escapeHtml(a.tag)}', '${escapeHtml(a.name)}')" class="spring-btn py-1 rounded-lg ui-btn">单用画风</button>
-              <button onclick="addArtistToMixer('${escapeHtml(a.tag)}', '${escapeHtml(a.name)}')" class="spring-btn py-1 rounded-lg ui-btn text-sky-300">+ 混搭</button>
-              <button id="gen-card-btn-${a.id}" onclick="generateArtistCard(${a.id})" class="spring-btn py-1 rounded-lg ui-btn text-emerald-300" title="调用 NovelAI 官方接口 0点数生成该画师标准预览图">⚡ 实测跑卡</button>
+            <p class="text-[12.5px] text-[var(--text-muted)] line-clamp-2 leading-relaxed">${escapeHtml(a.desc)}</p>
+            <div class="grid grid-cols-3 gap-2 pt-1 text-[12.5px]">
+              <button onclick="useSingleArtist('${escapeHtml(a.tag)}', '${escapeHtml(a.name)}')" class="spring-btn py-1 rounded-[6px] ui-btn">单用画风</button>
+              <button onclick="addArtistToMixer('${escapeHtml(a.tag)}', '${escapeHtml(a.name)}')" class="spring-btn py-1 rounded-[6px] ui-btn">+ 混搭</button>
+              <button id="gen-card-btn-${a.id}" onclick="generateArtistCard(${a.id})" class="spring-btn py-1 rounded-[6px] ui-btn text-[var(--status-success)]" title="调用 NovelAI 接口 0点数生成该画师标准预览图">实测跑卡</button>
             </div>
           </div>
         </div>
@@ -2065,14 +2073,14 @@ async function generateArtistCard(artistId) {
       const idx = state.artists.findIndex(x => x.id === artistId);
       if (idx !== -1) state.artists[idx] = data.artist;
       renderArtistsGrid();
-      showToast(`✨ 已生成并保存 ${data.artist.name} 的标准预览卡！`);
+      showToast(`已生成并保存 ${data.artist.name} 的标准预览卡`);
     }
   } catch (err) {
     showToast(err.message || "生成预览卡失败");
   } finally {
     if (btn) {
       btn.disabled = false;
-      btn.textContent = "⚡ 实测跑卡";
+      btn.textContent = "实测跑卡";
     }
   }
 }
@@ -2127,14 +2135,14 @@ function renderMixer() {
   wrap.innerHTML = state.mixerItems
     .map(
       (it, idx) => `
-      <div class="p-2.5 rounded-xl ui-card space-y-1.5">
+      <div class="p-3 rounded-[10px] ui-card space-y-2">
         <div class="flex items-center justify-between ui-body">
-          <span class="font-semibold">${escapeHtml(it.name)} <span class="text-[12px] font-mono text-[var(--muted-foreground)]">(${escapeHtml(it.tag)})</span></span>
-          <button onclick="state.mixerItems.splice(${idx},1);renderMixer()" class="text-[12.5px] text-rose-300">移除</button>
+          <span class="font-semibold">${escapeHtml(it.name)} <span class="text-[12px] font-mono text-[var(--text-muted)]">(${escapeHtml(it.tag)})</span></span>
+          <button onclick="state.mixerItems.splice(${idx},1);renderMixer()" class="text-[12.5px] text-[var(--status-danger)]">移除</button>
         </div>
-        <div class="flex items-center gap-2.5">
+        <div class="flex items-center gap-3">
           <input type="range" min="0.1" max="2.0" step="0.05" value="${it.weight}" oninput="state.mixerItems[${idx}].weight=parseFloat(this.value);renderMixer()" class="flex-1" />
-          <span class="font-mono text-[13px] w-11 text-right text-sky-300">${Number(it.weight).toFixed(2)}</span>
+          <span class="font-mono text-[13px] w-11 text-right text-[var(--text-primary)]">${Number(it.weight).toFixed(2)}</span>
         </div>
       </div>
     `
@@ -2157,7 +2165,7 @@ function applyMixerToWorkbench() {
   state.activeArtistMix = JSON.parse(JSON.stringify(state.mixerItems));
   renderActiveArtistMixBar();
   switchTab("workbench");
-  showToast("已将多画师混搭方案挂载至工作台！");
+  showToast("已将多画师混搭方案应用到工作台");
 }
 
 function renderActiveArtistMixBar() {
@@ -2183,12 +2191,12 @@ function renderMixPresets() {
   wrap.innerHTML = state.mixPresets
     .map(
       p => `
-      <div class="flex items-center justify-between gap-2 p-2 rounded-xl ui-card text-[13px]">
+      <div class="flex items-center justify-between gap-2 p-2 rounded-[10px] ui-card text-[13px]">
         <div class="truncate">
           <div class="font-medium truncate">${escapeHtml(p.name)}</div>
-          <div class="text-[12px] font-mono text-[var(--muted-foreground)] truncate">${escapeHtml(formatMixString(p.items || []))}</div>
+          <div class="text-[12px] font-mono text-[var(--text-muted)] truncate">${escapeHtml(formatMixString(p.items || []))}</div>
         </div>
-        <button onclick='loadMixPreset(${JSON.stringify(p.items || [])})' class="spring-btn px-2.5 py-1 rounded-lg ui-btn text-[12px] text-sky-300 shrink-0">载入</button>
+        <button onclick='loadMixPreset(${JSON.stringify(p.items || [])})' class="spring-btn px-3 py-1 rounded-[6px] ui-btn text-[12px] shrink-0">载入</button>
       </div>
     `
     )
@@ -2249,13 +2257,13 @@ async function submitNewArtist() {
       else state.artists.unshift(data.artist);
       renderArtistsGrid();
       toggleCustomArtistModal(false);
-      showToast(`✨ 已收录 ${data.artist.name} 并生成标准预览卡！`);
+      showToast(`已收录 ${data.artist.name} 并生成标准预览卡`);
     }
   } catch (err) {
     showToast(err.message || "收录失败");
   } finally {
     btn.disabled = false;
-    btn.textContent = "⚡ 立即跑卡并收录 (0点数)";
+    btn.textContent = "立即跑卡并收录 (0点数)";
   }
 }
 
@@ -2270,7 +2278,7 @@ function toggleGalleryFavFilter() {
   state.galleryFavOnly = !state.galleryFavOnly;
   const btn = document.getElementById("gallery-fav-filter-btn");
   if (btn) {
-    btn.textContent = state.galleryFavOnly ? "★ 仅看收藏" : "☆ 仅看收藏";
+    btn.innerHTML = `${uiIcon("star")}<span>${state.galleryFavOnly ? "已筛选收藏" : "仅看收藏"}</span>`;
     btn.classList.toggle("is-active", state.galleryFavOnly);
   }
   renderFullGallery(true);
@@ -2351,26 +2359,26 @@ async function renderFullGallery(reloadFromServer = false) {
   grid.innerHTML = items
     .map(
       it => `
-      <div class="rounded-2xl ui-card overflow-hidden flex flex-col justify-between group">
-        <div class="relative overflow-hidden bg-black/20">
+      <div class="rounded-[10px] ui-card overflow-hidden flex flex-col justify-between group">
+        <div class="relative overflow-hidden ui-stage-well">
           <img src="${it.image_url}" alt="artwork" class="w-full h-60 object-cover object-top transition-opacity duration-150 group-hover:opacity-95 cursor-pointer" onclick="setStageFromGalleryItem(state.gallery.find(x=>x.id===${it.id}), false);switchTab('workbench')" />
-          <span class="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-lg liquid-popover text-[12px] font-mono text-sky-300">${escapeHtml(it.model_short)}</span>
-          <button onclick="toggleGalleryFav(${it.id})" class="spring-btn absolute top-2.5 right-2.5 w-7 h-7 rounded-full liquid-popover flex items-center justify-center text-sm ${it.favorite ? "text-amber-300" : "text-white/70"}">
-            ${it.favorite ? "★" : "☆"}
+          <span class="absolute top-2 left-2 px-2 py-1 rounded-[6px] liquid-popover text-[12px] font-mono text-[var(--text-primary)]">${escapeHtml(it.model_short)}</span>
+          <button onclick="toggleGalleryFav(${it.id})" aria-label="收藏作品" class="spring-btn absolute top-2 right-2 w-7 h-7 rounded-[6px] liquid-popover flex items-center justify-center ${it.favorite ? "text-[var(--status-warning)]" : "text-[var(--text-muted)]"}">
+            ${uiIcon("star")}
           </button>
         </div>
         <div class="p-3 space-y-2">
-          <div class="flex items-center justify-between text-[12.5px] font-mono text-[var(--muted-foreground)]">
+          <div class="flex items-center justify-between text-[12.5px] font-mono text-[var(--text-muted)]">
             <span>Seed: #${it.seed}</span>
             <span>${it.width}×${it.height} · ${it.generation_time || 0}s</span>
           </div>
-          ${it.notes ? `<div class="text-[12px] px-2 py-0.5 rounded bg-sky-500/15 text-sky-300 truncate">📝 ${escapeHtml(it.notes)}</div>` : ""}
-          <p class="selectable-text text-[12.5px] font-mono text-[var(--foreground)] line-clamp-2">${escapeHtml(it.prompt)}</p>
+          ${it.notes ? `<div class="text-[12px] px-2 py-1 rounded-[6px] bg-[var(--accent-tint)] text-[var(--text-primary)] truncate inline-flex items-center gap-1 max-w-full">${uiIcon("edit", "ui-ic-sm")}<span>${escapeHtml(it.notes)}</span></div>` : ""}
+          <p class="selectable-text text-[12.5px] font-mono text-[var(--text-primary)] line-clamp-2">${escapeHtml(it.prompt)}</p>
           <div class="grid grid-cols-4 gap-1 pt-1 text-[12.5px]">
-            <button onclick="setStageFromGalleryItem(state.gallery.find(x=>x.id===${it.id}), true)" class="spring-btn py-1 rounded-lg ui-btn text-sky-300">还原</button>
-            <button onclick="editGalleryNotes(${it.id})" class="spring-btn py-1 rounded-lg ui-btn">备注</button>
-            <a href="${it.image_url}" download="${escapeHtml(it.filename)}" class="spring-btn py-1 rounded-lg ui-btn text-center">下载</a>
-            <button onclick="deleteGalleryRecord(${it.id})" class="spring-btn py-1 rounded-lg ui-btn text-rose-300">删除</button>
+            <button onclick="setStageFromGalleryItem(state.gallery.find(x=>x.id===${it.id}), true)" class="spring-btn py-1 rounded-[6px] ui-btn">还原</button>
+            <button onclick="editGalleryNotes(${it.id})" class="spring-btn py-1 rounded-[6px] ui-btn">备注</button>
+            <a href="${it.image_url}" download="${escapeHtml(it.filename)}" class="spring-btn py-1 rounded-[6px] ui-btn text-center">下载</a>
+            <button onclick="deleteGalleryRecord(${it.id})" class="spring-btn py-1 rounded-[6px] ui-btn text-[var(--status-danger)]">删除</button>
           </div>
         </div>
       </div>
@@ -2432,7 +2440,7 @@ async function syncGalleryFolder() {
 }
 
 async function batchCleanGallery() {
-  if (!window.confirm("确定要一键清理所有【未收藏 ★】的图库记录与 D 盘对应原图文件吗？已收藏作品将完整保留。")) return;
+  if (!window.confirm("确定要一键清理所有未收藏的图库记录与 D 盘对应原图文件吗？已收藏作品将完整保留。")) return;
   const res = await fetch("/api/gallery/batch-delete", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -2444,7 +2452,7 @@ async function batchCleanGallery() {
   renderStorageBadges();
   renderWorkbenchHistory();
   renderFullGallery();
-  showToast(`🧹 已清理 ${data.removed || 0} 张未收藏图片`);
+  showToast(`已清理 ${data.removed || 0} 张未收藏图片`);
 }
 
 // ================= Tab 4: Settings & MCP Agent Playground =================
@@ -2518,44 +2526,24 @@ function toggleBgMenu(force) {
 }
 
 function applyBgHex(hex, presetName = null, persist = true) {
-  state.config.bg_hex = hex;
+  const normalizedHex = !hex || hex.toLowerCase() === "#0b262c" ? "#0b0c0e" : hex;
+  state.config.bg_hex = normalizedHex;
   const picker = document.getElementById("bg-color-picker");
   const label = document.getElementById("bg-hex-label");
-  if (picker) picker.value = hex;
-  if (label) label.textContent = hex.toUpperCase();
+  if (picker) picker.value = normalizedHex;
+  if (label) label.textContent = normalizedHex.toUpperCase();
 
-  const [h, s, l] = hexToHsl(hex);
+  const [h, s, l] = hexToHsl(normalizedHex);
   const isLight = document.documentElement.classList.contains("light");
   const root = document.documentElement.style;
-  const sat = Math.min(s, 72);
+  const sat = Math.min(s, 8);
 
   if (isLight) {
-    root.setProperty("--bg-base", `hsl(${h}, ${Math.max(18, sat * 0.6)}%, 82%)`);
-    root.setProperty("--sky-top", `hsl(${h}, ${Math.max(20, sat * 0.65)}%, 88%)`);
-    root.setProperty("--sky-mid", `hsl(${h}, ${Math.max(22, sat * 0.7)}%, 79%)`);
-    root.setProperty("--water-horizon", `hsl(${h}, ${Math.max(25, sat * 0.75)}%, 71%)`);
-    root.setProperty("--water-deep", `hsl(${h}, ${Math.max(24, sat * 0.7)}%, 64%)`);
-    root.setProperty("--cloud-fill", `hsla(${h}, 40%, 100%, 0.48)`);
-    root.setProperty("--cloud-soft", `hsla(${h}, 45%, 98%, 0.30)`);
-    root.setProperty("--water-sheen", `hsla(${h}, 60%, 98%, 0.36)`);
-    root.setProperty("--glass-popover", `hsla(${h}, ${Math.min(sat, 40)}%, 97%, 0.96)`);
+    root.setProperty("--bg-base", `hsl(${h}, ${sat}%, 95%)`);
   } else {
-    const baseL = Math.min(Math.max(l, 7), 20);
-    root.setProperty("--bg-base", `hsl(${h}, ${sat}%, ${Math.max(5, baseL - 4)}%)`);
-    root.setProperty("--sky-top", `hsl(${h}, ${sat}%, ${Math.max(6, baseL - 3)}%)`);
-    root.setProperty("--sky-mid", `hsl(${h}, ${Math.min(82, sat + 6)}%, ${baseL + 5}%)`);
-    root.setProperty("--water-horizon", `hsl(${h}, ${Math.min(86, sat + 10)}%, ${baseL + 11}%)`);
-    root.setProperty("--water-deep", `hsl(${h}, ${sat}%, ${Math.max(5, baseL - 3)}%)`);
-    root.setProperty("--cloud-fill", `hsla(${h}, 75%, 76%, 0.12)`);
-    root.setProperty("--cloud-soft", `hsla(${h}, 80%, 82%, 0.07)`);
-    root.setProperty("--water-sheen", `hsla(${h}, 85%, 74%, 0.14)`);
-    root.setProperty("--glass-popover", `hsla(${h}, ${Math.min(sat, 55)}%, 10%, 0.95)`);
+    const baseL = Math.min(Math.max(l, 4), 16);
+    root.setProperty("--bg-base", `hsl(${h}, ${sat}%, ${baseL}%)`);
   }
-
-  const g0 = document.getElementById("glow-stop-0");
-  const g1 = document.getElementById("glow-stop-1");
-  if (g0) g0.setAttribute("stop-color", `hsl(${h}, ${Math.min(85, sat + 15)}%, 72%)`);
-  if (g1) g1.setAttribute("stop-color", `hsl(${h}, ${Math.min(85, sat + 10)}%, 52%)`);
 
   setGlassClarity(state.config.glass_clarity || 88, false);
   if (presetName) showToast(`已切换背景色：${presetName}`);
@@ -2563,7 +2551,7 @@ function applyBgHex(hex, presetName = null, persist = true) {
     fetch("/api/config", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ bg_hex: hex, bg_preset_name: presetName || "" }),
+      body: JSON.stringify({ bg_hex: normalizedHex, bg_preset_name: presetName || "" }),
     });
   }
 }
@@ -2576,15 +2564,6 @@ function setGlassClarity(val, persist = true) {
   if (valEl) valEl.textContent = `${clarity}%`;
   if (slider) slider.value = String(clarity);
 
-  const alpha = Math.max(0.06, (100 - clarity) / 100).toFixed(2);
-  const isLight = document.documentElement.classList.contains("light");
-  const [h, s] = hexToHsl(state.config.bg_hex || "#0b262c");
-  if (isLight) {
-    document.documentElement.style.setProperty("--glass-tint", `rgba(235, 245, 252, ${alpha})`);
-  } else {
-    document.documentElement.style.setProperty("--glass-tint", `hsla(${h}, ${Math.min(s, 55)}%, 10%, ${alpha})`);
-  }
-
   if (persist) {
     fetch("/api/config", {
       method: "POST",
@@ -2596,8 +2575,9 @@ function setGlassClarity(val, persist = true) {
 
 function toggleTheme() {
   const isLight = document.documentElement.classList.toggle("light");
-  document.getElementById("theme-label").textContent = isLight ? "🌙 深色晶透" : "☀ 浅色晶透";
-  applyBgHex(state.config.bg_hex || "#0b262c", null, false);
+  document.getElementById("theme-label").textContent = isLight ? "深色模式" : "浅色模式";
+  document.getElementById("theme-icon-use")?.setAttribute("href", isLight ? "#ic-moon" : "#ic-sun");
+  applyBgHex(state.config.bg_hex || "#0b0c0e", null, false);
   fetch("/api/config", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -2700,8 +2680,8 @@ function renderTagPillsBar() {
         <span class="${cls}" draggable="true" ondragstart="handleTagDragStart(${idx}, event)" ondragover="handleTagDragOver(event)" ondragleave="handleTagDragLeave(event)" ondrop="handleTagDrop(${idx}, event)" onclick="toggleMuteTagPill('${escapeHtml(seg)}')" title="单击静音/恢复，拖拽调整词序，右侧 +/- 调权重">
           <span class="font-mono">${escapeHtml(seg)}</span>
           ${cn ? `<span class="tag-pill-cn">${escapeHtml(cn)}</span>` : ""}
-          <button type="button" onclick="event.stopPropagation();adjustTagPillWeight(${idx}, 1)" class="px-1 rounded hover:bg-sky-500/25 text-[12px] font-bold" title="增加权重">+</button>
-          <button type="button" onclick="event.stopPropagation();adjustTagPillWeight(${idx}, -1)" class="px-1 rounded hover:bg-rose-500/25 text-[12px] font-bold" title="降低权重">−</button>
+          <button type="button" onclick="event.stopPropagation();adjustTagPillWeight(${idx}, 1)" class="px-1 rounded-[6px] hover:bg-[var(--accent-tint)] text-[12px] font-bold" title="增加权重">+</button>
+          <button type="button" onclick="event.stopPropagation();adjustTagPillWeight(${idx}, -1)" class="px-1 rounded-[6px] hover:bg-[var(--accent-tint)] text-[12px] font-bold" title="降低权重">−</button>
         </span>
       `;
     })
@@ -2858,14 +2838,14 @@ function renderInlineMenu() {
   menu.innerHTML = state.inlineMatches
     .map(
       (m, i) => `
-      <button type="button" onclick="acceptInlineSuggestion(${i})" class="w-full flex items-center justify-between px-2.5 py-1 rounded-lg text-left text-[12.5px] ${
-        i === state.inlineSelIdx ? "bg-sky-500/25 border border-sky-400/40" : "hover:bg-white/10"
+      <button type="button" onclick="acceptInlineSuggestion(${i})" class="ui-menu-item w-full flex items-center justify-between px-3 py-1 text-left text-[12.5px] ${
+        i === state.inlineSelIdx ? "is-selected" : ""
       }">
         <div class="truncate">
-          <span class="font-mono font-semibold text-sky-300">${escapeHtml(m.tag)}</span>
-          <span class="ml-2 text-[var(--muted-foreground)]">${escapeHtml(m.cn || "")}</span>
+          <span class="font-mono font-semibold text-[var(--text-primary)]">${escapeHtml(m.tag)}</span>
+          <span class="ml-2 text-[var(--text-muted)]">${escapeHtml(m.cn || "")}</span>
         </div>
-        <span class="text-[12px] font-mono text-[var(--muted-foreground)] shrink-0">${m.count ? (m.count / 1000).toFixed(0) + "k" : m.cat || ""}</span>
+        <span class="text-[12px] font-mono text-[var(--text-muted)] shrink-0">${m.count ? (m.count / 1000).toFixed(0) + "k" : m.cat || ""}</span>
       </button>
     `
     )
@@ -2960,7 +2940,7 @@ function toggleCheckerboard() {
   state.checkerboard = !state.checkerboard;
   document.getElementById("stage-dropzone")?.classList.toggle("checkerboard-bg", state.checkerboard);
   document.getElementById("lightbox-stage")?.classList.toggle("checkerboard-bg", state.checkerboard);
-  document.getElementById("checkerboard-btn")?.classList.toggle("border-sky-400", state.checkerboard);
+  document.getElementById("checkerboard-btn")?.classList.toggle("is-active", state.checkerboard);
 }
 
 async function copyStageImage() {
@@ -2974,12 +2954,12 @@ async function copyStageImage() {
     const blob = await resp.blob();
     if (navigator.clipboard && window.ClipboardItem) {
       await navigator.clipboard.write([new ClipboardItem({ [blob.type || "image/png"]: blob })]);
-      showToast("📋 已将高清原图复制到系统剪贴板！");
+      showToast("已将高清原图复制到剪贴板");
     } else {
       throw new Error("ClipboardItem 不可用");
     }
   } catch (err) {
-    showToast("浏览器限制了直接写图片剪贴板，请右键图片复制或点击「⬇ 保存」");
+    showToast("浏览器限制了直接写图片剪贴板，请右键图片复制或点击「保存」");
   }
 }
 
@@ -3026,11 +3006,11 @@ function renderCharStageOverlay() {
     overlay.innerHTML = "";
     return;
   }
-  const colors = ["#38bdf8", "#34d399", "#f472b6", "#a78bfa", "#fbbf24", "#fb7185"];
+  const colors = [];
   overlay.innerHTML = state.characters
     .map(
       (ch, idx) => `
-      <div class="char-stage-dot" data-cidx="${idx}" style="left:${(ch.x * 100).toFixed(1)}%;top:${(ch.y * 100).toFixed(1)}%;background:${colors[idx % colors.length]};" title="拖拽调整角色 #${idx + 1} 在画布中的位置">
+      <div class="char-stage-dot" data-cidx="${idx}" style="left:${(ch.x * 100).toFixed(1)}%;top:${(ch.y * 100).toFixed(1)}%;" title="拖拽调整角色 #${idx + 1} 在画布中的位置">
         ${idx + 1}
       </div>
     `
@@ -3117,7 +3097,7 @@ function setupGlobalHotkeys() {
           img.classList.remove("hidden");
           document.getElementById("stage-empty")?.classList.add("hidden");
           setWorkbenchAction("img2img");
-          showToast("📋 已从剪贴板粘贴图像并切换至图生图模式！");
+          showToast("已从剪贴板粘贴图像并切换至图生图模式");
         };
         reader.readAsDataURL(blob);
         break;
@@ -3172,7 +3152,7 @@ async function runArtistAbTest() {
     if (!res.ok) throw new Error(data.detail || "启动对照失败");
     switchTab("workbench");
     startQueuePolling();
-    showToast(`⚖️ 已启动 ${abList.length} 位画师同 Seed (#${fixedSeed}) 盲测对照跑图！`);
+    showToast(`已启动 ${abList.length} 位画师同 Seed (#${fixedSeed}) 对照跑图`);
   } catch (err) {
     showToast(err.message || "画师对照队列启动失败");
   }
@@ -3201,23 +3181,23 @@ function renderOcCardsList() {
   wrap.innerHTML = state.ocCards
     .map(
       c => `
-      <div class="p-2.5 rounded-xl ui-card flex items-start gap-2.5">
+      <div class="p-3 rounded-[10px] ui-card flex items-start gap-3">
         ${
           c.avatar_url
-            ? `<img src="${escapeHtml(c.avatar_url)}" alt="" class="w-11 h-11 rounded-xl object-cover shrink-0 border border-white/20" />`
-            : `<div class="w-11 h-11 rounded-xl ui-subgroup flex items-center justify-center text-xs text-[var(--muted-foreground)] shrink-0">👤</div>`
+            ? `<img src="${escapeHtml(c.avatar_url)}" alt="" class="w-11 h-11 rounded-[6px] object-cover shrink-0 border border-[var(--border-control)]" />`
+            : `<div class="w-11 h-11 rounded-[6px] ui-subgroup flex items-center justify-center text-[var(--text-muted)] shrink-0">${uiIcon("user")}</div>`
         }
         <div class="flex-1 min-w-0 space-y-1">
-          <div class="flex items-center justify-between gap-1">
-            <span class="font-semibold text-sky-300 truncate">${escapeHtml(c.name)}</span>
-            <div class="flex items-center gap-1.5 text-[12px] shrink-0">
-              <button onclick="bindOcAvatarFromStage(${c.id})" class="spring-btn px-1.5 py-0.5 rounded ui-btn" title="用当前画布图像作为该 OC 头像">设当前图为头像</button>
-              <button onclick="injectOcAsCharSlot(${c.id})" class="spring-btn px-2 py-0.5 rounded ui-btn text-emerald-300">+ 塞入多角色槽</button>
-              <button onclick="injectOcIntoPrompt(${c.id})" class="spring-btn px-2 py-0.5 rounded ui-btn text-sky-300">覆盖主提示词</button>
-              <button onclick="deleteOcCardRecord(${c.id})" class="text-rose-300 hover:underline px-1">删除</button>
+          <div class="flex items-center justify-between gap-2">
+            <span class="font-semibold text-[var(--text-primary)] truncate">${escapeHtml(c.name)}</span>
+            <div class="flex items-center gap-1 text-[12px] shrink-0">
+              <button onclick="bindOcAvatarFromStage(${c.id})" class="spring-btn px-2 py-1 rounded-[6px] ui-btn" title="用当前画布图像作为该 OC 头像">设当前图为头像</button>
+              <button onclick="injectOcAsCharSlot(${c.id})" class="spring-btn px-2 py-1 rounded-[6px] ui-btn">+ 塞入多角色槽</button>
+              <button onclick="injectOcIntoPrompt(${c.id})" class="spring-btn px-2 py-1 rounded-[6px] ui-btn">覆盖主提示词</button>
+              <button onclick="deleteOcCardRecord(${c.id})" class="text-[var(--status-danger)] hover:underline px-1">删除</button>
             </div>
           </div>
-          <div class="selectable-text font-mono text-[12px] text-[var(--muted-foreground)] line-clamp-2">${escapeHtml(c.prompt)}</div>
+          <div class="selectable-text font-mono text-[12px] text-[var(--text-muted)] line-clamp-2">${escapeHtml(c.prompt)}</div>
         </div>
       </div>
     `
@@ -3275,7 +3255,7 @@ async function bindOcAvatarFromStage(cardId) {
     const idx = state.ocCards.findIndex(x => x.id === cardId);
     if (idx !== -1) state.ocCards[idx] = data.card;
     renderOcCardsList();
-    showToast(`✨ 已更新「${data.card.name}」的头像！`);
+    showToast(`已更新「${data.card.name}」的头像`);
   } else {
     showToast(data.detail || "设置头像失败");
   }
@@ -3395,13 +3375,16 @@ function toggleImmersionMode() {
   const view = document.getElementById("view-workbench");
   const btn = document.getElementById("immersion-btn");
   if (view) view.classList.toggle("immersion-active", state.immersionMode);
-  if (btn) btn.textContent = state.immersionMode ? "⤢ 退出沉浸" : "⛶ 沉浸";
+  if (btn) {
+    btn.innerHTML = `${uiIcon("maximize", "ui-ic-sm")}<span>${state.immersionMode ? "退出沉浸" : "沉浸"}</span>`;
+    btn.classList.toggle("is-active", state.immersionMode);
+  }
 }
 
 async function startArtistBackfillQueue() {
   const missing = state.artists.filter(a => !a.preview_url);
   if (!missing.length) {
-    showToast("所有画师都已有预览图，无需补齐！");
+    showToast("所有画师都已有预览图，无需补齐");
     return;
   }
   try {
@@ -3413,7 +3396,7 @@ async function startArtistBackfillQueue() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || "启动画师补齐队列失败");
     startQueuePolling();
-    showToast(`⚡ 已开启静默补齐队列：共 ${missing.length} 位缺失画师 (0 Anlas V4.5)`);
+    showToast(`已开启静默补齐队列：共 ${missing.length} 位缺失画师 (0 Anlas V4.5)`);
   } catch (err) {
     showToast(err.message || "启动失败");
   }
@@ -3443,17 +3426,17 @@ function renderWildcardFileList() {
   const wrap = document.getElementById("wildcard-file-list");
   if (!wrap) return;
   if (!state.wildcards.length) {
-    wrap.innerHTML = `<div class="text-[11px] text-[var(--muted-foreground)] p-2">暂无词库文件，点击上方新建</div>`;
+    wrap.innerHTML = `<div class="text-[12px] text-[var(--text-muted)] p-2">暂无词库文件，点击上方新建</div>`;
     return;
   }
   wrap.innerHTML = state.wildcards
     .map(
       w => `
-      <button type="button" onclick="selectWildcardFile('${escapeHtml(w.name)}')" class="w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] flex items-center justify-between ${
-        state.currentWildcardName === w.name ? "bg-sky-500/25 text-sky-200 border border-sky-400/40" : "hover:bg-white/10"
+      <button type="button" onclick="selectWildcardFile('${escapeHtml(w.name)}')" class="ui-menu-item w-full text-left px-3 py-2 text-[12px] flex items-center justify-between ${
+        state.currentWildcardName === w.name ? "is-selected font-semibold" : ""
       }">
         <span class="font-mono truncate">${escapeHtml(w.token || `__${w.name}__`)}</span>
-        <span class="text-[10px] text-[var(--muted-foreground)] font-mono shrink-0">${w.count || 0}行</span>
+        <span class="text-[12px] text-[var(--text-muted)] font-mono shrink-0">${w.count || 0}行</span>
       </button>
     `
     )
@@ -3502,7 +3485,7 @@ async function saveCurrentWildcard() {
     state.wildcards = data.wildcards || [];
     state.currentWildcardName = data.name;
     renderWildcardFileList();
-    showToast(`✨ 已保存词库 ${data.token}（${data.count} 项）`);
+    showToast(`已保存词库 ${data.token}（${data.count} 项）`);
   } catch (err) {
     showToast(err.message || "保存词库失败");
   }
@@ -3536,7 +3519,7 @@ function testRollWildcard() {
   }
   const picked = lines[Math.floor(Math.random() * lines.length)];
   if (prev) {
-    prev.textContent = `🎲 试抽结果：${picked}`;
+    prev.textContent = `试抽结果：${picked}`;
     prev.classList.remove("hidden");
   }
 }
@@ -3662,7 +3645,7 @@ async function startXyzMatrixQueue() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || "启动矩阵任务失败");
     startQueuePolling();
-    showToast(`📊 已启动 ${xLabels.length}×${yLabels.length} 参数矩阵 (Seed #${fixedSeed})`);
+    showToast(`已启动 ${xLabels.length}×${yLabels.length} 参数矩阵 (Seed #${fixedSeed})`);
   } catch (err) {
     showToast(err.message || "启动矩阵失败");
   }
@@ -3726,12 +3709,12 @@ function renderSnapshotList() {
   wrap.innerHTML = snaps
     .map(
       (s, i) => `
-      <div class="p-2.5 rounded-xl ui-card space-y-1">
+      <div class="p-3 rounded-[10px] ui-card space-y-1">
         <div class="flex items-center justify-between text-[12px]">
-          <span class="font-semibold text-sky-300">${escapeHtml(s.label)} · ${escapeHtml(s.time)}</span>
-          <button onclick="restorePromptSnapshot(${i})" class="spring-btn px-2.5 py-0.5 rounded-lg ui-btn text-emerald-300 text-[12px]">恢复此配方</button>
+          <span class="font-semibold text-[var(--text-primary)]">${escapeHtml(s.label)} · ${escapeHtml(s.time)}</span>
+          <button onclick="restorePromptSnapshot(${i})" class="spring-btn px-2 py-1 rounded-[6px] ui-btn text-[12px]">恢复此配方</button>
         </div>
-        <div class="selectable-text font-mono text-[12px] text-[var(--muted-foreground)] line-clamp-2">${escapeHtml(s.prompt)}</div>
+        <div class="selectable-text font-mono text-[12px] text-[var(--text-muted)] line-clamp-2">${escapeHtml(s.prompt)}</div>
       </div>
     `
     )
@@ -3767,7 +3750,7 @@ async function exportWorkbenchRecipeJson() {
   const jsonStr = JSON.stringify(payload, null, 2);
   try {
     await navigator.clipboard.writeText(jsonStr);
-    showToast("📋 完整配方 JSON 已复制到剪贴板！");
+    showToast("完整配方 JSON 已复制到剪贴板");
   } catch (e) {
     window.prompt("复制下方配方 JSON：", jsonStr);
   }
@@ -3780,7 +3763,7 @@ function importWorkbenchRecipeJson() {
     const obj = JSON.parse(raw);
     restoreRecipeToWorkbench(obj);
     toggleSnapshotModal(false);
-    showToast("✨ 已导入配方 JSON 至当前工作台！");
+    showToast("已导入配方 JSON 至当前工作台");
   } catch (e) {
     showToast("JSON 格式解析失败，请检查粘贴内容是否完整");
   }
