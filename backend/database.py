@@ -183,11 +183,11 @@ INITIAL_MIX_PRESETS: List[Dict[str, Any]] = [
 ]
 
 INITIAL_SNIPPETS: List[Dict[str, Any]] = [
-    {"label": "✨ 电影逆光", "tags": "cinematic lighting, backlighting, rim lighting, lens flare", "cat": "lighting"},
-    {"label": "💧 晶透水滴", "tags": "water drop, sparkles, chromatic aberration, depth of field", "cat": "atmosphere"},
-    {"label": "🌅 逢魔暮色", "tags": "twilight, sunset, golden hour, dappled sunlight, bokeh", "cat": "atmosphere"},
-    {"label": "🌬 飘逸微风", "tags": "wind, floating hair, floating petals, dynamic angle", "cat": "motion"},
-    {"label": "👁 精致眼眸", "tags": "detailed eyes, sparkling eyes, looking at viewer, light smile", "cat": "detail"},
+    {"label": "电影逆光", "tags": "cinematic lighting, backlighting, rim lighting, lens flare", "cat": "lighting"},
+    {"label": "晶透水滴", "tags": "water drop, sparkles, chromatic aberration, depth of field", "cat": "atmosphere"},
+    {"label": "逢魔暮色", "tags": "twilight, sunset, golden hour, dappled sunlight, bokeh", "cat": "atmosphere"},
+    {"label": "飘逸微风", "tags": "wind, floating hair, floating petals, dynamic angle", "cat": "motion"},
+    {"label": "精致眼眸", "tags": "detailed eyes, sparkling eyes, looking at viewer, light smile", "cat": "detail"},
 ]
 
 

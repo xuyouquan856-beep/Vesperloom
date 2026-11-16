@@ -695,7 +695,7 @@ async def augment_image(req: Dict[str, Any], cfg: Optional[Dict[str, Any]] = Non
 
     req_type = str(req.get("req_type") or "lineart")
     if req_type == "bg-removal" and cfg.get("opus_free_guard", True):
-        raise ValueError("【Opus 0点数免费保护已拦截】官方 Director「去背景 (bg-removal)」固定消耗点数；若需 0 点数透明底，请使用 NAI V5 的「✨ 原生透明底」功能！其他 Director 工具（提取线稿、转草图、智能上色、表情微调、去杂物）均可 0 点数免费使用。")
+        raise ValueError("【Opus 0点数免费保护已拦截】官方 Director「去背景 (bg-removal)」固定消耗点数；若需 0 点数透明底，请使用 NAI V5 的「原生透明底」功能！其他 Director 工具（提取线稿、转草图、智能上色、表情微调、去杂物）均可 0 点数免费使用。")
 
     image_b64 = _strip_data_url(str(req.get("image") or ""))
     if not image_b64:
@@ -993,9 +993,9 @@ class QueueManager:
             self.total = len(ab_artists)
             self.mode_label = f"画师 A/B 对照 ({len(ab_artists)} 组)"
         elif self.total == 0:
-            self.mode_label = "Opus 无限连抽中"
+            self.mode_label = "Opus 持续生成中"
         else:
-            self.mode_label = f"连抽队列 ({self.total} 张)"
+            self.mode_label = f"批量生成队列 ({self.total} 张)"
         self._task = asyncio.create_task(self._run_loop(req, ab_artists))
         return self.status()
 

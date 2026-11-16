@@ -6,7 +6,7 @@
 
 ## 1. 前端静态资源缓存失效机制（硬编码版本参数）
 
-- **现状**：[frontend/index.html](file:///D:/NAI-Studio/frontend/index.html) 中手动使用硬编码查询参数（当前为 `?v=p2-4`）加载 `/static/styles.css` 与 `/static/app.js`，FastAPI 仅通过默认 `StaticFiles` 挂载 `/static`，浏览器易命中强缓存或 `304 Not Modified`。
+- **现状**：[frontend/index.html](file:///D:/NAI-Studio/frontend/index.html) 中手动使用硬编码查询参数（当前为 `?v=p2-5`）加载 `/static/styles.css` 与 `/static/app.js`，FastAPI 仅通过默认 `StaticFiles` 挂载 `/static`，浏览器易命中强缓存或 `304 Not Modified`。
 - **影响**：每次更新 `styles.css` 或 `app.js` 均需人工同步修改 `index.html` 的 `?v=...` 参数；遗漏时本地 Edge / Chrome 会静默加载旧前端资源。
 - **建议方案**：后续由后端在渲染入口注入基于文件 mtime / SHA-256 短哈希的版本参数，或对 `/static/*.css`、`/static/*.js` 设置 `Cache-Control: no-cache`（协商缓存 / ETag 验证）。
 

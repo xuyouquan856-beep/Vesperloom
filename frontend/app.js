@@ -224,6 +224,8 @@ async function bootstrapApp() {
     setupInlineAutocomplete();
     setupGlobalHotkeys();
     initWorkspacePanels();
+    switchInspectorTab("prompts");
+    updateLeftRefsBadge();
     renderTagPillsBar();
     if (data.queue?.running) {
       startQueuePolling();
@@ -320,6 +322,31 @@ function initWorkspacePanels() {
 
   bindResizer("left-resizer", "left");
   bindResizer("right-resizer", "right");
+}
+
+// ================= Left Inspector Tabs & Reference Counter =================
+function switchInspectorTab(tab) {
+  ["prompts", "sampling", "refs"].forEach(id => {
+    document.getElementById(`inspector-pane-${id}`)?.classList.toggle("hidden", id !== tab);
+  });
+  document.querySelectorAll(".inspector-tab-btn").forEach(btn => {
+    const act = btn.dataset.inspector === tab;
+    btn.className = act
+      ? "inspector-tab-btn py-1 rounded-[6px] font-medium bg-[var(--cta-bg)] text-white transition-colors"
+      : "inspector-tab-btn py-1 rounded-[6px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors";
+  });
+}
+
+function updateLeftRefsBadge() {
+  const badge = document.getElementById("left-refs-badge");
+  if (!badge) return;
+  const spec = state.models[state.currentModel];
+  const charCount = spec?.supports_multi_char ? state.characters.length : 0;
+  const vibeCount = spec?.supports_vibe ? state.vibes.length : 0;
+  const prefCount = spec?.supports_precise_ref ? state.preciseRefs.length : 0;
+  const total = charCount + vibeCount + prefCount;
+  badge.textContent = total > 0 ? `(${total})` : "";
+  badge.classList.toggle("hidden", total === 0);
 }
 
 // ================= Tab Navigation =================
@@ -518,11 +545,11 @@ function selectModel(modelId, notify = true) {
   if (!spec.supports_numeric_weight) {
     state.weightMode = "brackets";
     if (wmBtn) {
-      wmBtn.textContent = "模式: {} (V3锁定)";
+      wmBtn.textContent = "语法: {} (V3锁定)";
       wmBtn.classList.add("opacity-75");
     }
   } else if (wmBtn) {
-    wmBtn.textContent = state.weightMode === "numeric" ? "模式: 1.1::" : "模式: {}";
+    wmBtn.textContent = state.weightMode === "numeric" ? "语法: 1.1::" : "语法: {}";
     wmBtn.classList.remove("opacity-75");
   }
 
@@ -592,6 +619,7 @@ function selectModel(modelId, notify = true) {
   renderActiveArtistMixBar();
   updateStageInfoPill();
   updateCostEstimate();
+  updateLeftRefsBadge();
 
   if (notify) {
     showToast(`已切换模型：${spec.name}（界面功能已按模型能力自动同步）`);
@@ -699,9 +727,9 @@ function renderResolutionButtons() {
         ? "is-active"
         : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]";
       return `
-        <button type="button" onclick="selectResolution(${r.width}, ${r.height})" class="spring-btn py-2 px-1 rounded-[6px] ui-btn text-center ${cls}">
-          <div class="text-[12.5px] leading-tight">${escapeHtml(r.label)}</div>
-          <div class="text-[12px] font-mono opacity-80">${r.sub}</div>
+        <button type="button" onclick="selectResolution(${r.width}, ${r.height})" class="spring-btn py-1.5 px-1 rounded-[6px] ui-btn text-center ${cls}">
+          <div class="text-[12px] leading-tight">${escapeHtml(r.label)}</div>
+          <div class="text-[11px] font-mono opacity-75">${r.sub}</div>
         </button>
       `;
     })
@@ -1039,7 +1067,7 @@ function toggleWeightMode() {
   }
   state.weightMode = state.weightMode === "brackets" ? "numeric" : "brackets";
   document.getElementById("weight-mode-btn").textContent =
-    state.weightMode === "numeric" ? "模式: 1.1::" : "模式: {}";
+    state.weightMode === "numeric" ? "语法: 1.1::" : "语法: {}";
 }
 
 async function adjustSelectedWeight(delta) {
@@ -1136,13 +1164,14 @@ function renderSnippetsBar() {
   if (!bar) return;
   bar.innerHTML = state.snippets
     .map(s => {
+      const cleanLabel = String(s.label || "").replace(/^[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\uFE0F\u200D\s]+/gu, "").trim() || s.label;
       const delBtn =
         s.cat === "custom"
-          ? `<span onclick="event.stopPropagation();deleteSnippetRecord(${s.id})" class="ml-1 text-[var(--status-danger)] hover:opacity-80" title="删除自定义积木">×</span>`
+          ? `<span onclick="event.stopPropagation();deleteSnippetRecord(${s.id})" class="ml-1 text-[var(--status-danger)] hover:opacity-80" title="删除自定义预设词条">×</span>`
           : "";
       return `
-      <button type="button" onclick="toggleSnippetTag('${escapeHtml(s.tags)}')" class="spring-btn inline-flex items-center px-2 py-1 rounded-[6px] ui-btn text-[12px]">
-        <span>${escapeHtml(s.label)}</span>${delBtn}
+      <button type="button" onclick="toggleSnippetTag('${escapeHtml(s.tags)}')" class="spring-btn inline-flex items-center px-2 py-1 rounded-[6px] ui-btn text-[12px]" title="${escapeHtml(s.tags)}">
+        <span>${escapeHtml(cleanLabel)}</span>${delBtn}
       </button>
     `;
     })
@@ -1216,8 +1245,9 @@ function renderCharacterSlots() {
   const wrap = document.getElementById("char-slots-list");
   if (!wrap) return;
   if (!state.characters.length) {
-    wrap.innerHTML = `<div class="text-[12.5px] text-[var(--text-muted)]">未添加角色分控。</div>`;
+    wrap.innerHTML = `<div class="text-[12.5px] text-[var(--text-muted)]">尚未添加角色分控。</div>`;
     renderCharStageOverlay();
+    updateLeftRefsBadge();
     return;
   }
   wrap.innerHTML = state.characters
@@ -1260,6 +1290,7 @@ function renderCharacterSlots() {
     })
     .join("");
   renderCharStageOverlay();
+  updateLeftRefsBadge();
 }
 
 // ================= Vibe Transfer Handling =================
@@ -1327,6 +1358,7 @@ function removePreciseRef(idx) {
 function renderPreciseRefList() {
   const wrap = document.getElementById("precise-refs-list");
   if (!wrap) return;
+  updateLeftRefsBadge();
   if (!state.preciseRefs.length) {
     wrap.innerHTML = `<div class="text-[12px] text-[var(--muted-foreground)]">未添加精准参考图（适合锁定特定角色脸型与服装细节）</div>`;
     return;
@@ -1361,6 +1393,7 @@ function renderVibeList() {
   const wrap = document.getElementById("vibe-items-list");
   const clearBtn = document.getElementById("vibe-clear-btn");
   if (!wrap) return;
+  updateLeftRefsBadge();
   clearBtn?.classList.toggle("hidden", state.vibes.length === 0);
   if (!state.vibes.length) {
     wrap.innerHTML = "";
@@ -1427,7 +1460,7 @@ function toggleFocusInpaint() {
   state.focusInpaint = !state.focusInpaint;
   const btn = document.getElementById("focus-inpaint-btn");
   if (btn) {
-    btn.textContent = state.focusInpaint ? "Focus高清: 开" : "Focus高清: 关";
+    btn.textContent = state.focusInpaint ? "局部高清: 开" : "局部高清: 关";
     btn.className = state.focusInpaint
       ? "spring-btn px-2 py-1 rounded-[6px] ui-btn text-[var(--status-success)] text-[12px]"
       : "spring-btn px-2 py-1 rounded-[6px] ui-btn text-[var(--text-muted)] text-[12px]";
@@ -1668,9 +1701,9 @@ async function triggerGenerate() {
         body: JSON.stringify({ ...payload, count: state.batchCount }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || "启动连抽队列失败");
+      if (!res.ok) throw new Error(data.detail || "启动批量生成失败");
       startQueuePolling();
-      showToast(state.batchCount === 0 ? "已开启 Opus 无限自动连抽" : `已开启 ${state.batchCount} 张连续自动出图`);
+      showToast(state.batchCount === 0 ? "已开启持续自动生成" : `已开启 ${state.batchCount} 张连续自动生成`);
     } catch (err) {
       showToast(err.message || "队列启动失败");
     }
@@ -1702,7 +1735,7 @@ async function triggerGenerate() {
       if (state.seedLocked) {
         document.getElementById("seed-input").value = String(newItems[0].seed);
       }
-      savePromptSnapshot("出图自动快照");
+      savePromptSnapshot("自动保存");
     }
 
     renderAccountHeader();
@@ -1898,7 +1931,7 @@ function restoreRecipeToWorkbench(item) {
   updateStageInfoPill();
   updateCostEstimate();
   switchTab("workbench");
-  showToast(`已完整还原配方 (Seed: ${item.seed || "随机"})`);
+  showToast(`已载入生成参数 (Seed: ${item.seed || "随机"})`);
 }
 
 function renderWorkbenchHistory() {
@@ -1925,9 +1958,9 @@ function renderWorkbenchHistory() {
           </div>
         </div>
         <div class="grid grid-cols-3 gap-1 text-[11.5px]">
-          <button onclick="setStageFromGalleryItem(state.gallery.find(x=>x.id===${item.id}), true)" class="spring-btn py-0.5 rounded-[5px] ui-btn">配方</button>
-          <button onclick="sendGalleryItemToI2I(${item.id})" class="spring-btn py-0.5 rounded-[5px] ui-btn">重绘</button>
-          <button onclick="rerollGalleryItem(${item.id})" class="spring-btn py-0.5 rounded-[5px] ui-btn">再抽</button>
+          <button onclick="setStageFromGalleryItem(state.gallery.find(x=>x.id===${item.id}), true)" class="spring-btn py-0.5 rounded-[5px] ui-btn" title="加载此图的提示词与采样参数">载入参数</button>
+          <button onclick="sendGalleryItemToI2I(${item.id})" class="spring-btn py-0.5 rounded-[5px] ui-btn" title="设为图生图底图">图生图</button>
+          <button onclick="rerollGalleryItem(${item.id})" class="spring-btn py-0.5 rounded-[5px] ui-btn" title="保留参数并用新随机种子重新生成">重生成</button>
         </div>
       </div>
     `;
@@ -1988,7 +2021,7 @@ async function inspectPngFile(file) {
       img.src = dataUrl;
       img.classList.remove("hidden");
       document.getElementById("stage-empty")?.classList.add("hidden");
-      showToast("已载入图片至画布（该图片未检测到 NovelAI 内嵌配方，可直接用于图生图或 Director）");
+      showToast("已载入图片至画布（未检测到 NovelAI 内嵌参数，可直接用于图生图或 Director）");
     }
   } catch (err) {
     showToast(err.message || "解析图片失败");
@@ -2064,7 +2097,7 @@ function confirmInspectPngRestore() {
   }
 
   closeInspectPngModal();
-  showToast("已按勾选项还原配方");
+  showToast("已按勾选项应用生成参数");
 }
 
 function downloadCurrentStageImage() {
@@ -2081,7 +2114,7 @@ function downloadCurrentStageImage() {
 
 function openDiffModal(idxA = 0, idxB = 1) {
   if (state.gallery.length < 2) {
-    showToast("至少需要 2 条生成记录才能对比配方差异与视觉卷帘");
+    showToast("至少需要 2 条生成记录才能进行参数差异与卷帘对比");
     return;
   }
   const safeA = Math.min(Math.max(0, idxA), state.gallery.length - 1);
@@ -2186,7 +2219,7 @@ function renderArtistsGrid() {
         : `<div class="w-full aspect-[4/5] ui-stage-well flex flex-col items-center justify-center p-4 text-center border-b border-[var(--border-hairline)]">
              <div class="ui-title text-[var(--text-primary)]">${escapeHtml(a.name)}</div>
              <div class="text-[12px] font-mono text-[var(--text-secondary)] mt-1">${escapeHtml(a.tag)}</div>
-             <div class="mt-3 text-[11.5px] px-2.5 py-1 rounded-[6px] ui-badge text-[var(--text-muted)]">点击「跑卡」生成预览</div>
+             <div class="mt-3 text-[11.5px] px-2.5 py-1 rounded-[6px] ui-badge text-[var(--text-muted)]">点击「生成预览」制作示例图</div>
            </div>`;
 
       return `
@@ -2205,9 +2238,9 @@ function renderArtistsGrid() {
             </div>
             <p class="text-[12px] text-[var(--text-muted)] line-clamp-2 leading-relaxed">${escapeHtml(a.desc)}</p>
             <div class="grid grid-cols-3 gap-1.5 pt-1 text-[12px]">
-              <button onclick="useSingleArtist('${escapeHtml(a.tag)}', '${escapeHtml(a.name)}')" class="spring-btn py-1 rounded-[6px] ui-btn">单用</button>
-              <button onclick="addArtistToMixer('${escapeHtml(a.tag)}', '${escapeHtml(a.name)}')" class="spring-btn py-1 rounded-[6px] ui-btn">+ 混搭</button>
-              <button id="gen-card-btn-${a.id}" onclick="generateArtistCard(${a.id})" class="spring-btn py-1 rounded-[6px] ui-btn text-[var(--status-success)]" title="调用 NovelAI 接口 0点数生成该画师标准预览图">实测跑卡</button>
+              <button onclick="useSingleArtist('${escapeHtml(a.tag)}', '${escapeHtml(a.name)}')" class="spring-btn py-1 rounded-[6px] ui-btn">选用</button>
+              <button onclick="addArtistToMixer('${escapeHtml(a.tag)}', '${escapeHtml(a.name)}')" class="spring-btn py-1 rounded-[6px] ui-btn">+ 混合</button>
+              <button id="gen-card-btn-${a.id}" onclick="generateArtistCard(${a.id})" class="spring-btn py-1 rounded-[6px] ui-btn text-[var(--status-success)]" title="调用 NovelAI 接口 0点数生成该画师标准预览图">生成预览</button>
             </div>
           </div>
         </div>
@@ -2243,7 +2276,7 @@ async function generateArtistCard(artistId) {
     btn.disabled = true;
     btn.textContent = "生成中...";
   }
-  showToast("正在调用 NovelAI (0 Anlas) 生成该画师标准图鉴预览卡...");
+  showToast("正在调用 NovelAI (0 Anlas) 生成该画师标准预览图...");
   try {
     const res = await fetch(`/api/artists/${artistId}/generate-preview`, {
       method: "POST",
@@ -2251,19 +2284,19 @@ async function generateArtistCard(artistId) {
       body: JSON.stringify({ model: "nai-diffusion-4-5-full" }),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || "跑卡失败");
+    if (!res.ok) throw new Error(data.detail || "生成预览图失败");
     if (data.artist) {
       const idx = state.artists.findIndex(x => x.id === artistId);
       if (idx !== -1) state.artists[idx] = data.artist;
       renderArtistsGrid();
-      showToast(`已生成并保存 ${data.artist.name} 的标准预览卡`);
+      showToast(`已生成并保存 ${data.artist.name} 的画风预览图`);
     }
   } catch (err) {
-    showToast(err.message || "生成预览卡失败");
+    showToast(err.message || "生成预览图失败");
   } finally {
     if (btn) {
       btn.disabled = false;
-      btn.textContent = "实测跑卡";
+      btn.textContent = "生成预览";
     }
   }
 }
@@ -2283,7 +2316,7 @@ function addArtistToMixer(tag, name) {
     state.mixerItems.push({ tag, name, weight: 0.8 });
   }
   renderMixer();
-  showToast(`已将 ${name} 加入右侧混搭台`);
+  showToast(`已将 ${name} 加入右侧混合器`);
 }
 
 function formatMixString(items) {
@@ -2329,8 +2362,8 @@ function renderMixer() {
   wrap.dataset.renderKey = renderKey;
 
   if (!state.mixerItems.length) {
-    wrap.innerHTML = `<div class="ui-body text-[var(--muted-foreground)] py-4 text-center">从左侧点击「+ 混搭」添加多位画师调配比例</div>`;
-    out.textContent = "尚未选择混搭画师";
+    wrap.innerHTML = `<div class="ui-body text-[var(--muted-foreground)] py-4 text-center">从左侧点击「+ 混合」添加多位画师调配比例</div>`;
+    out.textContent = "尚未添加混合画师";
     return;
   }
 
@@ -2367,7 +2400,7 @@ function applyMixerToWorkbench() {
   state.activeArtistMix = JSON.parse(JSON.stringify(state.mixerItems));
   renderActiveArtistMixBar();
   switchTab("workbench");
-  showToast("已将多画师混搭方案应用到工作台");
+  showToast("已将多画师混合权重应用到工作台");
 }
 
 function renderActiveArtistMixBar() {
@@ -2408,12 +2441,12 @@ function renderMixPresets() {
 function loadMixPreset(items) {
   state.mixerItems = JSON.parse(JSON.stringify(items));
   renderMixer();
-  showToast("已载入混搭预设至调音台");
+  showToast("已载入混合预设至画风混合器");
 }
 
 async function saveCurrentMixPreset() {
   if (!state.mixerItems.length) {
-    showToast("混搭台为空，无法保存");
+    showToast("混合器为空，无法保存");
     return;
   }
   const name = state.mixerItems.map(x => `${x.name}(${x.weight})`).join(" + ");
@@ -2426,7 +2459,7 @@ async function saveCurrentMixPreset() {
   if (data.preset) {
     state.mixPresets.unshift(data.preset);
     renderMixPresets();
-    showToast(`已保存混搭方案：${name}`);
+    showToast(`已保存混合方案：${name}`);
   }
 }
 
@@ -2444,7 +2477,7 @@ async function submitNewArtist() {
   }
   const btn = document.getElementById("create-artist-submit-btn");
   btn.disabled = true;
-  btn.textContent = "正在调用 NAI 跑卡...";
+  btn.textContent = "正在生成预览...";
   try {
     const res = await fetch("/api/artists", {
       method: "POST",
@@ -2452,20 +2485,20 @@ async function submitNewArtist() {
       body: JSON.stringify({ name, tag, desc, category: "私人收藏", generate_preview: true }),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || "收录失败");
+    if (!res.ok) throw new Error(data.detail || "添加失败");
     if (data.artist) {
       const idx = state.artists.findIndex(x => x.id === data.artist.id);
       if (idx !== -1) state.artists[idx] = data.artist;
       else state.artists.unshift(data.artist);
       renderArtistsGrid();
       toggleCustomArtistModal(false);
-      showToast(`已收录 ${data.artist.name} 并生成标准预览卡`);
+      showToast(`已添加 ${data.artist.name} 并生成画风预览图`);
     }
   } catch (err) {
-    showToast(err.message || "收录失败");
+    showToast(err.message || "添加失败");
   } finally {
     btn.disabled = false;
-    btn.textContent = "立即跑卡并收录 (0点数)";
+    btn.textContent = "生成预览并添加 (0点数)";
   }
 }
 
@@ -2581,7 +2614,7 @@ async function renderFullGallery(reloadFromServer = false) {
           ${it.notes ? `<div class="text-[11.5px] px-2 py-0.5 rounded-[5px] bg-[var(--accent-tint)] text-[var(--text-primary)] truncate inline-flex items-center gap-1 max-w-full">${uiIcon("edit", "ui-ic-sm")}<span>${escapeHtml(it.notes)}</span></div>` : ""}
           <p class="selectable-text text-[12px] font-mono text-[var(--text-secondary)] line-clamp-2 leading-snug">${escapeHtml(it.prompt)}</p>
           <div class="grid grid-cols-4 gap-1 pt-1 text-[12px]">
-            <button onclick="setStageFromGalleryItem(state.gallery.find(x=>x.id===${it.id}), true)" class="spring-btn py-1 rounded-[6px] ui-btn">还原</button>
+            <button onclick="setStageFromGalleryItem(state.gallery.find(x=>x.id===${it.id}), true)" class="spring-btn py-1 rounded-[6px] ui-btn" title="加载完整生成参数到工作台">载入</button>
             <button onclick="editGalleryNotes(${it.id})" class="spring-btn py-1 rounded-[6px] ui-btn">备注</button>
             <a href="${it.image_url}" download="${escapeHtml(it.filename)}" class="spring-btn py-1 rounded-[6px] ui-btn text-center">下载</a>
             <button onclick="deleteGalleryRecord(${it.id})" class="spring-btn py-1 rounded-[6px] ui-btn text-[var(--status-danger)]">删除</button>
@@ -3390,7 +3423,7 @@ function executeSelectedEmotion() {
 async function runArtistAbTest() {
   let candidates = state.mixerItems.length >= 2 ? state.mixerItems : state.artists.slice(0, 4).map(a => ({ tag: a.tag, name: a.name, weight: 1.0 }));
   if (!candidates.length) {
-    showToast("请先至少添加 2 位画师到混搭台后再执行对照测试");
+    showToast("请先至少添加 2 位画师到画风混合器后再执行对照测试");
     return;
   }
   const abList = candidates.slice(0, 8).map(c => ({ tag: c.tag, weight: c.weight || 1.0, label: c.name }));
@@ -3452,7 +3485,7 @@ function renderOcCardsList() {
             <span class="font-semibold text-[var(--text-primary)] truncate">${escapeHtml(c.name)}</span>
             <div class="flex items-center gap-1 text-[12px] shrink-0">
               <button onclick="bindOcAvatarFromStage(${c.id})" class="spring-btn px-2 py-1 rounded-[6px] ui-btn" title="用当前画布图像作为该 OC 头像">设当前图为头像</button>
-              <button onclick="injectOcAsCharSlot(${c.id})" class="spring-btn px-2 py-1 rounded-[6px] ui-btn">+ 塞入多角色槽</button>
+              <button onclick="injectOcAsCharSlot(${c.id})" class="spring-btn px-2 py-1 rounded-[6px] ui-btn">+ 添加至角色</button>
               <button onclick="injectOcIntoPrompt(${c.id})" class="spring-btn px-2 py-1 rounded-[6px] ui-btn">覆盖主提示词</button>
               <button onclick="deleteOcCardRecord(${c.id})" class="text-[var(--status-danger)] hover:underline px-1">删除</button>
             </div>
@@ -3604,7 +3637,7 @@ async function submitNewSnippet() {
   const label = document.getElementById("snippet-label-input").value.trim();
   const tags = document.getElementById("snippet-tags-input").value.trim();
   if (!label || !tags) {
-    showToast("请填写积木名称和对应 Tags");
+    showToast("请填写词条名称和对应 Tags");
     return;
   }
   const res = await fetch("/api/snippets", {
@@ -3619,7 +3652,7 @@ async function submitNewSnippet() {
     toggleSnippetModal(false);
     document.getElementById("snippet-label-input").value = "";
     document.getElementById("snippet-tags-input").value = "";
-    showToast(`已添加常用词积木：${data.snippet.label}`);
+    showToast(`已添加预设词条：${data.snippet.label}`);
   }
 }
 
@@ -3963,7 +3996,7 @@ function renderSnapshotList() {
   if (!wrap) return;
   const snaps = loadPromptSnapshots();
   if (!snaps.length) {
-    wrap.innerHTML = `<div class="text-center py-6 text-[var(--muted-foreground)]">暂无快照记录，每次点击出图或点上方「立即保存」均会自动存档</div>`;
+    wrap.innerHTML = `<div class="text-center py-6 text-[var(--muted-foreground)]">暂无草稿记录，每次生成或点击上方「+ 保存当前草稿」会自动存档</div>`;
     return;
   }
   wrap.innerHTML = snaps
@@ -3972,7 +4005,7 @@ function renderSnapshotList() {
       <div class="p-3 rounded-[10px] ui-card space-y-1">
         <div class="flex items-center justify-between text-[12px]">
           <span class="font-semibold text-[var(--text-primary)]">${escapeHtml(s.label)} · ${escapeHtml(s.time)}</span>
-          <button onclick="restorePromptSnapshot(${i})" class="spring-btn px-2 py-1 rounded-[6px] ui-btn text-[12px]">恢复此配方</button>
+          <button onclick="restorePromptSnapshot(${i})" class="spring-btn px-2 py-1 rounded-[6px] ui-btn text-[12px]">加载此参数</button>
         </div>
         <div class="selectable-text font-mono text-[12px] text-[var(--text-muted)] line-clamp-2">${escapeHtml(s.prompt)}</div>
       </div>
@@ -3987,7 +4020,7 @@ function restorePromptSnapshot(idx) {
   if (!s) return;
   restoreRecipeToWorkbench(s);
   toggleSnapshotModal(false);
-  showToast(`已恢复快照：${s.time}`);
+  showToast(`已恢复草稿：${s.time}`);
 }
 
 async function exportWorkbenchRecipeJson() {
@@ -4010,20 +4043,20 @@ async function exportWorkbenchRecipeJson() {
   const jsonStr = JSON.stringify(payload, null, 2);
   try {
     await navigator.clipboard.writeText(jsonStr);
-    showToast("完整配方 JSON 已复制到剪贴板");
+    showToast("完整参数 JSON 已复制到剪贴板");
   } catch (e) {
-    window.prompt("复制下方配方 JSON：", jsonStr);
+    window.prompt("复制下方参数 JSON：", jsonStr);
   }
 }
 
 function importWorkbenchRecipeJson() {
-  const raw = window.prompt("请粘贴 NAI Studio 导出的配方 JSON 文本：");
+  const raw = window.prompt("请粘贴 NAI Studio 导出的参数 JSON 文本：");
   if (!raw) return;
   try {
     const obj = JSON.parse(raw);
     restoreRecipeToWorkbench(obj);
     toggleSnapshotModal(false);
-    showToast("已导入配方 JSON 至当前工作台");
+    showToast("已导入参数 JSON 至当前工作台");
   } catch (e) {
     showToast("JSON 格式解析失败，请检查粘贴内容是否完整");
   }

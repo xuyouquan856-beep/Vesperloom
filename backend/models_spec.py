@@ -433,7 +433,7 @@ def estimate_generation_cost(
     if steps > 28:
         reasons.append(f"步数 {steps} 超过 Opus 免费上限 28 步")
     if n_samples > 1:
-        reasons.append(f"单次连抽 {n_samples} 张超过 Opus 单次免费上限 1 张")
+        reasons.append(f"单次批量生成 {n_samples} 张超过 Opus 单次免费上限 1 张")
 
     if has_precise_ref and spec["supports_precise_ref"]:
         extra_anlas += 5
