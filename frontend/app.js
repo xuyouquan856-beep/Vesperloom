@@ -225,6 +225,8 @@ async function bootstrapApp() {
     setupStageInteraction();
     setupInlineAutocomplete();
     setupGlobalHotkeys();
+    setupFastTooltips();
+    setupModalBackdropClose();
     initWorkspacePanels();
     switchInspectorTab("prompts");
     updateLeftRefsBadge();
@@ -258,12 +260,22 @@ function saveWorkspaceLayout(patch) {
   } catch (e) {}
 }
 
+function setElementTooltip(el, text) {
+  if (!el) return;
+  if (el.hasAttribute("data-tip") || !el.hasAttribute("title")) {
+    el.dataset.tip = text || "";
+    el.removeAttribute("title");
+  } else {
+    el.title = text || "";
+  }
+}
+
 function updatePanelToggleBtn(btn, collapsed, label) {
   if (!btn) return;
   btn.classList.toggle("is-panel-collapsed", collapsed);
   btn.setAttribute("aria-pressed", String(!collapsed));
   const shortcut = btn.id === "toggle-left-panel-btn" ? "[" : "]";
-  btn.title = `${collapsed ? "展开" : "收起"}${label} (快捷键 ${shortcut})`;
+  setElementTooltip(btn, `${collapsed ? "展开" : "收起"}${label} (快捷键 ${shortcut})`);
 }
 
 function toggleLeftPanel(force) {
@@ -274,14 +286,14 @@ function toggleLeftPanel(force) {
   if (state.immersionMode && force !== false) {
     toggleImmersionMode(false);
     panel.classList.remove("is-collapsed");
-    resizer?.classList.remove("hidden");
+    resizer?.classList.remove("is-resizer-hidden");
     updatePanelToggleBtn(btn, false, "左侧参数栏");
     saveWorkspaceLayout({ leftCollapsed: false });
     return;
   }
   const nextCollapsed = typeof force === "boolean" ? !force : !panel.classList.contains("is-collapsed");
   panel.classList.toggle("is-collapsed", nextCollapsed);
-  resizer?.classList.toggle("hidden", nextCollapsed);
+  resizer?.classList.toggle("is-resizer-hidden", nextCollapsed);
   updatePanelToggleBtn(btn, nextCollapsed, "左侧参数栏");
   saveWorkspaceLayout({ leftCollapsed: nextCollapsed });
 }
@@ -294,14 +306,14 @@ function toggleRightPanel(force) {
   if (state.immersionMode && force !== false) {
     toggleImmersionMode(false);
     panel.classList.remove("is-collapsed");
-    resizer?.classList.remove("hidden");
+    resizer?.classList.remove("is-resizer-hidden");
     updatePanelToggleBtn(btn, false, "右侧历史栏");
     saveWorkspaceLayout({ rightCollapsed: false });
     return;
   }
   const nextCollapsed = typeof force === "boolean" ? !force : !panel.classList.contains("is-collapsed");
   panel.classList.toggle("is-collapsed", nextCollapsed);
-  resizer?.classList.toggle("hidden", nextCollapsed);
+  resizer?.classList.toggle("is-resizer-hidden", nextCollapsed);
   updatePanelToggleBtn(btn, nextCollapsed, "右侧历史栏");
   saveWorkspaceLayout({ rightCollapsed: nextCollapsed });
 }
@@ -399,6 +411,10 @@ function switchTab(tab) {
     const el = document.getElementById(`view-${id}`);
     if (el) el.classList.toggle("hidden", id !== tab);
   });
+  const isWorkbench = tab === "workbench";
+  document.getElementById("topbar-left-toggle-wrap")?.classList.toggle("hidden", !isWorkbench);
+  document.getElementById("topbar-right-toggle-wrap")?.classList.toggle("hidden", !isWorkbench);
+
   const indicator = document.getElementById("tab-indicator");
   const activeBtn = document.querySelector(`.tab-btn[data-tab="${tab}"]`);
   document.querySelectorAll(".tab-btn").forEach(btn => {
@@ -2250,9 +2266,16 @@ function openDiffModal(idxA = 0, idxB = 1) {
 let _swipingDiff = false;
 function startDiffSwipe(e) {
   _swipingDiff = true;
+  e.preventDefault();
+  try {
+    e.currentTarget?.setPointerCapture?.(e.pointerId);
+  } catch (err) {}
   moveDiffSwipe(e);
 }
 window.addEventListener("pointerup", () => {
+  _swipingDiff = false;
+});
+window.addEventListener("pointercancel", () => {
   _swipingDiff = false;
 });
 function moveDiffSwipe(e) {
@@ -3365,6 +3388,10 @@ function openLightbox(idx = null) {
   }
   const img = document.getElementById("lightbox-img");
   const cap = document.getElementById("lightbox-caption");
+  const canNavigate = state.gallery.length > 1;
+  document.querySelectorAll('#lightbox-modal [onclick*="navigateLightbox"]').forEach(btn => {
+    btn.disabled = !canNavigate;
+  });
 
   if (idx === null && state.stageImageB64) {
     state.lightboxIdx = -1;
@@ -3455,16 +3482,38 @@ function setupGlobalHotkeys() {
       return;
     }
     if (e.key === "Escape") {
-      const lbOpen = !document.getElementById("lightbox-modal")?.classList.contains("hidden");
-      const diffOpen = !document.getElementById("diff-modal")?.classList.contains("hidden");
-      const acOpen = !document.getElementById("inline-autocomplete-menu")?.classList.contains("hidden");
+      const overlayIds = [
+        "lightbox-modal",
+        "diff-modal",
+        "oc-modal",
+        "wildcard-modal",
+        "inspect-png-modal",
+        "xyz-modal",
+        "snapshot-modal",
+        "snippet-modal",
+        "custom-artist-modal",
+        "bg-menu",
+        "director-menu",
+        "inline-autocomplete-menu",
+      ];
+      const anyOverlayOpen = overlayIds.some(id => {
+        const el = document.getElementById(id);
+        return el && !el.classList.contains("hidden");
+      });
       closeLightbox();
-      document.getElementById("diff-modal")?.classList.add("hidden");
+      closeInspectPngModal();
       toggleOcModal(false);
+      toggleWildcardModal(false);
+      toggleXyzModal(false);
+      toggleSnapshotModal(false);
       toggleSnippetModal(false);
       toggleCustomArtistModal(false);
+      toggleBgMenu(false);
+      document.getElementById("diff-modal")?.classList.add("hidden");
+      document.getElementById("director-menu")?.classList.add("hidden");
       document.getElementById("inline-autocomplete-menu")?.classList.add("hidden");
-      if (!lbOpen && !diffOpen && !acOpen && state.immersionMode) {
+      hideFastTooltip(true);
+      if (!anyOverlayOpen && state.immersionMode) {
         toggleImmersionMode(false);
       }
       return;
@@ -3791,8 +3840,130 @@ function toggleImmersionMode(force) {
   if (btn) {
     btn.classList.toggle("is-active", state.immersionMode);
     btn.setAttribute("aria-pressed", String(state.immersionMode));
-    btn.title = state.immersionMode ? "退出沉浸模式 (快捷键 Esc)" : "隐藏左右面板专注看图 (Esc 退出)";
+    setElementTooltip(btn, state.immersionMode ? "退出沉浸模式 (快捷键 Esc)" : "隐藏左右面板专注看图 (Esc 退出)");
   }
+}
+
+// ================= Fast Custom Tooltip & Modal Backdrop UX =================
+let _tooltipTimer = null;
+let _tooltipTarget = null;
+let _tooltipLastHideAt = 0;
+
+function hideFastTooltip(immediate = false) {
+  clearTimeout(_tooltipTimer);
+  _tooltipTimer = null;
+  _tooltipTarget = null;
+  const tipEl = document.getElementById("studio-tooltip");
+  if (tipEl && tipEl.classList.contains("is-visible")) {
+    tipEl.classList.remove("is-visible");
+    tipEl.setAttribute("aria-hidden", "true");
+    if (!immediate) _tooltipLastHideAt = performance.now();
+  }
+}
+
+function renderTooltipText(tipEl, raw) {
+  const m = raw.match(/^(.*?)\s*\(([^()]{1,22})\)\s*$/);
+  if (m && /(快捷键|Esc|Ctrl|\[|\])/i.test(m[2])) {
+    tipEl.innerHTML = `${escapeHtml(m[1])}<kbd>${escapeHtml(m[2])}</kbd>`;
+  } else {
+    tipEl.textContent = raw;
+  }
+}
+
+function showFastTooltipFor(el) {
+  const text = el?.dataset?.tip;
+  const tipEl = document.getElementById("studio-tooltip");
+  if (!el || !text || !tipEl) return;
+  renderTooltipText(tipEl, text);
+  tipEl.classList.add("is-visible");
+  tipEl.setAttribute("aria-hidden", "false");
+
+  const r = el.getBoundingClientRect();
+  const tw = tipEl.offsetWidth;
+  const th = tipEl.offsetHeight;
+  const pad = 8;
+  const topSpace = r.top - pad;
+  const bottomSpace = window.innerHeight - r.bottom - pad;
+  const placeBelow = bottomSpace >= th + 8 || bottomSpace >= topSpace;
+  const top = placeBelow ? Math.min(window.innerHeight - th - pad, r.bottom + 7) : Math.max(pad, r.top - th - 7);
+  const left = Math.max(pad, Math.min(window.innerWidth - tw - pad, r.left + r.width / 2 - tw / 2));
+  tipEl.style.top = `${Math.round(top)}px`;
+  tipEl.style.left = `${Math.round(left)}px`;
+}
+
+function setupFastTooltips() {
+  const migrateTitles = root => {
+    root?.querySelectorAll?.("[title]").forEach(el => {
+      const t = el.getAttribute("title");
+      if (t) el.dataset.tip = t;
+      el.removeAttribute("title");
+    });
+  };
+  migrateTitles(document);
+
+  const resolveTipHost = node => {
+    const el = node?.nodeType === 1 ? node.closest("[title], [data-tip]") : null;
+    if (!el) return null;
+    if (el.hasAttribute("title")) {
+      const t = el.getAttribute("title");
+      if (t) el.dataset.tip = t;
+      el.removeAttribute("title");
+    }
+    return el.dataset.tip ? el : null;
+  };
+
+  document.addEventListener("pointerover", e => {
+    if (e.pointerType === "touch") return;
+    const host = resolveTipHost(e.target);
+    if (!host) return;
+    if (_tooltipTarget === host) return;
+    clearTimeout(_tooltipTimer);
+    _tooltipTarget = host;
+    const warm = performance.now() - _tooltipLastHideAt < 260;
+    _tooltipTimer = setTimeout(() => showFastTooltipFor(host), warm ? 24 : 90);
+  });
+
+  document.addEventListener("pointerout", e => {
+    if (!_tooltipTarget) return;
+    if (!_tooltipTarget.contains(e.relatedTarget)) {
+      hideFastTooltip(false);
+    }
+  });
+
+  document.addEventListener("pointerdown", () => hideFastTooltip(true), true);
+  window.addEventListener("scroll", () => hideFastTooltip(true), true);
+  document.addEventListener("focusin", e => {
+    const host = resolveTipHost(e.target);
+    if (host && host.matches(":focus-visible")) {
+      clearTimeout(_tooltipTimer);
+      _tooltipTarget = host;
+      showFastTooltipFor(host);
+    }
+  });
+  document.addEventListener("focusout", () => hideFastTooltip(true));
+}
+
+function setupModalBackdropClose() {
+  const closers = {
+    "custom-artist-modal": () => toggleCustomArtistModal(false),
+    "diff-modal": () => document.getElementById("diff-modal")?.classList.add("hidden"),
+    "oc-modal": () => toggleOcModal(false),
+    "wildcard-modal": () => toggleWildcardModal(false),
+    "inspect-png-modal": () => closeInspectPngModal(),
+    "xyz-modal": () => toggleXyzModal(false),
+    "snapshot-modal": () => toggleSnapshotModal(false),
+    "snippet-modal": () => toggleSnippetModal(false),
+    "lightbox-modal": () => closeLightbox(),
+  };
+  Object.entries(closers).forEach(([id, closeFn]) => {
+    const modal = document.getElementById(id);
+    if (!modal) return;
+    modal.addEventListener("pointerdown", e => {
+      if (e.target === modal || (id === "lightbox-modal" && e.target.id === "lightbox-stage")) {
+        closeFn();
+      }
+    });
+  });
 }
 
 async function startArtistBackfillQueue() {

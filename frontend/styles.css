@@ -347,6 +347,17 @@ body {
   display: none !important;
 }
 
+.studio-resizer.is-resizer-hidden {
+  display: none !important;
+}
+
+@media (max-width: 1023px) {
+  #left-panel.is-collapsed,
+  #right-panel.is-collapsed {
+    display: none !important;
+  }
+}
+
 /* Workbench Splitters & Collapsible Sidebars (Desktop >= 1024px) */
 @media (min-width: 1024px) {
   .studio-workbench {
@@ -358,13 +369,13 @@ body {
     width: var(--left-panel-w);
     flex: 0 0 auto;
     border-right: 1px solid var(--border-hairline);
-    transition: width 0.14s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.12s ease;
+    transition: width 0.16s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.12s ease;
   }
   #right-panel {
     width: var(--right-panel-w);
     flex: 0 0 auto;
     border-left: 1px solid var(--border-hairline);
-    transition: width 0.14s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.12s ease;
+    transition: width 0.16s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.12s ease;
   }
   #center-panel {
     flex: 1 1 0%;
@@ -466,12 +477,12 @@ select.ui-well option {
   border: 1px solid var(--border-hairline);
 }
 
-/* Interactive Buttons (Snappy 80ms + :active Tactile Press) */
+/* Interactive Buttons (Silky Spring Release + Tactile Press) */
 .ui-btn {
   background-color: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--border-control);
   color: var(--text-primary);
-  transition: background-color 0.08s ease, border-color 0.08s ease, color 0.08s ease, transform 0.06s ease, opacity 0.08s ease;
+  transition: background-color 0.14s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.14s cubic-bezier(0.22, 1, 0.36, 1), color 0.14s ease, transform 0.14s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.14s ease;
 }
 html.light .ui-btn {
   background-color: #ffffff;
@@ -481,10 +492,11 @@ html.light .ui-btn {
   border-color: var(--border-hover);
 }
 .ui-btn:active:not(:disabled) {
-  transform: scale(0.975);
+  transform: scale(0.955);
+  transition-duration: 0.06s;
 }
 .ui-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: not-allowed;
   pointer-events: none;
 }
@@ -500,7 +512,7 @@ html.light .ui-btn {
   background-color: var(--accent-tint);
   border: 1px solid var(--border-hover);
   color: var(--text-primary);
-  transition: background-color 0.08s ease, border-color 0.08s ease, color 0.08s ease, transform 0.06s ease;
+  transition: background-color 0.14s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.14s cubic-bezier(0.22, 1, 0.36, 1), color 0.14s ease, transform 0.14s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .ui-btn-accent:hover:not(:disabled) {
   background-color: var(--cta-bg);
@@ -508,10 +520,11 @@ html.light .ui-btn {
   color: var(--cta-fg);
 }
 .ui-btn-accent:active:not(:disabled) {
-  transform: scale(0.975);
+  transform: scale(0.955);
+  transition-duration: 0.06s;
 }
 .ui-btn-accent:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: not-allowed;
   pointer-events: none;
 }
@@ -521,7 +534,7 @@ html.light .ui-btn {
   background-color: transparent;
   border: 1px solid transparent;
   color: var(--text-secondary);
-  transition: background-color 0.08s ease, border-color 0.08s ease, color 0.08s ease, transform 0.06s ease;
+  transition: background-color 0.14s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.14s cubic-bezier(0.22, 1, 0.36, 1), color 0.14s ease, transform 0.14s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.14s ease;
 }
 .ui-btn-ghost:hover:not(:disabled) {
   background-color: var(--surface-well-hover);
@@ -529,10 +542,11 @@ html.light .ui-btn {
   color: var(--text-primary);
 }
 .ui-btn-ghost:active:not(:disabled) {
-  transform: scale(0.975);
+  transform: scale(0.95);
+  transition-duration: 0.06s;
 }
 .ui-btn-ghost:disabled {
-  opacity: 0.5;
+  opacity: 0.42;
   cursor: not-allowed;
   pointer-events: none;
 }
@@ -543,22 +557,25 @@ html.light .ui-btn {
   font-weight: 600;
 }
 
-/* Quiet Panel Collapse Toggles inside HUD (no nested card outline when expanded) */
+/* Stationary Panel Collapse Toggles (Topbar Anchored) */
 .hud-panel-toggle {
   background-color: transparent;
   border: 1px solid transparent;
   color: var(--text-secondary);
-  transition: background-color 0.08s ease, border-color 0.08s ease, color 0.08s ease, transform 0.06s ease;
+  transition: background-color 0.14s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.14s cubic-bezier(0.22, 1, 0.36, 1), color 0.14s ease, transform 0.14s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .hud-panel-toggle:hover:not(:disabled) {
   background-color: var(--surface-well-hover);
+  border-color: var(--border-hairline);
   color: var(--text-primary);
 }
 .hud-panel-toggle:active:not(:disabled) {
-  transform: scale(0.975);
+  transform: scale(0.95);
+  transition-duration: 0.06s;
 }
 .hud-panel-toggle.is-panel-collapsed {
   background-color: var(--accent-tint);
+  border-color: var(--border-control);
   color: var(--text-primary);
   font-weight: 500;
 }
@@ -568,17 +585,18 @@ html.light .ui-btn {
   background-color: var(--surface-well);
   border: 1px solid var(--border-control);
   color: var(--text-primary);
-  transition: background-color 0.08s ease, border-color 0.08s ease, transform 0.06s ease;
+  transition: background-color 0.14s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.14s cubic-bezier(0.22, 1, 0.36, 1), transform 0.14s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .ui-chip:hover:not(:disabled) {
   background-color: var(--surface-well-hover);
   border-color: var(--border-hover);
 }
 .ui-chip:active:not(:disabled) {
-  transform: scale(0.975);
+  transform: scale(0.96);
+  transition-duration: 0.06s;
 }
 .ui-chip:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: not-allowed;
   pointer-events: none;
 }
@@ -774,8 +792,11 @@ html.light .ui-btn {
   background-color: var(--surface-well);
   border: 1px solid var(--border-control);
   cursor: pointer;
-  transition: background-color 0.12s ease, border-color 0.12s ease;
+  transition: background-color 0.16s ease, border-color 0.16s ease, transform 0.12s cubic-bezier(0.22, 1, 0.36, 1);
   flex-shrink: 0;
+}
+.glass-switch:active {
+  transform: scale(0.94);
 }
 .glass-switch::after {
   content: "";
@@ -786,7 +807,7 @@ html.light .ui-btn {
   height: 12px;
   border-radius: 6px;
   background-color: var(--text-secondary);
-  transition: transform 0.12s ease, background-color 0.12s ease;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.14s ease;
 }
 .glass-switch.on {
   background-color: var(--cta-bg);
@@ -797,36 +818,91 @@ html.light .ui-btn {
   background-color: var(--cta-fg);
 }
 
-/* Tactile Buttons & High-Contrast Brand CTA */
+/* Tactile Spring Physics (non-destructive: never overrides .ui-btn* color or custom transitions) */
 .spring-btn {
-  color: inherit;
-  transition: border-color 0.08s ease, background-color 0.08s ease, opacity 0.08s ease, transform 0.06s ease;
+  transition: background-color 0.14s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.14s cubic-bezier(0.22, 1, 0.36, 1), color 0.14s ease, opacity 0.14s ease, transform 0.14s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .spring-btn:active:not(:disabled) {
-  transform: scale(0.975);
+  transform: scale(0.955);
+  transition-duration: 0.06s;
 }
 .spring-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: not-allowed;
   pointer-events: none;
+}
+
+.tab-btn,
+.inspector-tab-btn,
+.batch-btn,
+[data-prompt-side],
+.ui-menu-item {
+  transition: background-color 0.14s cubic-bezier(0.22, 1, 0.36, 1), color 0.14s ease, transform 0.14s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.tab-btn:active:not(:disabled),
+.inspector-tab-btn:active:not(:disabled),
+.batch-btn:active:not(:disabled),
+[data-prompt-side]:active:not(:disabled),
+.ui-menu-item:active:not(:disabled) {
+  transform: scale(0.96);
+  transition-duration: 0.06s;
 }
 
 .liquid-cta {
   background-color: var(--cta-bg);
   color: var(--cta-fg);
   border: 1px solid var(--cta-bg);
-  transition: background-color 0.08s ease, border-color 0.08s ease, transform 0.06s ease, opacity 0.08s ease;
+  transition: background-color 0.14s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.14s cubic-bezier(0.22, 1, 0.36, 1), transform 0.14s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.14s ease, box-shadow 0.14s ease;
 }
 .liquid-cta:hover:not(:disabled) {
   background-color: var(--cta-bg-hover);
   border-color: var(--cta-bg-hover);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.22);
 }
 .liquid-cta:active:not(:disabled) {
-  transform: scale(0.975);
+  transform: scale(0.968);
+  transition-duration: 0.06s;
+  box-shadow: none;
 }
 .liquid-cta:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: not-allowed;
+}
+
+/* Fast Custom Studio Tooltip */
+#studio-tooltip {
+  position: fixed;
+  z-index: 120;
+  max-width: 280px;
+  padding: 5px 9px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-primary);
+  background-color: var(--surface-popover);
+  border: 1px solid var(--border-control);
+  box-shadow: var(--popover-shadow);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(3px) scale(0.98);
+  transition: opacity 0.11s cubic-bezier(0.22, 1, 0.36, 1), transform 0.11s cubic-bezier(0.22, 1, 0.36, 1);
+  word-break: break-word;
+  white-space: normal;
+}
+#studio-tooltip.is-visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+#studio-tooltip kbd {
+  display: inline-block;
+  margin-left: 5px;
+  padding: 0 4px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  background-color: var(--surface-well);
+  border: 1px solid var(--border-hairline);
+  color: var(--text-secondary);
 }
 
 /* Unified Keyboard Focus Accessibility */
@@ -1113,7 +1189,13 @@ html.theme-sync * {
   .ui-chip:active:not(:disabled),
   .spring-btn:active:not(:disabled),
   .liquid-cta:active:not(:disabled),
-  .glass-stepper-btn:active:not(:disabled) {
+  .glass-stepper-btn:active:not(:disabled),
+  .glass-switch:active,
+  .tab-btn:active:not(:disabled),
+  .inspector-tab-btn:active:not(:disabled),
+  .batch-btn:active:not(:disabled),
+  [data-prompt-side]:active:not(:disabled),
+  .ui-menu-item:active:not(:disabled) {
     transform: none !important;
   }
   * {

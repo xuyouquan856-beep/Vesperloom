@@ -6,7 +6,7 @@
   <title>NAI Studio — 个人创作工作台</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23111318'/%3E%3Cpath d='M20 44V20l24 24V20' stroke='%23ffffff' stroke-width='6' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E" />
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="/static/styles.css?v=p2-7" />
+  <link rel="stylesheet" href="/static/styles.css?v=p2-8" />
 </head>
 <body class="lg:h-screen min-h-screen flex flex-col lg:overflow-hidden overflow-y-auto">
 
@@ -83,9 +83,17 @@
         <button data-tab="gallery" onclick="switchTab('gallery')" class="tab-btn relative z-10 px-2.5 py-1 rounded-[6px] text-[12.5px] font-medium whitespace-nowrap transition-colors">作品图库 <span id="nav-gallery-count" class="ml-1 opacity-75 font-mono text-[11.5px]">0</span></button>
         <button data-tab="settings" onclick="switchTab('settings')" class="tab-btn relative z-10 px-2.5 py-1 rounded-[6px] text-[12.5px] font-medium whitespace-nowrap transition-colors">设置与 Agent</button>
       </nav>
+
+      <!-- 固定锚点的参数栏开关（不随侧栏折合飘移） -->
+      <div id="topbar-left-toggle-wrap" class="flex items-center shrink-0">
+        <button id="toggle-left-panel-btn" type="button" onclick="toggleLeftPanel()" aria-pressed="true" class="spring-btn hud-panel-toggle inline-flex items-center gap-1.5 h-7 px-2 rounded-[6px] text-[12px] whitespace-nowrap" title="收起左侧参数栏 (快捷键 [)">
+          <svg class="ui-ic" aria-hidden="true"><use href="#ic-panel-left"/></svg>
+          <span class="hidden md:inline">参数</span>
+        </button>
+      </div>
     </div>
 
-    <!-- 右：Opus 保护 + 账号遥测 + 外观与主题 -->
+    <!-- 右：Opus 保护 + 账号遥测 + 外观与主题 + 历史栏开关 -->
     <div class="flex items-center gap-2 text-[12px] relative shrink-0">
       <button id="opus-guard-pill" onclick="toggleOpusGuard()" class="spring-btn inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] ui-chip whitespace-nowrap" title="Opus 0点数免费保护锁：开启后自动拦截任何会消耗付费点数的参数">
         <svg class="ui-ic text-[var(--status-success)]" aria-hidden="true"><use href="#ic-shield"/></svg>
@@ -109,6 +117,13 @@
         <svg id="theme-icon" class="ui-ic-sm ui-ic" aria-hidden="true"><use id="theme-icon-use" href="#ic-sun"/></svg>
         <span id="theme-label" class="hidden sm:inline">浅色模式</span>
       </button>
+
+      <div id="topbar-right-toggle-wrap" class="flex items-center pl-1 border-l border-[var(--border-hairline)] shrink-0">
+        <button id="toggle-right-panel-btn" type="button" onclick="toggleRightPanel()" aria-pressed="true" class="spring-btn hud-panel-toggle inline-flex items-center gap-1.5 h-7 px-2 rounded-[6px] text-[12px] whitespace-nowrap" title="收起右侧历史栏 (快捷键 ])">
+          <span class="hidden sm:inline">历史</span>
+          <svg class="ui-ic" aria-hidden="true"><use href="#ic-panel-right"/></svg>
+        </button>
+      </div>
 
       <!-- 外观定制浮层 -->
       <div id="bg-menu" class="hidden absolute right-0 top-9 w-72 liquid-popover rounded-[12px] p-4 space-y-4 z-50">
@@ -552,15 +567,10 @@
     <!-- 中央暗房主舞台（占据核心视口，顶部/底部悬浮 HUD 操控坞） -->
     <section id="center-panel" class="studio-canvas-grid relative flex flex-col min-h-[540px] lg:min-h-0 overflow-hidden">
 
-      <!-- 顶部悬浮 HUD：侧栏折叠开关 + 画布状态 + 工具条 -->
+      <!-- 顶部悬浮 HUD：画布状态 + 图像工具条 -->
       <div class="absolute top-3 left-3 right-3 z-20 flex items-center justify-between gap-2 pointer-events-none">
         <div class="pointer-events-auto studio-hud rounded-[8px] px-1.5 py-1 flex items-center gap-1.5 min-w-0">
-          <button id="toggle-left-panel-btn" type="button" onclick="toggleLeftPanel()" aria-pressed="true" class="spring-btn hud-panel-toggle inline-flex items-center gap-1.5 h-7 px-2 rounded-[5px] text-[12px] whitespace-nowrap shrink-0" title="收起左侧参数栏 (快捷键 [)">
-            <svg class="ui-ic" aria-hidden="true"><use href="#ic-panel-left"/></svg>
-            <span class="hidden sm:inline">参数</span>
-          </button>
-          <span class="h-3.5 w-px bg-[var(--border-hairline)] shrink-0"></span>
-          <button id="stage-info-pill" type="button" onclick="switchInspectorTab('sampling')" class="h-7 px-1.5 rounded-[5px] hover:bg-[var(--surface-well-hover)] text-[11.5px] text-[var(--text-secondary)] font-mono truncate cursor-pointer transition-colors" title="点击快速跳转至采样与步数参数">
+          <button id="stage-info-pill" type="button" onclick="switchInspectorTab('sampling')" class="spring-btn h-7 px-2 rounded-[5px] hover:bg-[var(--surface-well-hover)] text-[11.5px] text-[var(--text-secondary)] font-mono truncate cursor-pointer" title="点击快速跳转至采样与步数参数">
             V5 Full · 832×1216 · Steps 28
           </button>
           <span id="stage-mode-pill" class="px-2 py-0.5 rounded-[5px] bg-[var(--accent-tint)] text-[var(--text-primary)] text-[11px] font-medium whitespace-nowrap shrink-0">
@@ -573,7 +583,7 @@
           <button id="stage-zoom-out-btn" type="button" onclick="zoomStage(-0.15)" class="spring-btn w-7 h-7 rounded-[5px] ui-btn-ghost flex items-center justify-center" title="缩小画布">
             <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-minus"/></svg>
           </button>
-          <button id="stage-zoom-label" type="button" onclick="resetStageZoom()" class="h-7 min-w-[44px] px-1.5 rounded-[5px] ui-btn-ghost font-mono text-[11.5px] flex items-center justify-center" title="重置缩放与位置 (100%)">100%</button>
+          <button id="stage-zoom-label" type="button" onclick="resetStageZoom()" class="spring-btn h-7 min-w-[44px] px-1.5 rounded-[5px] ui-btn-ghost font-mono text-[11.5px] flex items-center justify-center" title="重置缩放与位置 (100%)">100%</button>
           <button id="stage-zoom-in-btn" type="button" onclick="zoomStage(0.15)" class="spring-btn w-7 h-7 rounded-[5px] ui-btn-ghost flex items-center justify-center" title="放大画布">
             <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-plus"/></svg>
           </button>
@@ -604,14 +614,6 @@
           </button>
           <button id="stage-download-btn" type="button" onclick="downloadCurrentStageImage()" class="spring-btn w-7 h-7 rounded-[5px] ui-btn-ghost flex items-center justify-center" title="下载高清原图">
             <svg class="ui-ic" aria-hidden="true"><use href="#ic-download"/></svg>
-          </button>
-
-          <span class="h-3.5 w-px bg-[var(--border-hairline)] mx-1 shrink-0"></span>
-
-          <!-- 右侧历史栏开关 -->
-          <button id="toggle-right-panel-btn" type="button" onclick="toggleRightPanel()" aria-pressed="true" class="spring-btn hud-panel-toggle inline-flex items-center gap-1.5 h-7 px-2 rounded-[5px] text-[12px] whitespace-nowrap shrink-0" title="收起右侧历史栏 (快捷键 ])">
-            <span class="hidden sm:inline">历史</span>
-            <svg class="ui-ic" aria-hidden="true"><use href="#ic-panel-right"/></svg>
           </button>
         </div>
       </div>
@@ -784,14 +786,14 @@
 
     <!-- 右栏：历史记录条 (可折叠、可拖拽调宽) -->
     <aside id="right-panel" class="studio-panel flex flex-col min-h-0 overflow-hidden">
-      <div class="px-3.5 py-2.5 flex items-center justify-between gap-2 border-b border-[var(--border-hairline)] shrink-0">
+      <div class="px-3.5 py-2.5 flex items-center justify-between gap-2 border-b border-[var(--border-hairline)] shrink-0 whitespace-nowrap">
         <div class="inline-flex items-center gap-1.5 min-w-0">
           <span class="ui-section truncate">历史记录</span>
           <button type="button" class="ui-info-btn" title="出图自动保存高清原图与完整参数，点击缩略图即可载入画布" aria-label="历史记录说明">
             <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-info"/></svg>
           </button>
         </div>
-        <button onclick="openDiffModal()" class="spring-btn text-[12px] px-2.5 py-1 rounded-[6px] ui-btn shrink-0">参数对比</button>
+        <button onclick="openDiffModal()" class="spring-btn text-[12px] px-2.5 py-1 rounded-[6px] ui-btn shrink-0 whitespace-nowrap">参数对比</button>
       </div>
 
       <div id="workbench-history-list" class="flex-1 overflow-y-auto custom-scroll p-2.5 space-y-2"></div>
@@ -1255,6 +1257,8 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=p2-7"></script>
+  <div id="studio-tooltip" role="tooltip" aria-hidden="true"></div>
+
+  <script src="/static/app.js?v=p2-8"></script>
 </body>
 </html>
