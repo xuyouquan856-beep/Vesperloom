@@ -27,20 +27,20 @@
 
   /* 3. Architectural Borders & Focus */
   --border-hairline: rgba(255, 255, 255, 0.075);
-  --border-control: rgba(255, 255, 255, 0.13);
-  --border-hover: rgba(56, 189, 248, 0.48);
-  --border-focus: #38bdf8;
+  --border-control: rgba(255, 255, 255, 0.14);
+  --border-hover: rgba(255, 255, 255, 0.34);
+  --border-focus: #f4f4f5;
 
-  /* 4. Ink & Single Calibrated Brand Accent (Zero neon glow / zero gradients) */
-  --text-primary: #f1f5f9;
-  --text-secondary: #a1b2c6;
-  --text-muted: #6c7d93;
-  --cta-bg: #0284c7;
-  --cta-bg-hover: #0ea5e9;
-  --cta-fg: #ffffff;
-  --accent: #38bdf8;
-  --accent-solid: #0284c7;
-  --accent-tint: rgba(14, 165, 233, 0.15);
+  /* 4. Ink & Inverted Darkroom Contrast (Crisp Gallery White Interactive on Obsidian) */
+  --text-primary: #f4f4f6;
+  --text-secondary: #a1a9b8;
+  --text-muted: #6c7689;
+  --cta-bg: #f4f4f5;
+  --cta-bg-hover: #ffffff;
+  --cta-fg: #090b0f;
+  --accent: #f4f4f5;
+  --accent-solid: #f4f4f5;
+  --accent-tint: rgba(255, 255, 255, 0.11);
 
   /* Semantic Status Ink */
   --status-success: #34d399;
@@ -77,16 +77,16 @@
   /* 7. Legacy Aliases */
   --glass-popover: #141822;
   --glass-inset-bg: #080a0e;
-  --glass-border: rgba(255, 255, 255, 0.13);
-  --glass-border-strong: rgba(56, 189, 248, 0.48);
+  --glass-border: rgba(255, 255, 255, 0.14);
+  --glass-border-strong: rgba(255, 255, 255, 0.36);
   --popover-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
   --hud-shadow: 0 12px 32px rgba(0, 0, 0, 0.48);
   --stage-art-shadow: 0 20px 56px rgba(0, 0, 0, 0.62);
-  --foreground: #f1f5f9;
-  --muted-foreground: #a1b2c6;
-  --placeholder: #6c7d93;
-  --primary: #38bdf8;
-  --primary-deep: #0284c7;
+  --foreground: #f4f4f6;
+  --muted-foreground: #a1a9b8;
+  --placeholder: #6c7689;
+  --primary: #f4f4f5;
+  --primary-deep: #d4d4d8;
   --success: #34d399;
   --warning: #fbbf24;
   --error: #f87171;
@@ -111,20 +111,21 @@ html.light {
   --surface-popover: #ffffff;
   --surface-glass: rgba(255, 255, 255, 0.90);
 
-  --border-hairline: rgba(15, 23, 42, 0.085);
-  --border-control: rgba(15, 23, 42, 0.15);
-  --border-hover: rgba(2, 132, 199, 0.52);
-  --border-focus: #0284c7;
+  --border-hairline: rgba(15, 23, 42, 0.09);
+  --border-control: rgba(15, 23, 42, 0.16);
+  --border-hover: rgba(17, 19, 24, 0.36);
+  --border-focus: #111318;
 
+  /* Light Mode Complementary Polarity: Crisp Ink Black Interactive Controls */
   --text-primary: #0f172a;
   --text-secondary: #475569;
   --text-muted: #64748b;
-  --cta-bg: #0284c7;
-  --cta-bg-hover: #0369a1;
+  --cta-bg: #111318;
+  --cta-bg-hover: #272a33;
   --cta-fg: #ffffff;
-  --accent: #0284c7;
-  --accent-solid: #0284c7;
-  --accent-tint: rgba(2, 132, 199, 0.12);
+  --accent: #111318;
+  --accent-solid: #111318;
+  --accent-tint: rgba(17, 19, 24, 0.085);
 
   --status-success: #047857;
   --status-warning: #b45309;
@@ -132,16 +133,16 @@ html.light {
 
   --glass-popover: #ffffff;
   --glass-inset-bg: #ffffff;
-  --glass-border: rgba(15, 23, 42, 0.15);
-  --glass-border-strong: rgba(2, 132, 199, 0.52);
+  --glass-border: rgba(15, 23, 42, 0.16);
+  --glass-border-strong: rgba(17, 19, 24, 0.38);
   --popover-shadow: 0 14px 36px rgba(15, 23, 42, 0.12);
   --hud-shadow: 0 10px 28px rgba(15, 23, 42, 0.10);
   --stage-art-shadow: 0 16px 40px rgba(15, 23, 42, 0.16);
   --foreground: #0f172a;
   --muted-foreground: #475569;
   --placeholder: #64748b;
-  --primary: #0284c7;
-  --primary-deep: #0369a1;
+  --primary: #111318;
+  --primary-deep: #272a33;
   --success: #047857;
   --warning: #b45309;
   --error: #be123c;
@@ -486,22 +487,17 @@ html.light .ui-btn {
   font-weight: 600;
 }
 
-/* Tonal Cyan Secondary Action Button */
+/* Tonal High-Contrast Secondary Action Button */
 .ui-btn-accent {
   background-color: var(--accent-tint);
   border: 1px solid var(--border-hover);
   color: var(--text-primary);
-  transition: background-color 0.08s ease, border-color 0.08s ease, transform 0.06s ease;
+  transition: background-color 0.08s ease, border-color 0.08s ease, color 0.08s ease, transform 0.06s ease;
 }
 .ui-btn-accent:hover:not(:disabled) {
-  background-color: rgba(14, 165, 233, 0.24);
-  border-color: var(--border-focus);
-}
-html.light .ui-btn-accent {
-  color: #0369a1;
-}
-html.light .ui-btn-accent:hover:not(:disabled) {
-  background-color: rgba(2, 132, 199, 0.18);
+  background-color: var(--cta-bg);
+  border-color: var(--cta-bg);
+  color: var(--cta-fg);
 }
 .ui-btn-accent:active:not(:disabled) {
   transform: scale(0.975);
@@ -770,7 +766,7 @@ html.light .ui-btn-accent:hover:not(:disabled) {
 }
 .glass-switch.on::after {
   transform: translateX(16px);
-  background-color: #ffffff;
+  background-color: var(--cta-fg);
 }
 
 /* Tactile Buttons & High-Contrast Brand CTA */
@@ -847,7 +843,7 @@ input[type="range"]::-webkit-slider-thumb {
   width: 13px;
   height: 13px;
   border-radius: 4px;
-  background: #ffffff;
+  background: var(--cta-fg);
   border: 2px solid var(--cta-bg);
   cursor: pointer;
 }
@@ -907,7 +903,7 @@ input[type="range"]:disabled {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  max-height: 92px;
+  max-height: 116px;
   overflow-y: auto;
 }
 .tag-pill {
@@ -986,7 +982,7 @@ html.light .checkerboard-bg {
   justify-content: center;
   font-size: 11px;
   font-weight: 700;
-  color: #ffffff;
+  color: var(--cta-fg);
   background-color: var(--cta-bg);
   border: 2px solid var(--surface-panel);
   cursor: grab;
@@ -1044,8 +1040,8 @@ html.light .checkerboard-bg {
 .inpaint-cursor-ring {
   position: fixed;
   pointer-events: none;
-  border: 1.5px solid var(--accent);
-  background: rgba(56, 189, 248, 0.12);
+  border: 1.5px solid var(--text-primary);
+  background: var(--accent-tint);
   border-radius: 50%;
   transform: translate(-50%, -50%);
   z-index: 80;

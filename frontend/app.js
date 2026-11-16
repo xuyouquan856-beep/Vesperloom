@@ -332,9 +332,27 @@ function switchInspectorTab(tab) {
   document.querySelectorAll(".inspector-tab-btn").forEach(btn => {
     const act = btn.dataset.inspector === tab;
     btn.className = act
-      ? "inspector-tab-btn py-1 rounded-[6px] font-medium bg-[var(--cta-bg)] text-white transition-colors"
+      ? "inspector-tab-btn py-1 rounded-[6px] font-medium bg-[var(--cta-bg)] text-[var(--cta-fg)] transition-colors"
       : "inspector-tab-btn py-1 rounded-[6px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors";
   });
+}
+
+function switchPromptSide(side) {
+  ["pos", "uc"].forEach(id => {
+    document.getElementById(`prompt-side-${id}`)?.classList.toggle("hidden", id !== side);
+  });
+  document.querySelectorAll(".prompt-side-btn").forEach(btn => {
+    const act = btn.dataset.promptSide === side;
+    btn.className = act
+      ? "prompt-side-btn px-2.5 py-1 rounded-[5px] font-medium bg-[var(--cta-bg)] text-[var(--cta-fg)] transition-colors inline-flex items-center gap-1.5"
+      : "prompt-side-btn px-2.5 py-1 rounded-[5px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors inline-flex items-center gap-1.5";
+  });
+  document.getElementById("inline-autocomplete-menu")?.classList.add("hidden");
+  if (side === "pos") {
+    document.getElementById("prompt-input")?.focus();
+  } else {
+    document.getElementById("uc-input")?.focus();
+  }
 }
 
 function updateLeftRefsBadge() {
@@ -3119,6 +3137,9 @@ function setupInlineAutocomplete() {
 function renderInlineMenu() {
   const menu = document.getElementById("inline-autocomplete-menu");
   if (!menu) return;
+  if (state.inlineTarget?.parentElement?.classList.contains("relative") && menu.parentElement !== state.inlineTarget.parentElement) {
+    state.inlineTarget.parentElement.appendChild(menu);
+  }
   if (!state.inlineMatches.length) {
     menu.classList.add("hidden");
     return;
