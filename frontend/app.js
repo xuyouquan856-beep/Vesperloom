@@ -192,7 +192,8 @@ async function bootstrapApp() {
       document.getElementById("theme-label").textContent = "浅色模式";
       document.getElementById("theme-icon-use")?.setAttribute("href", "#ic-sun");
     }
-    const savedBg = !state.config.bg_hex || state.config.bg_hex === "#0b262c" ? "#0b0c0e" : state.config.bg_hex;
+    const legacyDefaultBg = !state.config.bg_hex || ["#0b262c", "#0b0c0e"].includes(state.config.bg_hex.toLowerCase());
+    const savedBg = legacyDefaultBg ? "#091319" : state.config.bg_hex;
     applyBgHex(savedBg, null, false);
     setGlassClarity(state.config.glass_clarity || 88, false);
 
@@ -708,39 +709,98 @@ function updateStageInfoPill() {
   if (el) el.textContent = `${shortName} · ${state.width}×${state.height} · Steps ${state.steps}`;
 }
 
-async function updateCostEstimate() {
+let _costTimer = null;
+let _costController = null;
+
+function computeInstantCostBadge() {
+  const spec = state.models[state.currentModel] || {};
+  const pixels = Number(state.width || 832) * Number(state.height || 1216);
+  const steps = Number(state.steps || 28);
+  const hasRawVibe = state.vibes.some(v => Boolean(v.raw_image) && !v.encoding);
+  const hasPreciseRef = Boolean(spec.supports_precise_ref && state.preciseRefs.length > 0);
+  const isOpus = true;
+  const baseOpusFree = isOpus && pixels <= 1048576 && steps <= 28;
+
+  let extraAnlas = 0;
+  if (hasPreciseRef) extraAnlas += 5;
+  if (hasRawVibe && spec.supports_vibe && !spec.vibe_raw_image_free) extraAnlas += 2;
+  if ((spec.family === "v4" || spec.family === "v4_5") && state.vibes.length > 4) {
+    extraAnlas += (state.vibes.length - 4) * 2;
+  }
+
+  if (baseOpusFree && extraAnlas === 0) {
+    return {
+      is_opus_free: true,
+      badge: spec.uses_v5_quota ? "0 Anlas · V5免费" : "0 Anlas · 无限免费",
+    };
+  }
+  const baseCost = baseOpusFree ? 0 : Math.max(5, Math.round((pixels / 1048576) * (steps / 28) * 16));
+  return {
+    is_opus_free: false,
+    badge: `预计消耗 ${baseCost + extraAnlas} Anlas`,
+  };
+}
+
+function renderCostBadge(est) {
+  const badge = document.getElementById("cost-estimate-badge");
+  if (!badge || !est) return;
+  badge.textContent = est.badge;
+  badge.className = est.is_opus_free
+    ? "hidden sm:inline-block text-[12px] px-2 py-1 rounded-[6px] ui-badge text-[var(--status-success)] font-mono whitespace-nowrap"
+    : "hidden sm:inline-block text-[12px] px-2 py-1 rounded-[6px] ui-badge text-[var(--status-warning)] font-mono whitespace-nowrap";
+}
+
+function updateCostEstimate() {
+  renderCostBadge(computeInstantCostBadge());
   const hasRawVibe = state.vibes.some(v => Boolean(v.raw_image) && !v.encoding);
   const spec = state.models[state.currentModel];
   const hasPreciseRef = Boolean(spec?.supports_precise_ref && state.preciseRefs.length > 0);
-  try {
-    const res = await fetch("/api/estimate-cost", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: state.currentModel,
-        width: state.width,
-        height: state.height,
-        steps: state.steps,
-        n_samples: 1,
-        has_vibe_raw_encode: hasRawVibe,
-        vibe_count: state.vibes.length,
-        has_precise_ref: hasPreciseRef,
-      }),
-    });
-    const est = await res.json();
-    const badge = document.getElementById("cost-estimate-badge");
-    if (badge) {
-      badge.textContent = est.badge;
-      badge.className = est.is_opus_free
-        ? "hidden sm:inline-block text-[12px] px-2 py-1 rounded-[6px] ui-badge text-[var(--status-success)] font-mono whitespace-nowrap"
-        : "hidden sm:inline-block text-[12px] px-2 py-1 rounded-[6px] ui-badge text-[var(--status-warning)] font-mono whitespace-nowrap";
-    }
-  } catch (e) {}
+
+  clearTimeout(_costTimer);
+  _costTimer = setTimeout(async () => {
+    if (_costController) _costController.abort();
+    _costController = new AbortController();
+    try {
+      const res = await fetch("/api/estimate-cost", {
+        method: "POST",
+        signal: _costController.signal,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: state.currentModel,
+          width: state.width,
+          height: state.height,
+          steps: state.steps,
+          n_samples: 1,
+          has_vibe_raw_encode: hasRawVibe,
+          vibe_count: state.vibes.length,
+          has_precise_ref: hasPreciseRef,
+        }),
+      });
+      const est = await res.json();
+      renderCostBadge(est);
+    } catch (e) {}
+  }, 120);
 }
 
 // ================= Prompt Linter, Weight Adjuster & Hybrid Tag Search =================
 let _lintTimer = null;
+let _lintController = null;
 let _tagTimer = null;
+let _tagController = null;
+
+function syncPromptImmediateVisuals() {
+  const ta = document.getElementById("prompt-input");
+  const bd = document.getElementById("prompt-backdrop");
+  if (!ta || !bd) return;
+  if (!state.lastLintResult || state.lastLintResult._raw !== ta.value) {
+    const escaped = escapeHtml(ta.value);
+    bd.innerHTML = ta.value.endsWith("\n") ? `${escaped}\u200b` : escaped;
+  }
+  bd.scrollTop = ta.scrollTop;
+  bd.scrollLeft = ta.scrollLeft;
+  renderTagPillsBar();
+  updateDynamicPromptIndicator();
+}
 
 function bindSwitchA11y() {
   document.querySelectorAll(".glass-switch").forEach(sw => {
@@ -768,11 +828,11 @@ function setupPromptListeners() {
   const bd = document.getElementById("prompt-backdrop");
   if (ta && bd) {
     ta.addEventListener("input", () => {
+      syncPromptImmediateVisuals();
       clearTimeout(_lintTimer);
       _lintTimer = setTimeout(() => {
         runPromptLinter();
-        renderTagPillsBar();
-      }, 130);
+      }, 80);
     });
     ta.addEventListener("scroll", () => {
       bd.scrollTop = ta.scrollTop;
@@ -784,7 +844,7 @@ function setupPromptListeners() {
   if (searchIn) {
     searchIn.addEventListener("input", () => {
       clearTimeout(_tagTimer);
-      _tagTimer = setTimeout(() => queryTagSuggestions(searchIn.value), 150);
+      _tagTimer = setTimeout(() => queryTagSuggestions(searchIn.value), 60);
     });
     searchIn.addEventListener("focus", () => {
       if (searchIn.value.trim()) queryTagSuggestions(searchIn.value);
@@ -799,13 +859,20 @@ async function runPromptLinter() {
   const listEl = document.getElementById("lint-issues-list");
   if (!ta || !bd) return;
 
+  const promptSnapshot = ta.value;
+  if (_lintController) _lintController.abort();
+  _lintController = new AbortController();
+
   try {
     const res = await fetch("/api/prompt/lint", {
       method: "POST",
+      signal: _lintController.signal,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt: ta.value, model: state.currentModel }),
+      body: JSON.stringify({ prompt: promptSnapshot, model: state.currentModel }),
     });
     const data = await res.json();
+    if (ta.value !== promptSnapshot) return;
+    data._raw = promptSnapshot;
     state.lastLintResult = data;
     const rawHtml = data.highlighted_html || escapeHtml(ta.value);
     bd.innerHTML = ta.value.endsWith("\n") ? `${rawHtml}\u200b` : rawHtml;
@@ -933,11 +1000,16 @@ async function queryTagSuggestions(query) {
   if (!menu) return;
   const q = (query || "").trim();
   if (!q) {
+    if (_tagController) _tagController.abort();
     menu.classList.add("hidden");
     return;
   }
+  if (_tagController) _tagController.abort();
+  _tagController = new AbortController();
   try {
-    const res = await fetch(`/api/tags/suggest?q=${encodeURIComponent(q)}&model=${encodeURIComponent(state.currentModel)}`);
+    const res = await fetch(`/api/tags/suggest?q=${encodeURIComponent(q)}&model=${encodeURIComponent(state.currentModel)}`, {
+      signal: _tagController.signal,
+    });
     const data = await res.json();
     const tags = data.tags || [];
     if (!tags.length) {
@@ -967,6 +1039,7 @@ function insertTagFromSearch(tag) {
   ta.value = cur ? (cur.endsWith(",") ? `${cur} ${tag}` : `${cur}, ${tag}`) : tag;
   document.getElementById("tag-suggestions-menu")?.classList.add("hidden");
   document.getElementById("tag-search-input").value = "";
+  syncPromptImmediateVisuals();
   runPromptLinter();
 }
 
@@ -1000,6 +1073,7 @@ function toggleSnippetTag(tags) {
     const cur = ta.value.trim();
     ta.value = cur ? `${cur}, ${tags}` : tags;
   }
+  syncPromptImmediateVisuals();
   runPromptLinter();
 }
 
@@ -1054,7 +1128,7 @@ function renderCharacterSlots() {
   const wrap = document.getElementById("char-slots-list");
   if (!wrap) return;
   if (!state.characters.length) {
-    wrap.innerHTML = `<div class="text-[12.5px] text-[var(--text-muted)]">单画面模式。多人同框可点击「+ 添加角色」按 5×5 坐标拆分站位，并可在中央画布直接拖拽标点。</div>`;
+    wrap.innerHTML = `<div class="text-[12.5px] text-[var(--text-muted)]">未添加角色分控。</div>`;
     renderCharStageOverlay();
     return;
   }
@@ -2007,6 +2081,10 @@ function renderArtistsGrid() {
     return true;
   });
 
+  const renderKey = `${state.artistCatFilter}|${q}|${filtered.map(a => `${a.id}:${a.favorite ? 1 : 0}:${a.preview_url || ""}`).join(",")}`;
+  if (grid.dataset.renderKey === renderKey) return;
+  grid.dataset.renderKey = renderKey;
+
   grid.innerHTML = filtered
     .map(a => {
       const previewHtml = a.preview_url
@@ -2045,12 +2123,23 @@ function renderArtistsGrid() {
 }
 
 async function toggleArtistFav(artistId) {
-  const res = await fetch(`/api/artists/${artistId}/favorite`, { method: "POST" });
-  const data = await res.json();
-  if (data.artist) {
-    const idx = state.artists.findIndex(x => x.id === artistId);
-    if (idx !== -1) state.artists[idx] = data.artist;
+  const idx = state.artists.findIndex(x => x.id === artistId);
+  if (idx === -1) return;
+  const prevFav = Boolean(state.artists[idx].favorite);
+  state.artists[idx].favorite = !prevFav;
+  renderArtistsGrid();
+  try {
+    const res = await fetch(`/api/artists/${artistId}/favorite`, { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) throw new Error("收藏同步失败");
+    if (data.artist) {
+      state.artists[idx] = data.artist;
+      renderArtistsGrid();
+    }
+  } catch (e) {
+    state.artists[idx].favorite = prevFav;
     renderArtistsGrid();
+    showToast("收藏状态同步失败");
   }
 }
 
@@ -2121,10 +2210,29 @@ function formatMixString(items) {
     .join(", ");
 }
 
+function updateMixerSlotWeight(idx, rawVal) {
+  const it = state.mixerItems[idx];
+  if (!it) return;
+  const w = parseFloat(rawVal);
+  it.weight = w;
+  const weightEl = document.getElementById(`mixer-weight-${idx}`);
+  if (weightEl) weightEl.textContent = Number(w).toFixed(2);
+  const out = document.getElementById("mixer-preview-output");
+  if (out) out.textContent = formatMixString(state.mixerItems);
+  const wrap = document.getElementById("mixer-slots");
+  if (wrap) {
+    wrap.dataset.renderKey = state.mixerItems.map(x => `${x.tag}:${Number(x.weight).toFixed(2)}`).join("|") + `|${state.currentModel}`;
+  }
+}
+
 function renderMixer() {
   const wrap = document.getElementById("mixer-slots");
   const out = document.getElementById("mixer-preview-output");
   if (!wrap || !out) return;
+
+  const renderKey = state.mixerItems.map(x => `${x.tag}:${Number(x.weight).toFixed(2)}`).join("|") + `|${state.currentModel}`;
+  if (wrap.dataset.renderKey === renderKey) return;
+  wrap.dataset.renderKey = renderKey;
 
   if (!state.mixerItems.length) {
     wrap.innerHTML = `<div class="ui-body text-[var(--muted-foreground)] py-4 text-center">从左侧点击「+ 混搭」添加多位画师调配比例</div>`;
@@ -2141,8 +2249,8 @@ function renderMixer() {
           <button onclick="state.mixerItems.splice(${idx},1);renderMixer()" class="text-[12.5px] text-[var(--status-danger)]">移除</button>
         </div>
         <div class="flex items-center gap-3">
-          <input type="range" min="0.1" max="2.0" step="0.05" value="${it.weight}" oninput="state.mixerItems[${idx}].weight=parseFloat(this.value);renderMixer()" class="flex-1" />
-          <span class="font-mono text-[13px] w-11 text-right text-[var(--text-primary)]">${Number(it.weight).toFixed(2)}</span>
+          <input type="range" min="0.1" max="2.0" step="0.05" value="${it.weight}" oninput="updateMixerSlotWeight(${idx}, this.value)" class="flex-1" />
+          <span id="mixer-weight-${idx}" class="font-mono text-[13px] w-11 text-right text-[var(--text-primary)] tabular-nums">${Number(it.weight).toFixed(2)}</span>
         </div>
       </div>
     `
@@ -2271,7 +2379,7 @@ async function submitNewArtist() {
 let _gallerySearchTimer = null;
 function debouncedGallerySearch() {
   clearTimeout(_gallerySearchTimer);
-  _gallerySearchTimer = setTimeout(() => renderFullGallery(true), 260);
+  _gallerySearchTimer = setTimeout(() => renderFullGallery(true), 140);
 }
 
 function toggleGalleryFavFilter() {
@@ -2351,6 +2459,10 @@ async function renderFullGallery(reloadFromServer = false) {
     loadMoreBtn.classList.toggle("hidden", !state.galleryHasMore && state.galleryOffset >= state.galleryTotal);
   }
 
+  const renderKey = `${state.galleryFavOnly ? 1 : 0}|${modelFilter}|${q}|${state.galleryTotal}|${items.map(it => `${it.id}:${it.favorite ? 1 : 0}:${it.notes || ""}`).join(",")}`;
+  if (grid.dataset.renderKey === renderKey) return;
+  grid.dataset.renderKey = renderKey;
+
   if (!items.length) {
     grid.innerHTML = `<div class="col-span-full text-center py-12 ui-body text-[var(--muted-foreground)]">没有匹配的本地图库记录</div>`;
     return;
@@ -2388,12 +2500,23 @@ async function renderFullGallery(reloadFromServer = false) {
 }
 
 async function toggleGalleryFav(id) {
-  const res = await fetch(`/api/gallery/${id}/favorite`, { method: "POST" });
-  const data = await res.json();
-  if (data.item) {
-    const idx = state.gallery.findIndex(x => x.id === id);
-    if (idx !== -1) state.gallery[idx] = data.item;
+  const idx = state.gallery.findIndex(x => x.id === id);
+  if (idx === -1) return;
+  const prevFav = Boolean(state.gallery[idx].favorite);
+  state.gallery[idx].favorite = !prevFav;
+  renderFullGallery();
+  try {
+    const res = await fetch(`/api/gallery/${id}/favorite`, { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) throw new Error("收藏同步失败");
+    if (data.item) {
+      state.gallery[idx] = data.item;
+      renderFullGallery();
+    }
+  } catch (e) {
+    state.gallery[idx].favorite = prevFav;
     renderFullGallery();
+    showToast("收藏状态同步失败");
   }
 }
 
@@ -2525,8 +2648,12 @@ function toggleBgMenu(force) {
   m.classList.toggle("hidden", typeof force === "boolean" ? !force : !m.classList.contains("hidden"));
 }
 
+let _bgConfigTimer = null;
+let _clarityConfigTimer = null;
+
 function applyBgHex(hex, presetName = null, persist = true) {
-  const normalizedHex = !hex || hex.toLowerCase() === "#0b262c" ? "#0b0c0e" : hex;
+  const lower = (hex || "").toLowerCase();
+  const normalizedHex = !hex || lower === "#0b262c" || lower === "#0b0c0e" ? "#091319" : hex;
   state.config.bg_hex = normalizedHex;
   const picker = document.getElementById("bg-color-picker");
   const label = document.getElementById("bg-hex-label");
@@ -2536,23 +2663,26 @@ function applyBgHex(hex, presetName = null, persist = true) {
   const [h, s, l] = hexToHsl(normalizedHex);
   const isLight = document.documentElement.classList.contains("light");
   const root = document.documentElement.style;
-  const sat = Math.min(s, 8);
+  const sat = Math.min(s, 36);
 
   if (isLight) {
-    root.setProperty("--bg-base", `hsl(${h}, ${sat}%, 95%)`);
+    root.setProperty("--bg-base", `hsl(${h}, ${Math.min(sat, 28)}%, 93%)`);
   } else {
-    const baseL = Math.min(Math.max(l, 4), 16);
+    const baseL = Math.min(Math.max(l, 4), 14);
     root.setProperty("--bg-base", `hsl(${h}, ${sat}%, ${baseL}%)`);
   }
 
   setGlassClarity(state.config.glass_clarity || 88, false);
   if (presetName) showToast(`已切换背景色：${presetName}`);
   if (persist) {
-    fetch("/api/config", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ bg_hex: normalizedHex, bg_preset_name: presetName || "" }),
-    });
+    clearTimeout(_bgConfigTimer);
+    _bgConfigTimer = setTimeout(() => {
+      fetch("/api/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bg_hex: normalizedHex, bg_preset_name: presetName || "" }),
+      });
+    }, presetName ? 0 : 180);
   }
 }
 
@@ -2564,20 +2694,32 @@ function setGlassClarity(val, persist = true) {
   if (valEl) valEl.textContent = `${clarity}%`;
   if (slider) slider.value = String(clarity);
 
+  const isLight = document.documentElement.classList.contains("light");
+  const alpha = Math.max(0.56, Math.min(0.96, clarity / 100));
+  const root = document.documentElement.style;
+  root.setProperty("--surface-glass", isLight ? `rgba(248, 251, 253, ${alpha.toFixed(2)})` : `rgba(14, 24, 31, ${alpha.toFixed(2)})`);
+
   if (persist) {
-    fetch("/api/config", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ glass_clarity: clarity }),
-    });
+    clearTimeout(_clarityConfigTimer);
+    _clarityConfigTimer = setTimeout(() => {
+      fetch("/api/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ glass_clarity: clarity }),
+      });
+    }, 180);
   }
 }
 
 function toggleTheme() {
-  const isLight = document.documentElement.classList.toggle("light");
+  const rootEl = document.documentElement;
+  rootEl.classList.add("theme-sync");
+  const isLight = rootEl.classList.toggle("light");
   document.getElementById("theme-label").textContent = isLight ? "深色模式" : "浅色模式";
   document.getElementById("theme-icon-use")?.setAttribute("href", isLight ? "#ic-moon" : "#ic-sun");
-  applyBgHex(state.config.bg_hex || "#0b0c0e", null, false);
+  applyBgHex(state.config.bg_hex || "#091319", null, false);
+  void rootEl.offsetHeight;
+  requestAnimationFrame(() => rootEl.classList.remove("theme-sync"));
   fetch("/api/config", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -2652,6 +2794,7 @@ function handleTagDrop(targetIdx, ev) {
   const [moved] = segs.splice(fromIdx, 1);
   segs.splice(targetIdx, 0, moved);
   ta.value = segs.join(", ");
+  syncPromptImmediateVisuals();
   runPromptLinter();
 }
 
@@ -2723,6 +2866,7 @@ function adjustTagPillWeight(idx, delta) {
   if (idx < 0 || idx >= segs.length) return;
   segs[idx] = clientAdjustTokenWeight(segs[idx], delta);
   ta.value = segs.join(", ");
+  syncPromptImmediateVisuals();
   runPromptLinter();
 }
 
@@ -2753,6 +2897,7 @@ async function previewDynamicPrompt() {
 
 // ================= V2.1 Inline Cursor Autocomplete =================
 let _inlineTimer = null;
+let _inlineController = null;
 
 function getCursorTagFragment(el) {
   const pos = el.selectionStart || 0;
@@ -2773,29 +2918,38 @@ function setupInlineAutocomplete() {
     state.inlineTarget = el;
     const { frag } = getCursorTagFragment(el);
     if (!frag || frag.length < 2) {
+      clearTimeout(_inlineTimer);
+      if (_inlineController) _inlineController.abort();
       menu.classList.add("hidden");
       state.inlineMatches = [];
       return;
     }
+    if (frag.startsWith("__")) {
+      clearTimeout(_inlineTimer);
+      const wq = frag.replace(/_/g, "").toLowerCase();
+      state.inlineMatches = (state.wildcards || [])
+        .filter(w => !wq || w.name.toLowerCase().includes(wq))
+        .map(w => ({ tag: w.token, cn: `词库通配符 (${w.count}项)`, cat: "Wildcard" }))
+        .slice(0, 8);
+      state.inlineSelIdx = 0;
+      renderInlineMenu();
+      return;
+    }
     clearTimeout(_inlineTimer);
     _inlineTimer = setTimeout(async () => {
+      if (_inlineController) _inlineController.abort();
+      _inlineController = new AbortController();
       try {
-        let matches = [];
-        if (frag.startsWith("__")) {
-          const wq = frag.replace(/_/g, "").toLowerCase();
-          matches = (state.wildcards || [])
-            .filter(w => !wq || w.name.toLowerCase().includes(wq))
-            .map(w => ({ tag: w.token, cn: `词库通配符 (${w.count}项)`, cat: "Wildcard" }));
-        } else {
-          const res = await fetch(`/api/tags/suggest?q=${encodeURIComponent(frag)}&model=${encodeURIComponent(state.currentModel)}`);
-          const data = await res.json();
-          matches = data.tags || [];
-        }
+        const res = await fetch(`/api/tags/suggest?q=${encodeURIComponent(frag)}&model=${encodeURIComponent(state.currentModel)}`, {
+          signal: _inlineController.signal,
+        });
+        const data = await res.json();
+        const matches = data.tags || [];
         state.inlineMatches = matches.slice(0, 8);
         state.inlineSelIdx = 0;
         renderInlineMenu();
       } catch (e) {}
-    }, 150);
+    }, 55);
   };
 
   const handleKeyDown = (el, e) => {

@@ -1,48 +1,48 @@
 /* ==========================================================================
-   NAI Studio — Neutral Workbench Design System (Pre-Phase 2 Polish)
-   Tokens: Neutral Monochrome Luminance Contrast · 4/8/12/16/24/32px · 6/10/16px
+   NAI Studio — Studio Slate + Restrained Cyan Accent Design System
+   Tokens: Calibrated Slate & Brand Cyan · 4/8/12/16/24/32px · 6/10/16px
    ========================================================================== */
 
 :root {
-  /* 1. Neutral Backdrop & Canvas Well */
-  --bg-base: #0b0c0e;
-  --bg-canvas-well: #08090b;
-  --sky-top: #0b0c0e;
-  --sky-mid: #0b0c0e;
-  --water-horizon: #0b0c0e;
-  --water-deep: #0b0c0e;
+  /* 1. Studio Slate Backdrop & Canvas Well */
+  --bg-base: #091319;
+  --bg-canvas-well: #060d12;
+  --sky-top: #091319;
+  --sky-mid: #091319;
+  --water-horizon: #091319;
+  --water-deep: #091319;
 
-  /* 2. Surface Tiers (Dark Graphite Workstation Default) */
-  --surface-panel: #121417;
-  --surface-group-hover: #1b1e23;
-  --surface-well: #0d0f12;
-  --surface-well-hover: #16191e;
-  --surface-chrome: #15171b;
-  --surface-popover: #181a1f;
+  /* 2. Surface Tiers (Dark Studio Slate Default) */
+  --surface-panel: rgba(14, 24, 31, 0.92);
+  --surface-group-hover: rgba(24, 41, 52, 0.85);
+  --surface-well: #081016;
+  --surface-well-hover: #101e28;
+  --surface-chrome: rgba(15, 27, 35, 0.86);
+  --surface-popover: #101c24;
 
   /* 3. Borders & Focus */
-  --border-hairline: rgba(255, 255, 255, 0.08);
-  --border-control: rgba(255, 255, 255, 0.16);
-  --border-hover: rgba(255, 255, 255, 0.34);
-  --border-focus: #f4f4f5;
+  --border-hairline: rgba(186, 224, 242, 0.10);
+  --border-control: rgba(186, 224, 242, 0.20);
+  --border-hover: rgba(56, 189, 248, 0.48);
+  --border-focus: #38bdf8;
 
-  /* 4. Neutral Ink & High-Contrast Primary Action */
-  --text-primary: #f4f4f5;
-  --text-secondary: #a1a1aa;
-  --text-muted: #8b8b95;
-  --cta-bg: #f4f4f5;
-  --cta-bg-hover: #ffffff;
-  --cta-fg: #09090b;
-  --accent: #f4f4f5;
-  --accent-solid: #f4f4f5;
-  --accent-tint: rgba(255, 255, 255, 0.11);
+  /* 4. Ink & Calibrated Brand Cyan Accent (Zero neon glow / colored drop shadow) */
+  --text-primary: #eef6fb;
+  --text-secondary: #adc6d6;
+  --text-muted: #7e9bad;
+  --cta-bg: #0284c7;
+  --cta-bg-hover: #0ea5e9;
+  --cta-fg: #ffffff;
+  --accent: #38bdf8;
+  --accent-solid: #0284c7;
+  --accent-tint: rgba(56, 189, 248, 0.14);
 
-  /* Functional Telemetry Ink Only (No decorative glows) */
-  --status-success: #4ade80;
+  /* Functional Semantic Ink Only */
+  --status-success: #34d399;
   --status-warning: #fbbf24;
   --status-danger: #f87171;
 
-  /* 5. Typography Scale (Standard Comfort Mode) */
+  /* 5. Typography Scale */
   --fs-brand: 16px;
   --fs-title: 15px;
   --fs-section: 14px;
@@ -67,69 +67,69 @@
   --radius-md: 10px;
   --radius-lg: 16px;
 
-  /* 7. Legacy Token Compatibility Aliases (Neutralized) */
-  --glass-popover: #181a1f;
-  --glass-inset-bg: #0d0f12;
-  --glass-border: rgba(255, 255, 255, 0.16);
-  --glass-border-strong: rgba(255, 255, 255, 0.34);
-  --popover-shadow: 0 12px 32px rgba(0, 0, 0, 0.42);
-  --foreground: #f4f4f5;
-  --muted-foreground: #a1a1aa;
-  --placeholder: #71717a;
-  --primary: #f4f4f5;
-  --primary-deep: #e4e4e7;
-  --success: #4ade80;
+  /* 7. Legacy Compatibility Aliases */
+  --glass-popover: #101c24;
+  --glass-inset-bg: #081016;
+  --glass-border: rgba(186, 224, 242, 0.20);
+  --glass-border-strong: rgba(56, 189, 248, 0.48);
+  --popover-shadow: 0 12px 32px rgba(2, 8, 16, 0.48);
+  --foreground: #eef6fb;
+  --muted-foreground: #adc6d6;
+  --placeholder: #7e9bad;
+  --primary: #38bdf8;
+  --primary-deep: #0284c7;
+  --success: #34d399;
   --warning: #fbbf24;
   --error: #f87171;
 }
 
 html.light {
-  --bg-base: #f2f3f5;
-  --bg-canvas-well: #e9ebef;
-  --sky-top: #f2f3f5;
-  --sky-mid: #f2f3f5;
-  --water-horizon: #f2f3f5;
-  --water-deep: #f2f3f5;
+  --bg-base: #e7eff5;
+  --bg-canvas-well: #dce7ef;
+  --sky-top: #e7eff5;
+  --sky-mid: #e7eff5;
+  --water-horizon: #e7eff5;
+  --water-deep: #e7eff5;
 
-  --surface-panel: #ffffff;
-  --surface-group-hover: #f3f4f6;
-  --surface-well: #f4f5f7;
-  --surface-well-hover: #e8eaee;
-  --surface-chrome: #ffffff;
+  --surface-panel: rgba(248, 251, 253, 0.94);
+  --surface-group-hover: #edf4f9;
+  --surface-well: #eff5f9;
+  --surface-well-hover: #e2ecf3;
+  --surface-chrome: rgba(250, 253, 255, 0.90);
   --surface-popover: #ffffff;
 
-  --border-hairline: rgba(17, 24, 39, 0.09);
-  --border-control: rgba(17, 24, 39, 0.16);
-  --border-hover: rgba(17, 24, 39, 0.36);
-  --border-focus: #18181b;
+  --border-hairline: rgba(15, 42, 60, 0.10);
+  --border-control: rgba(15, 42, 60, 0.18);
+  --border-hover: rgba(2, 132, 199, 0.56);
+  --border-focus: #0284c7;
 
-  --text-primary: #111827;
-  --text-secondary: #4b5563;
-  --text-muted: #6b7280;
-  --cta-bg: #18181b;
-  --cta-bg-hover: #27272a;
+  --text-primary: #0c1f2b;
+  --text-secondary: #355264;
+  --text-muted: #536f82;
+  --cta-bg: #0284c7;
+  --cta-bg-hover: #0369a1;
   --cta-fg: #ffffff;
-  --accent: #18181b;
-  --accent-solid: #18181b;
-  --accent-tint: rgba(17, 24, 39, 0.08);
+  --accent: #0284c7;
+  --accent-solid: #0284c7;
+  --accent-tint: rgba(2, 132, 199, 0.12);
 
-  --status-success: #15803d;
+  --status-success: #047857;
   --status-warning: #b45309;
-  --status-danger: #b91c1c;
+  --status-danger: #be123c;
 
   --glass-popover: #ffffff;
-  --glass-inset-bg: #f4f5f7;
-  --glass-border: rgba(17, 24, 39, 0.16);
-  --glass-border-strong: rgba(17, 24, 39, 0.36);
-  --popover-shadow: 0 12px 28px rgba(17, 24, 39, 0.12);
-  --foreground: #111827;
-  --muted-foreground: #4b5563;
-  --placeholder: #6b7280;
-  --primary: #18181b;
-  --primary-deep: #27272a;
-  --success: #15803d;
+  --glass-inset-bg: #eff5f9;
+  --glass-border: rgba(15, 42, 60, 0.18);
+  --glass-border-strong: rgba(2, 132, 199, 0.56);
+  --popover-shadow: 0 12px 28px rgba(12, 38, 56, 0.14);
+  --foreground: #0c1f2b;
+  --muted-foreground: #355264;
+  --placeholder: #536f82;
+  --primary: #0284c7;
+  --primary-deep: #0369a1;
+  --success: #047857;
   --warning: #b45309;
-  --error: #b91c1c;
+  --error: #be123c;
 }
 
 * {
@@ -190,6 +190,23 @@ body {
   height: 20px;
 }
 
+/* Compact Info Icon Trigger */
+.ui-info-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  transition: color 0.1s ease, background-color 0.1s ease;
+  cursor: help;
+}
+.ui-info-btn:hover {
+  color: var(--text-primary);
+  background-color: var(--accent-tint);
+}
+
 /* Semantic Typography & Tabular Numbers */
 .ui-brand {
   font-size: var(--fs-brand);
@@ -238,21 +255,23 @@ body {
   font-feature-settings: "tnum" 1;
 }
 
-/* Flat Neutral Scenery Backdrop (Zero decorative gradients) */
+/* Clean Studio Slate Backdrop (Zero gradient fog) */
 .scenery-canvas {
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
   background-color: var(--bg-base);
-  transition: background-color 0.2s ease;
+  transition: background-color 0.18s ease;
 }
 
 /* ============================================================
-   Surface Hierarchy (Zero Gradients, Zero Glows, Zero Colored Shadows)
+   Surface Hierarchy (Restrained Frosted Chrome + Slate Panels)
    ============================================================ */
 .liquid-glass {
   background-color: var(--surface-chrome);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--border-control);
 }
 
@@ -268,30 +287,26 @@ body {
   box-shadow: var(--popover-shadow);
 }
 
-/* Recessed Control Well (Inputs, textareas, prompt wrap, selects) */
+/* Recessed Control Well */
 .ui-well {
   background-color: var(--surface-well);
   border: 1px solid var(--border-control);
   color: var(--text-primary);
-  transition: border-color 0.14s ease, background-color 0.14s ease;
+  transition: border-color 0.1s ease, background-color 0.1s ease;
 }
-
 select.ui-well option {
   background-color: var(--surface-popover);
   color: var(--text-primary);
 }
-
 .ui-well:hover:not(:disabled) {
   border-color: var(--border-hover);
 }
-
 .ui-well:focus-within,
 .ui-well:focus,
 .ui-well:focus-visible {
   outline: none;
   border-color: var(--border-focus);
 }
-
 .ui-well:disabled,
 .ui-well[aria-disabled="true"] {
   opacity: 0.5;
@@ -304,16 +319,22 @@ select.ui-well option {
   border: 1px solid var(--border-hairline);
 }
 
-/* Standard Secondary & Toolbar Action Button */
+/* Interactive Buttons (Snappy 90ms + Instant :active Tactile Press) */
 .ui-btn {
-  background-color: transparent;
+  background-color: rgba(255, 255, 255, 0.035);
   border: 1px solid var(--border-control);
   color: var(--text-primary);
-  transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease, opacity 0.14s ease;
+  transition: background-color 0.09s ease, border-color 0.09s ease, color 0.09s ease, transform 0.06s ease, opacity 0.09s ease;
+}
+html.light .ui-btn {
+  background-color: rgba(255, 255, 255, 0.72);
 }
 .ui-btn:hover:not(:disabled) {
   background-color: var(--surface-well-hover);
   border-color: var(--border-hover);
+}
+.ui-btn:active:not(:disabled) {
+  transform: scale(0.975);
 }
 .ui-btn:disabled {
   opacity: 0.5;
@@ -327,16 +348,25 @@ select.ui-well option {
   font-weight: 600;
 }
 
-/* High-Contrast Secondary Action Button */
+/* Tonal Cyan Secondary Action Button (Restrained, zero glow) */
 .ui-btn-accent {
   background-color: var(--accent-tint);
   border: 1px solid var(--border-hover);
   color: var(--text-primary);
-  transition: background-color 0.14s ease, border-color 0.14s ease;
+  transition: background-color 0.09s ease, border-color 0.09s ease, transform 0.06s ease;
 }
 .ui-btn-accent:hover:not(:disabled) {
-  background-color: var(--surface-well-hover);
+  background-color: rgba(56, 189, 248, 0.22);
   border-color: var(--border-focus);
+}
+html.light .ui-btn-accent {
+  color: #0369a1;
+}
+html.light .ui-btn-accent:hover:not(:disabled) {
+  background-color: rgba(2, 132, 199, 0.18);
+}
+.ui-btn-accent:active:not(:disabled) {
+  transform: scale(0.975);
 }
 .ui-btn-accent:disabled {
   opacity: 0.5;
@@ -349,12 +379,15 @@ select.ui-well option {
   background-color: transparent;
   border: 1px solid transparent;
   color: var(--text-secondary);
-  transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+  transition: background-color 0.09s ease, border-color 0.09s ease, color 0.09s ease, transform 0.06s ease;
 }
 .ui-btn-ghost:hover:not(:disabled) {
   background-color: var(--surface-well-hover);
   border-color: var(--border-hairline);
   color: var(--text-primary);
+}
+.ui-btn-ghost:active:not(:disabled) {
+  transform: scale(0.975);
 }
 .ui-btn-ghost:disabled {
   opacity: 0.5;
@@ -363,7 +396,7 @@ select.ui-well option {
 }
 .ui-btn-ghost.is-active {
   background-color: var(--accent-tint);
-  border-color: var(--border-control);
+  border-color: var(--border-hover);
   color: var(--text-primary);
   font-weight: 600;
 }
@@ -373,11 +406,14 @@ select.ui-well option {
   background-color: var(--surface-well);
   border: 1px solid var(--border-control);
   color: var(--text-primary);
-  transition: background-color 0.14s ease, border-color 0.14s ease;
+  transition: background-color 0.09s ease, border-color 0.09s ease, transform 0.06s ease;
 }
 .ui-chip:hover:not(:disabled) {
   background-color: var(--surface-well-hover);
   border-color: var(--border-hover);
+}
+.ui-chip:active:not(:disabled) {
+  transform: scale(0.975);
 }
 .ui-chip:disabled {
   opacity: 0.5;
@@ -396,10 +432,10 @@ select.ui-well option {
 .ui-card {
   background-color: var(--surface-well);
   border: 1px solid var(--border-hairline);
-  transition: border-color 0.16s ease, background-color 0.16s ease;
+  transition: border-color 0.12s ease, background-color 0.12s ease;
 }
 .ui-card:hover {
-  border-color: var(--border-control);
+  border-color: var(--border-hover);
   background-color: var(--surface-group-hover);
 }
 
@@ -423,8 +459,8 @@ select.ui-well option {
 }
 .generating-emblem {
   background-color: var(--surface-popover);
-  border: 1px solid var(--border-hover);
-  color: var(--text-primary);
+  border: 1px solid var(--border-focus);
+  color: var(--accent);
 }
 
 /* Custom Select Dropdown */
@@ -442,7 +478,7 @@ select.ui-well option {
   font-size: 13.5px;
   font-weight: 500;
   cursor: pointer;
-  transition: border-color 0.14s ease, background-color 0.14s ease;
+  transition: border-color 0.09s ease, background-color 0.09s ease;
 }
 .glass-select-trigger:hover:not(:disabled) {
   border-color: var(--border-hover);
@@ -459,11 +495,11 @@ select.ui-well option {
 .glass-select-chevron {
   font-size: 11px;
   color: var(--text-secondary);
-  transition: transform 0.16s ease;
+  transition: transform 0.12s ease;
 }
 .glass-select-trigger.open .glass-select-chevron {
   transform: rotate(180deg);
-  color: var(--text-primary);
+  color: var(--accent);
 }
 
 .glass-select-menu {
@@ -495,7 +531,7 @@ select.ui-well option {
   text-align: left;
   color: var(--text-primary);
   cursor: pointer;
-  transition: background-color 0.12s ease;
+  transition: background-color 0.08s ease;
 }
 .glass-select-option:hover {
   background-color: var(--accent-tint);
@@ -506,17 +542,17 @@ select.ui-well option {
   font-weight: 600;
 }
 
-/* Menu Item Hover Utility (Theme-Aware) */
+/* Menu Item Hover Utility */
 .ui-menu-item {
   border-radius: var(--radius-sm);
-  transition: background-color 0.12s ease;
+  transition: background-color 0.08s ease;
 }
 .ui-menu-item:hover {
   background-color: var(--accent-tint);
 }
 .ui-menu-item.is-selected {
   background-color: var(--accent-tint);
-  border: 1px solid var(--border-control);
+  border: 1px solid var(--border-hover);
 }
 
 /* Number Stepper */
@@ -538,11 +574,14 @@ select.ui-well option {
   font-size: 14px;
   font-weight: 600;
   color: var(--text-secondary);
-  transition: background-color 0.12s ease, color 0.12s ease;
+  transition: background-color 0.08s ease, color 0.08s ease, transform 0.06s ease;
 }
 .glass-stepper-btn:hover:not(:disabled) {
   background-color: var(--accent-tint);
   color: var(--text-primary);
+}
+.glass-stepper-btn:active:not(:disabled) {
+  transform: scale(0.92);
 }
 .glass-stepper-btn:disabled {
   opacity: 0.5;
@@ -550,7 +589,7 @@ select.ui-well option {
   pointer-events: none;
 }
 
-/* Switch Control (Neutral Monochrome Luminance Contrast) */
+/* Switch Control (Calibrated Cyan ON state, zero gradient) */
 .glass-switch {
   position: relative;
   width: 36px;
@@ -559,7 +598,7 @@ select.ui-well option {
   background-color: var(--surface-well);
   border: 1px solid var(--border-control);
   cursor: pointer;
-  transition: background-color 0.16s ease, border-color 0.16s ease;
+  transition: background-color 0.12s ease, border-color 0.12s ease;
   flex-shrink: 0;
 }
 .glass-switch::after {
@@ -571,7 +610,7 @@ select.ui-well option {
   height: 14px;
   border-radius: 4px;
   background-color: var(--text-secondary);
-  transition: transform 0.18s ease, background-color 0.16s ease;
+  transition: transform 0.12s ease, background-color 0.12s ease;
 }
 .glass-switch.on {
   background-color: var(--cta-bg);
@@ -579,13 +618,16 @@ select.ui-well option {
 }
 .glass-switch.on::after {
   transform: translateX(16px);
-  background-color: var(--cta-fg);
+  background-color: #ffffff;
 }
 
-/* Primary High-Contrast CTA & Interactive Buttons */
+/* Primary High-Contrast Brand CTA (Zero glow, zero gradient, tactile press) */
 .spring-btn {
   color: inherit;
-  transition: border-color 0.14s ease, background-color 0.14s ease, opacity 0.14s ease;
+  transition: border-color 0.09s ease, background-color 0.09s ease, opacity 0.09s ease, transform 0.06s ease;
+}
+.spring-btn:active:not(:disabled) {
+  transform: scale(0.975);
 }
 .spring-btn:disabled {
   opacity: 0.5;
@@ -597,11 +639,14 @@ select.ui-well option {
   background-color: var(--cta-bg);
   color: var(--cta-fg);
   border: 1px solid var(--cta-bg);
-  transition: background-color 0.14s ease, border-color 0.14s ease, opacity 0.14s ease;
+  transition: background-color 0.09s ease, border-color 0.09s ease, transform 0.06s ease, opacity 0.09s ease;
 }
 .liquid-cta:hover:not(:disabled) {
   background-color: var(--cta-bg-hover);
   border-color: var(--cta-bg-hover);
+}
+.liquid-cta:active:not(:disabled) {
+  transform: scale(0.975);
 }
 .liquid-cta:disabled {
   opacity: 0.5;
@@ -622,14 +667,15 @@ select.ui-well option {
 .tag-pill:focus-visible,
 .tab-btn:focus-visible,
 .batch-btn:focus-visible,
+.ui-info-btn:focus-visible,
 summary:focus-visible {
   outline: 2px solid var(--border-focus);
   outline-offset: 2px;
 }
 
-/* Sliding Tab Pill Indicator (Solid High-Contrast Fill) */
+/* Sliding Tab Pill Indicator (Flat Brand Cyan Fill, Snappy 140ms) */
 #tab-indicator {
-  transition: transform 0.22s ease, width 0.22s ease;
+  transition: transform 0.14s cubic-bezier(0.22, 1, 0.36, 1), width 0.14s cubic-bezier(0.22, 1, 0.36, 1);
   background-color: var(--cta-bg);
   border: 1px solid var(--cta-bg);
 }
@@ -650,8 +696,8 @@ input[type="range"]::-webkit-slider-thumb {
   width: 14px;
   height: 14px;
   border-radius: var(--radius-sm);
-  background: var(--cta-bg);
-  border: 1px solid var(--border-control);
+  background: #ffffff;
+  border: 2px solid var(--cta-bg);
   cursor: pointer;
 }
 input[type="range"]:focus-visible {
@@ -665,12 +711,12 @@ input[type="range"]:disabled {
 
 /* Non-destructive Prompt Linter Marks */
 .lint-mark-error {
-  background: rgba(248, 113, 113, 0.16);
+  background: rgba(248, 113, 113, 0.18);
   box-shadow: inset 0 -2px 0 var(--status-danger);
   border-radius: 4px;
 }
 .lint-mark-warn {
-  background: rgba(251, 191, 36, 0.14);
+  background: rgba(251, 191, 36, 0.16);
   box-shadow: inset 0 -2px 0 var(--status-warning);
   border-radius: 4px;
 }
@@ -725,7 +771,7 @@ input[type="range"]:disabled {
   border: 1px solid var(--border-control);
   color: var(--text-primary);
   cursor: pointer;
-  transition: border-color 0.12s ease, background-color 0.12s ease;
+  transition: border-color 0.08s ease, background-color 0.08s ease;
 }
 .tag-pill:hover {
   border-color: var(--border-hover);
@@ -746,7 +792,7 @@ input[type="range"]:disabled {
 .tag-pill-weight {
   font-size: 11px;
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--accent);
 }
 .tag-pill-cn {
   font-size: 11.5px;
@@ -759,7 +805,7 @@ input[type="range"]:disabled {
 
 /* Alpha Transparency Checkerboard */
 .checkerboard-bg {
-  background-color: #16181c;
+  background-color: #16222c;
   background-image:
     linear-gradient(45deg, rgba(255, 255, 255, 0.08) 25%, transparent 25%),
     linear-gradient(-45deg, rgba(255, 255, 255, 0.08) 25%, transparent 25%),
@@ -769,12 +815,12 @@ input[type="range"]:disabled {
   background-position: 0 0, 0 8px, 8px -8px, -8px 0;
 }
 html.light .checkerboard-bg {
-  background-color: #e4e6ea;
+  background-color: #dce6ee;
   background-image:
-    linear-gradient(45deg, rgba(17, 24, 39, 0.08) 25%, transparent 25%),
-    linear-gradient(-45deg, rgba(17, 24, 39, 0.08) 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, rgba(17, 24, 39, 0.08) 75%),
-    linear-gradient(-45deg, transparent 75%, rgba(17, 24, 39, 0.08) 75%);
+    linear-gradient(45deg, rgba(15, 23, 42, 0.07) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(15, 23, 42, 0.07) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(15, 23, 42, 0.07) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(15, 23, 42, 0.07) 75%);
 }
 
 /* Canvas Draggable Multi-Character Dots */
@@ -789,7 +835,7 @@ html.light .checkerboard-bg {
   justify-content: center;
   font-size: 11px;
   font-weight: 700;
-  color: var(--cta-fg);
+  color: #ffffff;
   background-color: var(--cta-bg);
   border: 2px solid var(--surface-panel);
   cursor: grab;
@@ -847,8 +893,8 @@ html.light .checkerboard-bg {
 .inpaint-cursor-ring {
   position: fixed;
   pointer-events: none;
-  border: 1.5px solid var(--text-primary);
-  background: rgba(255, 255, 255, 0.08);
+  border: 1.5px solid var(--accent);
+  background: rgba(56, 189, 248, 0.10);
   border-radius: 50%;
   transform: translate(-50%, -50%);
   z-index: 80;
@@ -867,13 +913,9 @@ html.light .checkerboard-bg {
   cursor: grab;
 }
 
-/* Light-Mode Contrast & Minimal Semantic Overrides */
+/* Light-Mode Override for Dark Lightbox Overlay */
 html.light #lightbox-modal .text-white {
   color: #f8fafc;
-}
-html.light .inpaint-cursor-ring {
-  border-color: #18181b;
-  background: rgba(24, 24, 27, 0.10);
 }
 
 /* Stage Immersion Mode */
@@ -885,11 +927,26 @@ html.light .inpaint-cursor-ring {
   grid-column: span 12 / span 12;
 }
 
+/* Atomic Single-Frame Theme Switch (Zero half-transition flash) */
+html.theme-sync,
+html.theme-sync * {
+  transition: none !important;
+}
+
 /* Reduced Motion Respect */
 @media (prefers-reduced-motion: reduce) {
   .animate-pulse,
   .animate-spin {
     animation: none !important;
+  }
+  .ui-btn:active:not(:disabled),
+  .ui-btn-accent:active:not(:disabled),
+  .ui-btn-ghost:active:not(:disabled),
+  .ui-chip:active:not(:disabled),
+  .spring-btn:active:not(:disabled),
+  .liquid-cta:active:not(:disabled),
+  .glass-stepper-btn:active:not(:disabled) {
+    transform: none !important;
   }
   * {
     transition-duration: 0.01ms !important;

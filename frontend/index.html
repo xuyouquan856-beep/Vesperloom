@@ -6,7 +6,7 @@
   <title>NAI Studio — 个人创作工作台</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%2318181b'/%3E%3Cpath d='M20 44V20l24 24V20' stroke='%23f4f4f5' stroke-width='6' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E" />
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="/static/styles.css?v=phase1d-1" />
+  <link rel="stylesheet" href="/static/styles.css?v=phase1e-2" />
 </head>
 <body class="lg:h-screen min-h-screen flex flex-col lg:overflow-hidden overflow-y-auto">
 
@@ -46,6 +46,7 @@
       <symbol id="ic-compass" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="m10.2 5.8-1.4 3-3 1.4 1.4-3 3-1.4Z"/></symbol>
       <symbol id="ic-crop" viewBox="0 0 16 16"><path d="M4.5 2v9.5H14M2 4.5h9.5V14"/></symbol>
       <symbol id="ic-edit" viewBox="0 0 16 16"><path d="M11.2 2.8a1.4 1.4 0 0 1 2 2L6 12l-2.8.8.8-2.8 7.2-7.2Z"/></symbol>
+      <symbol id="ic-info" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="M8 7.5v3.5M8 4.8h.01"/></symbol>
     </defs>
   </svg>
 
@@ -105,22 +106,22 @@
           </div>
 
           <div class="space-y-2">
-            <div class="text-[12px] text-[var(--text-muted)]">中性底色预设</div>
+            <div class="text-[12px] text-[var(--text-muted)]">画布底色预设</div>
             <div class="grid grid-cols-6 gap-2">
-              <button onclick="applyBgHex('#0b0c0e', '深炭黑')" title="深炭黑" class="w-9 h-8 rounded-[6px] border border-[var(--border-control)] spring-btn" style="background:#0b0c0e"></button>
-              <button onclick="applyBgHex('#121417', '石墨灰')" title="石墨灰" class="w-9 h-8 rounded-[6px] border border-[var(--border-control)] spring-btn" style="background:#121417"></button>
-              <button onclick="applyBgHex('#18181b', '深铁灰')" title="深铁灰" class="w-9 h-8 rounded-[6px] border border-[var(--border-control)] spring-btn" style="background:#18181b"></button>
-              <button onclick="applyBgHex('#1c1917', '暖曜石')" title="暖曜石" class="w-9 h-8 rounded-[6px] border border-[var(--border-control)] spring-btn" style="background:#1c1917"></button>
-              <button onclick="applyBgHex('#27272a', '中锌灰')" title="中锌灰" class="w-9 h-8 rounded-[6px] border border-[var(--border-control)] spring-btn" style="background:#27272a"></button>
-              <button onclick="applyBgHex('#09090b', '纯暗黑')" title="纯暗黑" class="w-9 h-8 rounded-[6px] border border-[var(--border-control)] spring-btn" style="background:#09090b"></button>
+              <button onclick="applyBgHex('#091319', '深海石板')" title="深海石板" class="w-9 h-8 rounded-[6px] border border-[var(--border-control)] spring-btn" style="background:#091319"></button>
+              <button onclick="applyBgHex('#0c1724', '深海蓝灰')" title="深海蓝灰" class="w-9 h-8 rounded-[6px] border border-[var(--border-control)] spring-btn" style="background:#0c1724"></button>
+              <button onclick="applyBgHex('#141820', '极简曜石')" title="极简曜石" class="w-9 h-8 rounded-[6px] border border-[var(--border-control)] spring-btn" style="background:#141820"></button>
+              <button onclick="applyBgHex('#121417', '中性石墨')" title="中性石墨" class="w-9 h-8 rounded-[6px] border border-[var(--border-control)] spring-btn" style="background:#121417"></button>
+              <button onclick="applyBgHex('#0e1d19', '雾林青灰')" title="雾林青灰" class="w-9 h-8 rounded-[6px] border border-[var(--border-control)] spring-btn" style="background:#0e1d19"></button>
+              <button onclick="applyBgHex('#0b0c0e', '纯暗炭黑')" title="纯暗炭黑" class="w-9 h-8 rounded-[6px] border border-[var(--border-control)] spring-btn" style="background:#0b0c0e"></button>
             </div>
           </div>
 
           <div class="flex items-center justify-between gap-2 pt-1">
             <span class="text-[12px] text-[var(--text-muted)]">自定义底色</span>
             <div class="flex items-center gap-2">
-              <input id="bg-color-picker" type="color" value="#0b0c0e" oninput="applyBgHex(this.value, '自定义色')" class="w-7 h-7 rounded-[6px] cursor-pointer bg-transparent border border-[var(--border-control)] p-0" />
-              <span id="bg-hex-label" class="font-mono text-[12px] px-2 py-1 rounded-[6px] ui-badge">#0B0C0E</span>
+              <input id="bg-color-picker" type="color" value="#091319" oninput="applyBgHex(this.value, '自定义色')" class="w-7 h-7 rounded-[6px] cursor-pointer bg-transparent border border-[var(--border-control)] p-0" />
+              <span id="bg-hex-label" class="font-mono text-[12px] px-2 py-1 rounded-[6px] ui-badge">#091319</span>
             </div>
           </div>
 
@@ -212,13 +213,13 @@
 
         <div class="relative">
           <svg class="ui-ic text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" aria-hidden="true"><use href="#ic-search"/></svg>
-          <input id="tag-search-input" type="text" autocomplete="off" placeholder="搜索中文或英文标签（如：白发、水手服、ciloranko）" class="w-full ui-well rounded-[6px] pl-8 pr-3 py-2 ui-body placeholder:text-[var(--placeholder)]" />
+          <input id="tag-search-input" type="text" autocomplete="off" placeholder="搜索标签（中/英文）" class="w-full ui-well rounded-[6px] pl-8 pr-3 py-2 ui-body placeholder:text-[var(--placeholder)]" />
           <div id="tag-suggestions-menu" class="hidden absolute left-0 right-0 top-10 z-50 liquid-popover rounded-[10px] p-1 space-y-1 max-h-60 overflow-y-auto custom-scroll"></div>
         </div>
 
         <div class="relative rounded-[10px] ui-well" id="prompt-editor-wrap">
           <div id="prompt-backdrop" aria-hidden="true" class="custom-scroll prompt-mirror-sync absolute inset-0 p-3 whitespace-pre-wrap break-words pointer-events-none text-transparent"></div>
-          <textarea id="prompt-input" rows="4" spellcheck="false" class="custom-scroll prompt-mirror-sync relative z-10 w-full block bg-transparent p-3 focus:outline-none text-[var(--text-primary)] caret-[var(--text-primary)] resize-y rounded-[10px]">1girl, solo, silver hair, blue eyes, serafuku, sunset, backlighting, wind, detailed eyes, rooftop</textarea>
+          <textarea id="prompt-input" rows="4" spellcheck="false" class="custom-scroll prompt-mirror-sync relative z-10 w-full block bg-transparent p-3 focus:outline-none text-[var(--text-primary)] caret-[var(--accent)] resize-y rounded-[10px]">1girl, solo, silver hair, blue eyes, serafuku, sunset, backlighting, wind, detailed eyes, rooftop</textarea>
           <div id="inline-autocomplete-menu" class="hidden absolute left-2 right-2 top-[calc(100%+4px)] z-50 liquid-popover rounded-[10px] p-1 space-y-1 max-h-52 overflow-y-auto custom-scroll"></div>
         </div>
 
@@ -227,12 +228,17 @@
             <span class="text-[var(--text-primary)] font-medium">动态随机构想: </span>
             <span id="dynamic-prompt-preview" class="font-mono text-[var(--text-secondary)]"></span>
           </div>
-          <button onclick="previewDynamicPrompt()" class="spring-btn px-2 py-1 rounded-[6px] ui-btn shrink-0 text-[12px]">Roll 预览</button>
+          <button onclick="previewDynamicPrompt()" class="spring-btn px-2 py-1 rounded-[6px] ui-btn shrink-0 text-[12px]">Roll</button>
         </div>
 
         <div class="space-y-1">
           <div class="flex items-center justify-between text-[12px] text-[var(--text-muted)]">
-            <span>Tag 微调（单击静音，滚轮/点按 ± 调权重）</span>
+            <div class="inline-flex items-center gap-1">
+              <span>Tag 微调</span>
+              <button type="button" class="ui-info-btn" title="单击标签静音/恢复，拖拽调整顺序，点按或滚轮 +/- 调权重" aria-label="Tag微调说明">
+                <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-info"/></svg>
+              </button>
+            </div>
             <span id="prompt-token-count" class="font-mono">0 tags</span>
           </div>
           <div id="tag-pills-bar" class="tag-pills-bar custom-scroll"></div>
@@ -241,11 +247,21 @@
         <!-- 统一左边缘对齐的功能开关列表 -->
         <div class="rounded-[10px] ui-subgroup p-3 space-y-2">
           <div id="v5-alpha-bar" class="flex items-center justify-between gap-2">
-            <span class="text-[12.5px] text-[var(--text-primary)] font-medium">V5 原生透明底 (Alpha)</span>
+            <div class="inline-flex items-center gap-1">
+              <span class="text-[12.5px] text-[var(--text-primary)] font-medium">透明底 (Alpha)</span>
+              <button type="button" class="ui-info-btn" title="V5 原生透明通道输出" aria-label="透明底说明">
+                <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-info"/></svg>
+              </button>
+            </div>
             <div id="alpha-switch" role="switch" tabindex="0" aria-checked="false" onclick="toggleAlphaTransparency()" class="glass-switch"></div>
           </div>
           <div class="flex items-center justify-between gap-2 pt-2 border-t border-[var(--border-hairline)]">
-            <span class="text-[12.5px] text-[var(--text-secondary)]">自动附加官方美学词</span>
+            <div class="inline-flex items-center gap-1">
+              <span class="text-[12.5px] text-[var(--text-secondary)]">自动美学词</span>
+              <button type="button" class="ui-info-btn" title="自动附加官方质量与光影增强词" aria-label="自动美学词说明">
+                <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-info"/></svg>
+              </button>
+            </div>
             <div id="quality-switch" role="switch" tabindex="0" aria-checked="true" onclick="toggleAutoQuality()" class="glass-switch on"></div>
           </div>
         </div>
@@ -282,19 +298,24 @@
             <div id="uc-select-menu" class="glass-select-menu liquid-popover hidden"></div>
           </div>
         </div>
-        <textarea id="uc-input" rows="2" spellcheck="false" placeholder="补充额外排除词（已自动融合所选预设）" class="custom-scroll w-full ui-well rounded-[10px] p-3 ui-body font-mono focus:outline-none">lowres, bad anatomy, bad hands, missing fingers, extra digit, fewer digits, blurry, watermark</textarea>
+        <textarea id="uc-input" rows="2" spellcheck="false" placeholder="额外排除词..." class="custom-scroll w-full ui-well rounded-[10px] p-3 ui-body font-mono focus:outline-none">lowres, bad anatomy, bad hands, missing fingers, extra digit, fewer digits, blurry, watermark</textarea>
       </div>
 
       <!-- 4. 多角色分控 -->
       <div class="space-y-2 pb-4 border-b border-[var(--border-hairline)]" id="multi-char-container">
         <div class="flex items-center justify-between gap-2 flex-wrap">
-          <span class="ui-section whitespace-nowrap">多角色分控</span>
+          <div class="inline-flex items-center gap-1">
+            <span class="ui-section whitespace-nowrap">多角色分控</span>
+            <button type="button" class="ui-info-btn" title="支持 5×5 坐标站位（可画布拖拽）及 source#/target#/mutual# 互动语法" aria-label="多角色说明">
+              <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-info"/></svg>
+            </button>
+          </div>
           <div class="flex items-center gap-1 shrink-0" id="multi-char-actions">
             <button onclick="toggleOcModal(true)" class="spring-btn inline-flex items-center gap-1 text-[12px] px-2 py-1 rounded-[6px] ui-btn whitespace-nowrap" title="管理与载入 OC 角色卡">
               <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-user"/></svg>
               <span>OC库</span>
             </button>
-            <button id="use-coords-btn" onclick="toggleUseCoords()" class="spring-btn inline-flex items-center gap-1 text-[12px] px-2 py-1 rounded-[6px] ui-btn whitespace-nowrap">
+            <button id="use-coords-btn" onclick="toggleUseCoords()" class="spring-btn inline-flex items-center gap-1 text-[12px] px-2 py-1 rounded-[6px] ui-btn whitespace-nowrap" title="切换手动坐标站位或自动站位">
               <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-pin"/></svg>
               <span>站位: 开</span>
             </button>
@@ -302,10 +323,10 @@
           </div>
         </div>
         <div id="multi-char-v3-notice" class="hidden rounded-[10px] ui-subgroup p-3 text-[12.5px] text-[var(--status-warning)]">
-          当前所选 <strong>V3 模型</strong> 不支持多角色独立分区坐标（<code>v4_prompt</code>）。如需多人站位，请切换至 <strong>V5 Full</strong> 或 <strong>V4.5 Full</strong>。
+          V3 模型不支持多角色分区，请切至 V5 或 V4.5。
         </div>
         <div id="char-slots-list" class="space-y-2">
-          <div class="text-[12.5px] text-[var(--text-muted)]">单画面模式。多人同框可点击「+ 添加角色」按 5×5 坐标拆分站位并配置互动标签（<code>source#</code> / <code>target#</code> / <code>mutual#</code>）。</div>
+          <div class="text-[12px] text-[var(--text-muted)]">未添加角色分控</div>
         </div>
       </div>
 
@@ -313,21 +334,26 @@
       <div class="space-y-4">
         <div class="space-y-2">
           <div class="flex items-center justify-between gap-2">
-            <span class="ui-section">参考图引导 (Vibe / Precise)</span>
+            <span class="ui-section">参考图引导</span>
             <span id="ref-cap-pill" class="text-[12px] px-2 py-1 rounded-[6px] ui-badge">检测中</span>
           </div>
 
           <div id="ref-v5-unsupported-box" class="hidden rounded-[10px] ui-subgroup p-3 space-y-2">
-            <div class="flex items-start gap-2 text-[12.5px] text-[var(--text-secondary)] leading-relaxed">
-              <svg class="ui-ic text-[var(--status-warning)] mt-1 shrink-0" aria-hidden="true"><use href="#ic-alert"/></svg>
-              <span><strong>NAI Diffusion V5</strong> 采用全新 32 通道 VAE 架构，官方当前未对 V5 开放 Vibe Transfer 与 Precise Reference。</span>
+            <div class="flex items-center justify-between gap-2 text-[12.5px] text-[var(--text-secondary)]">
+              <div class="inline-flex items-center gap-2">
+                <svg class="ui-ic text-[var(--status-warning)] shrink-0" aria-hidden="true"><use href="#ic-alert"/></svg>
+                <span>V5 暂未开放 Vibe / Precise 参考图</span>
+              </div>
+              <button type="button" class="ui-info-btn" title="NAI Diffusion V5 采用全新 32 通道 VAE 架构，官方暂未对 V5 开放 Vibe Transfer 与 Precise Reference" aria-label="V5参考图限制说明">
+                <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-info"/></svg>
+              </button>
             </div>
             <div class="flex flex-wrap gap-2">
               <button onclick="selectModel('nai-diffusion-4-5-full')" class="spring-btn px-3 py-1 rounded-[6px] ui-btn-accent text-[12px] font-medium">
-                切换至 V4.5 Full（无限免费 + 支持参考图）
+                切至 V4.5 Full
               </button>
               <button onclick="selectModel('nai-diffusion-3')" class="spring-btn px-3 py-1 rounded-[6px] ui-btn text-[12px]">
-                切换至 Anime V3（0点数原图 Vibe）
+                切至 Anime V3
               </button>
             </div>
           </div>
@@ -335,8 +361,8 @@
           <div id="ref-vibe-supported-box" class="hidden space-y-2">
             <div class="rounded-[10px] ui-subgroup p-3 space-y-2">
               <div class="flex items-center justify-between text-[12.5px]">
-                <span class="font-medium">Vibe Transfer 参考</span>
-                <span id="vibe-cost-hint" class="text-[12px] text-[var(--status-success)] font-mono">.naiv4vibe 0点数免费</span>
+                <span class="font-medium">Vibe Transfer</span>
+                <span id="vibe-cost-hint" class="text-[12px] text-[var(--status-success)] font-mono">.naiv4vibe 0点数</span>
               </div>
               <div class="flex items-center gap-2">
                 <label class="spring-btn flex-1 inline-flex items-center justify-center gap-2 py-2 px-3 rounded-[6px] ui-btn cursor-pointer text-[12.5px]">
@@ -351,15 +377,14 @@
 
             <div id="ref-precise-supported-box" class="hidden rounded-[10px] ui-subgroup p-3 space-y-2">
               <div class="flex items-center justify-between text-[12.5px]">
-                <span class="font-medium">Precise Reference 精准参考</span>
+                <span class="font-medium">精准参考 (Precise)</span>
                 <span class="text-[12px] px-2 py-1 rounded-[6px] ui-badge text-[var(--status-warning)] font-mono">V4.5 · 5 Anlas</span>
               </div>
               <div class="flex items-center justify-between gap-2">
                 <label class="spring-btn px-3 py-1 rounded-[6px] ui-btn cursor-pointer text-[12.5px]">
-                  + 上传精准参考图
+                  + 上传参考图
                   <input type="file" accept="image/png,image/webp,image/jpeg" multiple class="hidden" onchange="handlePreciseRefUpload(event)" />
                 </label>
-                <span class="text-[12px] text-[var(--text-muted)]">添加后计费 5 Anlas</span>
               </div>
               <div id="precise-refs-list" class="space-y-2"></div>
             </div>
@@ -368,8 +393,8 @@
 
         <div class="rounded-[10px] ui-subgroup p-3 space-y-3">
           <div class="flex items-center justify-between gap-2">
-            <span class="ui-section">采样器与步数细节</span>
-            <span class="text-[12px] text-[var(--text-muted)] font-mono">Opus 上限 ≤ 28步</span>
+            <span class="ui-section">采样与步数</span>
+            <span class="text-[12px] text-[var(--text-muted)] font-mono">Opus ≤ 28步</span>
           </div>
 
           <div class="grid grid-cols-2 gap-2">
@@ -425,9 +450,13 @@
             </div>
           </div>
 
-          <!-- 统一左边缘对齐 + 不挤压折行的种子行 -->
           <div class="space-y-1">
-            <label for="seed-input" class="block text-[12.5px] text-[var(--text-muted)]">随机种子 Seed (0 = 随机)</label>
+            <div class="flex items-center gap-1">
+              <label for="seed-input" class="text-[12.5px] text-[var(--text-muted)]">随机种子 Seed</label>
+              <button type="button" class="ui-info-btn" title="设为 0 表示每次生成使用新随机种子" aria-label="种子说明">
+                <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-info"/></svg>
+              </button>
+            </div>
             <div class="flex items-center gap-2">
               <input id="seed-input" type="text" value="0" placeholder="0 = 随机" class="flex-1 min-w-0 ui-well rounded-[6px] px-3 py-1 font-mono text-sm text-center" />
               <button onclick="randomizeSeed()" class="spring-btn inline-flex items-center gap-1 px-3 py-1 rounded-[6px] ui-btn text-[13px] whitespace-nowrap shrink-0" title="设为随机种子 (0)">
@@ -442,7 +471,12 @@
           </div>
 
           <div id="v45-extra-toggles" class="flex items-center justify-between pt-2 border-t border-[var(--border-hairline)]">
-            <span class="text-[12.5px] text-[var(--text-secondary)]">Variety+ (防构图雷同 / 丰富度提升)</span>
+            <div class="inline-flex items-center gap-1">
+              <span class="text-[12.5px] text-[var(--text-secondary)]">Variety+</span>
+              <button type="button" class="ui-info-btn" title="抑制构图雷同，增强细节丰富度" aria-label="Variety+说明">
+                <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-info"/></svg>
+              </button>
+            </div>
             <div id="variety-switch" role="switch" tabindex="0" aria-checked="false" onclick="toggleVarietyPlus()" class="glass-switch"></div>
           </div>
 
@@ -516,14 +550,18 @@
       <!-- 中央主画布区 -->
       <div class="relative flex-1 my-3 rounded-[10px] ui-stage-well flex items-center justify-center overflow-hidden p-3" id="stage-dropzone" ondragover="event.preventDefault()" ondrop="handleStageDrop(event)">
         <div id="stage-pan-wrap" class="relative w-full h-full flex items-center justify-center overflow-hidden">
-          <div id="artwork-stage" class="relative flex items-center justify-center max-w-full max-h-full transition-transform duration-150">
+          <div id="artwork-stage" class="relative flex items-center justify-center max-w-full max-h-full transition-transform duration-75">
             <img id="stage-img" src="" alt="Generated Artwork" ondblclick="openLightbox()" class="hidden max-h-[66vh] max-w-full rounded-[10px] object-contain" />
             <div id="stage-empty" class="text-center space-y-2 p-8">
               <div class="inline-flex items-center justify-center w-10 h-10 rounded-[10px] ui-badge text-[var(--text-secondary)]">
                 <svg class="ui-ic ui-ic-lg" aria-hidden="true"><use href="#ic-image"/></svg>
               </div>
-              <div class="ui-body font-medium">点击「生成图片」或按 <kbd class="px-2 py-1 rounded-[6px] ui-badge font-mono text-[12px]">Ctrl+Enter</kbd> 出图</div>
-              <div class="text-[12.5px] text-[var(--text-muted)]">支持将 PNG 拖入此处还原配方，或按 <kbd class="px-2 py-1 rounded-[6px] ui-badge font-mono text-[12px]">Ctrl+V</kbd> 粘贴图片进图生图</div>
+              <div class="inline-flex items-center justify-center gap-2 ui-body font-medium">
+                <span>点击「生成图片」或 <kbd class="px-2 py-1 rounded-[6px] ui-badge font-mono text-[12px]">Ctrl+Enter</kbd></span>
+                <button type="button" class="ui-info-btn" title="支持拖入 PNG 还原配方，或按 Ctrl+V 粘贴剪贴板图像进图生图" aria-label="画布快捷操作说明">
+                  <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-info"/></svg>
+                </button>
+              </div>
             </div>
             <div id="char-stage-overlay" class="hidden absolute inset-0 pointer-events-none z-20"></div>
             <canvas id="inpaint-canvas" width="832" height="1216" class="hidden absolute inset-0 w-full h-full cursor-none rounded-[10px] z-20"></canvas>
@@ -670,9 +708,11 @@
     <!-- 右栏 (3 cols)：出图历史与配方 -->
     <section id="right-panel" class="lg:col-span-3 liquid-panel rounded-[16px] p-4 flex flex-col min-h-0">
       <div class="flex items-center justify-between gap-2 pb-3 border-b border-[var(--border-hairline)]">
-        <div>
+        <div class="inline-flex items-center gap-1">
           <span class="ui-title">出图历史与配方</span>
-          <div class="text-[12px] text-[var(--text-muted)]">自动落盘保存原图与参数</div>
+          <button type="button" class="ui-info-btn" title="出图自动落盘保存高清原图与完整参数" aria-label="出图历史说明">
+            <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-info"/></svg>
+          </button>
         </div>
         <button onclick="openDiffModal()" class="spring-btn text-[12.5px] px-3 py-1 rounded-[6px] ui-btn shrink-0">对比差异</button>
       </div>
@@ -717,9 +757,11 @@
 
     <section class="lg:col-span-4 liquid-panel rounded-[16px] p-4 flex flex-col justify-between min-h-0">
       <div class="space-y-3 overflow-y-auto custom-scroll pr-1">
-        <div class="pb-3 border-b border-[var(--border-hairline)]">
-          <h3 class="ui-title">多画师混搭调音台 (Artist Mixer)</h3>
-          <p class="text-[12.5px] text-[var(--text-muted)] mt-1 leading-relaxed">从左侧点「+ 混搭」加入多位画师，拖动滑块调配画风比例（自动适配 V4/V5 的 <code>w::artist::</code> 与 V3 的 <code>{}</code> 语法）。</p>
+        <div class="flex items-center justify-between pb-3 border-b border-[var(--border-hairline)]">
+          <h3 class="ui-title">画师混搭调音台</h3>
+          <button type="button" class="ui-info-btn" title="点击左侧画师「+ 混搭」加入，拖动滑块调配画风比例（自动适配 w::artist:: 与 {} 语法）" aria-label="混搭台说明">
+            <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-info"/></svg>
+          </button>
         </div>
 
         <div id="mixer-slots" class="space-y-2"></div>
@@ -794,30 +836,38 @@
 
       <div class="liquid-panel rounded-[16px] p-6 space-y-4">
         <div class="flex items-center justify-between gap-2">
-          <div>
-            <h3 class="ui-title">NovelAI 官方接口与存储设置</h3>
-            <p class="text-[12.5px] text-[var(--text-muted)]">直连 https://image.novelai.net 生图集群</p>
+          <div class="inline-flex items-center gap-1">
+            <h3 class="ui-title">官方接口与存储设置</h3>
+            <button type="button" class="ui-info-btn" title="直连 https://image.novelai.net 官方集群，所有图片与数据库均存于非 C 盘目录" aria-label="接口与存储说明">
+              <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-info"/></svg>
+            </button>
           </div>
           <span id="settings-conn-pill" class="px-2 py-1 rounded-[6px] ui-badge text-[var(--status-success)] text-[12.5px] font-mono shrink-0">已连接 Opus</span>
         </div>
 
         <div class="space-y-2">
-          <label class="text-[13px] font-medium">Persistent API Token (pst-...)</label>
+          <div class="inline-flex items-center gap-1">
+            <label class="text-[13px] font-medium">Persistent API Token (pst-...)</label>
+            <button type="button" class="ui-info-btn" title="支持随时更换并验证连接" aria-label="Token说明">
+              <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-info"/></svg>
+            </button>
+          </div>
           <input id="settings-token-input" type="password" placeholder="pst-..." class="w-full ui-well rounded-[6px] px-3 py-2 font-mono ui-body" />
-          <div class="text-[12.5px] text-[var(--text-muted)]">已预置当前 Opus 测试 Token，支持随时更换并点击下方保存验证。</div>
         </div>
 
         <div class="space-y-2">
-          <label class="text-[13px] font-medium">本地原图与数据库存储目录（非 C 盘）</label>
+          <label class="text-[13px] font-medium">存储目录（非 C 盘）</label>
           <input id="settings-output-dir" type="text" value="D:\NAI-Studio\outputs" class="w-full ui-well rounded-[6px] px-3 py-2 font-mono ui-body" />
           <div id="settings-storage-detail" class="text-[12.5px] text-[var(--status-success)] font-mono">当前位于 D: 盘 · C 盘占用：0 Bytes</div>
         </div>
 
-        <div class="rounded-[10px] ui-subgroup p-3 space-y-2">
+        <div class="rounded-[10px] ui-subgroup p-3">
           <div class="flex items-center justify-between gap-2">
-            <div>
-              <div class="ui-body font-medium">Opus 0点数免费生图保护锁</div>
-              <div class="text-[12.5px] text-[var(--text-muted)]">开启后自动限制步数 ≤ 28、像素 ≤ 1024²、单次 1 张</div>
+            <div class="inline-flex items-center gap-1">
+              <span class="ui-body font-medium">Opus 0点数免费生图保护锁</span>
+              <button type="button" class="ui-info-btn" title="自动限制步数 ≤ 28、像素 ≤ 1024²、单次 1 张" aria-label="Opus保护锁说明">
+                <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-info"/></svg>
+              </button>
             </div>
             <div id="settings-opus-switch" role="switch" tabindex="0" aria-checked="true" onclick="toggleOpusGuard()" class="glass-switch on"></div>
           </div>
@@ -952,9 +1002,11 @@
   <div id="wildcard-modal" class="hidden fixed inset-0 z-50 bg-black/55 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="w-full max-w-2xl max-h-[88vh] flex flex-col rounded-[16px] liquid-popover p-6 space-y-3 ui-body">
       <div class="flex items-center justify-between">
-        <div>
-          <h3 class="ui-title">Wildcard 动态词库编辑器 (data/wildcards/*.txt)</h3>
-          <p class="text-[12.5px] text-[var(--text-muted)]">在 Prompt 中写入 <code>__词库名__</code>，每次生成与连抽时自动随机抽取一行</p>
+        <div class="inline-flex items-center gap-1">
+          <h3 class="ui-title">Wildcard 动态词库 (data/wildcards/*.txt)</h3>
+          <button type="button" class="ui-info-btn" title="在 Prompt 中写入 __词库名__，生成或连抽时自动随机抽取一行" aria-label="Wildcard说明">
+            <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-info"/></svg>
+          </button>
         </div>
         <button onclick="toggleWildcardModal(false)" aria-label="关闭" class="w-6 h-6 rounded-[6px] ui-btn flex items-center justify-center text-[var(--text-secondary)]">
           <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-close"/></svg>
@@ -1019,9 +1071,11 @@
   <div id="xyz-modal" class="hidden fixed inset-0 z-50 bg-black/55 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="w-full max-w-lg rounded-[16px] liquid-popover p-6 space-y-3 ui-body">
       <div class="flex items-center justify-between">
-        <div>
-          <h3 class="ui-title">X/Y 参数矩阵测试 (Contact Sheet)</h3>
-          <p class="text-[12.5px] text-[var(--text-muted)]">固定随机种子与底座配方，遍历交叉组合并拼接对比大图</p>
+        <div class="inline-flex items-center gap-1">
+          <h3 class="ui-title">X/Y 参数矩阵</h3>
+          <button type="button" class="ui-info-btn" title="固定同一种子与底座配方，遍历交叉参数并自动拼接对比大图" aria-label="XY矩阵说明">
+            <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-info"/></svg>
+          </button>
         </div>
         <button onclick="toggleXyzModal(false)" aria-label="关闭" class="w-6 h-6 rounded-[6px] ui-btn flex items-center justify-center text-[var(--text-secondary)]">
           <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-close"/></svg>
@@ -1128,6 +1182,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=phase1d-1"></script>
+  <script src="/static/app.js?v=phase1e-2"></script>
 </body>
 </html>
