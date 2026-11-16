@@ -41,6 +41,7 @@ const state = {
   action: "generate",
   stageImageB64: "",
   stageImageUrl: "",
+  stageItemId: null,
   outpaintDir: "right",
 
   // Multi-Character State
@@ -222,6 +223,7 @@ async function bootstrapApp() {
     setupStageInteraction();
     setupInlineAutocomplete();
     setupGlobalHotkeys();
+    initWorkspacePanels();
     renderTagPillsBar();
     if (data.queue?.running) {
       startQueuePolling();
@@ -232,6 +234,92 @@ async function bootstrapApp() {
     console.error("Bootstrap error:", err);
     showToast("初始化加载失败，请检查后端服务是否正常运行");
   }
+}
+
+// ================= Workspace Sidebars: Collapse & Drag Resize =================
+const WORKSPACE_LAYOUT_KEY = "nai_studio_workspace_layout_v1";
+
+function loadWorkspaceLayout() {
+  try {
+    return JSON.parse(localStorage.getItem(WORKSPACE_LAYOUT_KEY) || "{}");
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveWorkspaceLayout(patch) {
+  const cur = loadWorkspaceLayout();
+  try {
+    localStorage.setItem(WORKSPACE_LAYOUT_KEY, JSON.stringify({ ...cur, ...patch }));
+  } catch (e) {}
+}
+
+function toggleLeftPanel(force) {
+  const panel = document.getElementById("left-panel");
+  const resizer = document.getElementById("left-resizer");
+  const btn = document.getElementById("toggle-left-panel-btn");
+  if (!panel) return;
+  const nextCollapsed = typeof force === "boolean" ? !force : !panel.classList.contains("is-collapsed");
+  panel.classList.toggle("is-collapsed", nextCollapsed);
+  resizer?.classList.toggle("hidden", nextCollapsed);
+  btn?.classList.toggle("is-active", !nextCollapsed);
+  saveWorkspaceLayout({ leftCollapsed: nextCollapsed });
+}
+
+function toggleRightPanel(force) {
+  const panel = document.getElementById("right-panel");
+  const resizer = document.getElementById("right-resizer");
+  const btn = document.getElementById("toggle-right-panel-btn");
+  if (!panel) return;
+  const nextCollapsed = typeof force === "boolean" ? !force : !panel.classList.contains("is-collapsed");
+  panel.classList.toggle("is-collapsed", nextCollapsed);
+  resizer?.classList.toggle("hidden", nextCollapsed);
+  btn?.classList.toggle("is-active", !nextCollapsed);
+  saveWorkspaceLayout({ rightCollapsed: nextCollapsed });
+}
+
+function initWorkspacePanels() {
+  const saved = loadWorkspaceLayout();
+  const rootStyle = document.documentElement.style;
+  if (saved.leftWidth) rootStyle.setProperty("--left-panel-w", `${Math.max(320, Math.min(520, Number(saved.leftWidth)))}px`);
+  if (saved.rightWidth) rootStyle.setProperty("--right-panel-w", `${Math.max(210, Math.min(360, Number(saved.rightWidth)))}px`);
+  if (saved.leftCollapsed) toggleLeftPanel(false);
+  if (saved.rightCollapsed) toggleRightPanel(false);
+
+  const bindResizer = (resizerId, side) => {
+    const resizer = document.getElementById(resizerId);
+    const panel = document.getElementById(side === "left" ? "left-panel" : "right-panel");
+    if (!resizer || !panel) return;
+    resizer.addEventListener("pointerdown", e => {
+      e.preventDefault();
+      const startX = e.clientX;
+      const startW = panel.getBoundingClientRect().width;
+      resizer.classList.add("is-dragging");
+      panel.style.transition = "none";
+
+      const onMove = mv => {
+        const dx = mv.clientX - startX;
+        const raw = side === "left" ? startW + dx : startW - dx;
+        const minW = side === "left" ? 320 : 210;
+        const maxW = side === "left" ? 520 : 360;
+        const nextW = Math.round(Math.max(minW, Math.min(maxW, raw)));
+        rootStyle.setProperty(side === "left" ? "--left-panel-w" : "--right-panel-w", `${nextW}px`);
+      };
+      const onUp = () => {
+        resizer.classList.remove("is-dragging");
+        panel.style.transition = "";
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        const finalW = Math.round(panel.getBoundingClientRect().width);
+        saveWorkspaceLayout(side === "left" ? { leftWidth: finalW } : { rightWidth: finalW });
+      };
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+    });
+  };
+
+  bindResizer("left-resizer", "left");
+  bindResizer("right-resizer", "right");
 }
 
 // ================= Tab Navigation =================
@@ -248,7 +336,7 @@ function switchTab(tab) {
   });
   if (activeBtn && indicator) {
     indicator.style.width = `${activeBtn.offsetWidth}px`;
-    indicator.style.transform = `translateX(${activeBtn.offsetLeft - 4}px)`;
+    indicator.style.transform = `translateX(${activeBtn.offsetLeft - 2}px)`;
   }
   if (tab === "gallery") renderFullGallery();
   if (tab === "artists") {
@@ -298,7 +386,7 @@ function renderAccountHeader() {
   const label = document.getElementById("opus-guard-label");
   const sw = document.getElementById("settings-opus-switch");
   if (pill && label) {
-    pill.className = "spring-btn inline-flex items-center gap-2 px-3 py-1 rounded-[6px] ui-chip whitespace-nowrap";
+    pill.className = "spring-btn inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] ui-chip whitespace-nowrap";
     pill.querySelector("svg")?.setAttribute("class", `ui-ic ${guardOn ? "text-[var(--status-success)]" : "text-[var(--status-warning)]"}`);
     pill.querySelector("use")?.setAttribute("href", guardOn ? "#ic-shield" : "#ic-alert");
     label.textContent = guardOn ? "Opus 免费保护: 开" : "Opus 免费保护: 关";
@@ -1758,6 +1846,7 @@ async function runDirectorTool(reqType, extra = {}) {
 // ================= Stage, History, Drag-Drop PNG Recipe Restore & Diff =================
 function setStageFromGalleryItem(item, restoreRecipe = false) {
   if (!item) return;
+  state.stageItemId = item.id ?? null;
   state.stageImageUrl = item.image_url;
   state.stageImageB64 = "";
   const img = document.getElementById("stage-img");
@@ -1773,6 +1862,10 @@ function setStageFromGalleryItem(item, restoreRecipe = false) {
     inpaintCanvas.width = item.width || 832;
     inpaintCanvas.height = item.height || 1216;
   }
+
+  document.querySelectorAll(".history-film-item").forEach(el => {
+    el.classList.toggle("is-active-stage", Number(el.dataset.id) === Number(state.stageItemId));
+  });
 
   if (restoreRecipe) {
     restoreRecipeToWorkbench(item);
@@ -1812,32 +1905,33 @@ function renderWorkbenchHistory() {
   const wrap = document.getElementById("workbench-history-list");
   if (!wrap) return;
   if (!state.gallery.length) {
-    wrap.innerHTML = `<div class="text-[12.5px] text-[var(--text-muted)] text-center py-8">暂无生成记录，点击「生成图片」开始创作</div>`;
+    wrap.innerHTML = `<div class="text-[12px] text-[var(--text-muted)] text-center py-8">暂无生成记录，点击「生成图片」开始创作</div>`;
     return;
   }
   wrap.innerHTML = state.gallery
-    .slice(0, 20)
-    .map(
-      item => `
-      <div class="rounded-[10px] ui-card p-3 space-y-2">
-        <div class="flex gap-3 cursor-pointer" onclick="setStageFromGalleryItem(state.gallery.find(x=>x.id===${item.id}), false)">
-          <img src="${item.image_url}" alt="thumb" class="w-14 h-20 rounded-[6px] object-cover shrink-0 border border-[var(--border-hairline)]" />
-          <div class="min-w-0 flex-1 space-y-1">
+    .slice(0, 24)
+    .map(item => {
+      const isActive = Number(state.stageItemId) === Number(item.id);
+      return `
+      <div data-id="${item.id}" class="history-film-item rounded-[8px] p-2 space-y-1.5 ${isActive ? "is-active-stage" : ""}">
+        <div class="flex gap-2.5 cursor-pointer" onclick="setStageFromGalleryItem(state.gallery.find(x=>x.id===${item.id}), false)">
+          <img src="${item.image_url}" alt="thumb" class="w-12 h-16 rounded-[5px] object-cover object-top shrink-0 border border-[var(--border-hairline)] bg-[var(--bg-canvas-well)]" />
+          <div class="min-w-0 flex-1 flex flex-col justify-between py-0.5">
             <div class="flex items-center justify-between gap-1">
-              <span class="text-[12px] px-2 py-0 rounded-[6px] ui-badge text-[var(--text-primary)] font-mono">${escapeHtml(item.model_short)}</span>
-              <span class="text-[12px] font-mono text-[var(--text-muted)]">#${item.seed}</span>
+              <span class="text-[11px] px-1.5 py-0.5 rounded-[4px] ui-badge text-[var(--text-primary)] font-mono truncate">${escapeHtml(item.model_short)}</span>
+              <span class="text-[11px] font-mono text-[var(--text-muted)]">#${item.seed}</span>
             </div>
-            <p class="text-[12.5px] text-[var(--text-secondary)] line-clamp-2 font-mono">${escapeHtml(item.prompt)}</p>
+            <p class="text-[11.5px] text-[var(--text-secondary)] line-clamp-2 font-mono leading-snug">${escapeHtml(item.prompt)}</p>
           </div>
         </div>
-        <div class="grid grid-cols-3 gap-2 text-[12px]">
-          <button onclick="setStageFromGalleryItem(state.gallery.find(x=>x.id===${item.id}), true)" class="spring-btn py-1 rounded-[6px] ui-btn">恢复配方</button>
-          <button onclick="sendGalleryItemToI2I(${item.id})" class="spring-btn py-1 rounded-[6px] ui-btn">送入重绘</button>
-          <button onclick="rerollGalleryItem(${item.id})" class="spring-btn py-1 rounded-[6px] ui-btn">换种再抽</button>
+        <div class="grid grid-cols-3 gap-1 text-[11.5px]">
+          <button onclick="setStageFromGalleryItem(state.gallery.find(x=>x.id===${item.id}), true)" class="spring-btn py-0.5 rounded-[5px] ui-btn">配方</button>
+          <button onclick="sendGalleryItemToI2I(${item.id})" class="spring-btn py-0.5 rounded-[5px] ui-btn">重绘</button>
+          <button onclick="rerollGalleryItem(${item.id})" class="spring-btn py-0.5 rounded-[5px] ui-btn">再抽</button>
         </div>
       </div>
-    `
-    )
+    `;
+    })
     .join("");
 }
 
@@ -2088,30 +2182,30 @@ function renderArtistsGrid() {
   grid.innerHTML = filtered
     .map(a => {
       const previewHtml = a.preview_url
-        ? `<img src="${a.preview_url}" alt="${escapeHtml(a.name)}" class="w-full h-52 object-cover object-top transition-opacity duration-150 group-hover:opacity-95" />`
-        : `<div class="w-full h-52 ui-stage-well flex flex-col items-center justify-center p-4 text-center border-b border-[var(--border-hairline)]">
+        ? `<img src="${a.preview_url}" alt="${escapeHtml(a.name)}" class="w-full aspect-[4/5] object-cover object-top transition-opacity duration-150 group-hover:opacity-95" />`
+        : `<div class="w-full aspect-[4/5] ui-stage-well flex flex-col items-center justify-center p-4 text-center border-b border-[var(--border-hairline)]">
              <div class="ui-title text-[var(--text-primary)]">${escapeHtml(a.name)}</div>
-             <div class="text-[12.5px] font-mono text-[var(--text-secondary)] mt-1">${escapeHtml(a.tag)}</div>
-             <div class="mt-3 text-[12px] px-3 py-1 rounded-[6px] ui-badge text-[var(--text-muted)]">点击下方「实测跑卡」生成预览图</div>
+             <div class="text-[12px] font-mono text-[var(--text-secondary)] mt-1">${escapeHtml(a.tag)}</div>
+             <div class="mt-3 text-[11.5px] px-2.5 py-1 rounded-[6px] ui-badge text-[var(--text-muted)]">点击「跑卡」生成预览</div>
            </div>`;
 
       return `
-        <div class="rounded-[10px] ui-card overflow-hidden flex flex-col justify-between group">
-          <div class="relative overflow-hidden">
+        <div class="rounded-[10px] ui-card overflow-hidden flex flex-col group">
+          <div class="relative shrink-0 aspect-[4/5] overflow-hidden bg-[var(--bg-canvas-well)]">
             ${previewHtml}
-            <span class="absolute top-2 left-2 px-2 py-1 rounded-[6px] liquid-popover text-[12px] font-medium">${escapeHtml(a.category)}</span>
-            <button onclick="toggleArtistFav(${a.id})" aria-label="收藏画师" class="spring-btn absolute top-2 right-2 w-7 h-7 rounded-[6px] liquid-popover flex items-center justify-center ${a.favorite ? "text-[var(--status-warning)]" : "text-[var(--text-muted)]"}">
+            <span class="absolute top-2 left-2 px-2 py-0.5 rounded-[5px] studio-hud text-[11.5px] font-medium">${escapeHtml(a.category)}</span>
+            <button onclick="toggleArtistFav(${a.id})" aria-label="收藏画师" class="spring-btn absolute top-2 right-2 w-7 h-7 rounded-[6px] studio-hud flex items-center justify-center ${a.favorite ? "text-[var(--status-warning)]" : "text-[var(--text-muted)]"}">
               ${uiIcon("star")}
             </button>
           </div>
           <div class="p-3 space-y-2">
             <div class="flex items-center justify-between gap-2">
               <span class="ui-section truncate">${escapeHtml(a.name)}</span>
-              <span class="selectable-text text-[12px] font-mono text-[var(--text-secondary)] truncate">${escapeHtml(a.tag)}</span>
+              <span class="selectable-text text-[11.5px] font-mono text-[var(--text-secondary)] truncate">${escapeHtml(a.tag)}</span>
             </div>
-            <p class="text-[12.5px] text-[var(--text-muted)] line-clamp-2 leading-relaxed">${escapeHtml(a.desc)}</p>
-            <div class="grid grid-cols-3 gap-2 pt-1 text-[12.5px]">
-              <button onclick="useSingleArtist('${escapeHtml(a.tag)}', '${escapeHtml(a.name)}')" class="spring-btn py-1 rounded-[6px] ui-btn">单用画风</button>
+            <p class="text-[12px] text-[var(--text-muted)] line-clamp-2 leading-relaxed">${escapeHtml(a.desc)}</p>
+            <div class="grid grid-cols-3 gap-1.5 pt-1 text-[12px]">
+              <button onclick="useSingleArtist('${escapeHtml(a.tag)}', '${escapeHtml(a.name)}')" class="spring-btn py-1 rounded-[6px] ui-btn">单用</button>
               <button onclick="addArtistToMixer('${escapeHtml(a.tag)}', '${escapeHtml(a.name)}')" class="spring-btn py-1 rounded-[6px] ui-btn">+ 混搭</button>
               <button id="gen-card-btn-${a.id}" onclick="generateArtistCard(${a.id})" class="spring-btn py-1 rounded-[6px] ui-btn text-[var(--status-success)]" title="调用 NovelAI 接口 0点数生成该画师标准预览图">实测跑卡</button>
             </div>
@@ -2471,22 +2565,22 @@ async function renderFullGallery(reloadFromServer = false) {
   grid.innerHTML = items
     .map(
       it => `
-      <div class="rounded-[10px] ui-card overflow-hidden flex flex-col justify-between group">
-        <div class="relative overflow-hidden ui-stage-well">
-          <img src="${it.image_url}" alt="artwork" class="w-full h-60 object-cover object-top transition-opacity duration-150 group-hover:opacity-95 cursor-pointer" onclick="setStageFromGalleryItem(state.gallery.find(x=>x.id===${it.id}), false);switchTab('workbench')" />
-          <span class="absolute top-2 left-2 px-2 py-1 rounded-[6px] liquid-popover text-[12px] font-mono text-[var(--text-primary)]">${escapeHtml(it.model_short)}</span>
-          <button onclick="toggleGalleryFav(${it.id})" aria-label="收藏作品" class="spring-btn absolute top-2 right-2 w-7 h-7 rounded-[6px] liquid-popover flex items-center justify-center ${it.favorite ? "text-[var(--status-warning)]" : "text-[var(--text-muted)]"}">
+      <div class="rounded-[10px] ui-card overflow-hidden flex flex-col group">
+        <div class="relative shrink-0 overflow-hidden bg-[var(--bg-canvas-well)] aspect-[4/5] flex items-center justify-center">
+          <img src="${it.image_url}" alt="artwork" class="w-full h-full object-contain transition-opacity duration-150 group-hover:opacity-95 cursor-pointer" onclick="setStageFromGalleryItem(state.gallery.find(x=>x.id===${it.id}), false);switchTab('workbench')" />
+          <span class="absolute top-2 left-2 px-2 py-0.5 rounded-[5px] studio-hud text-[11.5px] font-mono text-[var(--text-primary)]">${escapeHtml(it.model_short)}</span>
+          <button onclick="toggleGalleryFav(${it.id})" aria-label="收藏作品" class="spring-btn absolute top-2 right-2 w-7 h-7 rounded-[6px] studio-hud flex items-center justify-center ${it.favorite ? "text-[var(--status-warning)]" : "text-[var(--text-muted)]"}">
             ${uiIcon("star")}
           </button>
         </div>
         <div class="p-3 space-y-2">
-          <div class="flex items-center justify-between text-[12.5px] font-mono text-[var(--text-muted)]">
-            <span>Seed: #${it.seed}</span>
+          <div class="flex items-center justify-between text-[12px] font-mono text-[var(--text-muted)]">
+            <span>Seed #${it.seed}</span>
             <span>${it.width}×${it.height} · ${it.generation_time || 0}s</span>
           </div>
-          ${it.notes ? `<div class="text-[12px] px-2 py-1 rounded-[6px] bg-[var(--accent-tint)] text-[var(--text-primary)] truncate inline-flex items-center gap-1 max-w-full">${uiIcon("edit", "ui-ic-sm")}<span>${escapeHtml(it.notes)}</span></div>` : ""}
-          <p class="selectable-text text-[12.5px] font-mono text-[var(--text-primary)] line-clamp-2">${escapeHtml(it.prompt)}</p>
-          <div class="grid grid-cols-4 gap-1 pt-1 text-[12.5px]">
+          ${it.notes ? `<div class="text-[11.5px] px-2 py-0.5 rounded-[5px] bg-[var(--accent-tint)] text-[var(--text-primary)] truncate inline-flex items-center gap-1 max-w-full">${uiIcon("edit", "ui-ic-sm")}<span>${escapeHtml(it.notes)}</span></div>` : ""}
+          <p class="selectable-text text-[12px] font-mono text-[var(--text-secondary)] line-clamp-2 leading-snug">${escapeHtml(it.prompt)}</p>
+          <div class="grid grid-cols-4 gap-1 pt-1 text-[12px]">
             <button onclick="setStageFromGalleryItem(state.gallery.find(x=>x.id===${it.id}), true)" class="spring-btn py-1 rounded-[6px] ui-btn">还原</button>
             <button onclick="editGalleryNotes(${it.id})" class="spring-btn py-1 rounded-[6px] ui-btn">备注</button>
             <a href="${it.image_url}" download="${escapeHtml(it.filename)}" class="spring-btn py-1 rounded-[6px] ui-btn text-center">下载</a>
@@ -2665,11 +2759,16 @@ function applyBgHex(hex, presetName = null, persist = true) {
   const root = document.documentElement.style;
   const sat = Math.min(s, 36);
 
-  if (isLight) {
-    root.setProperty("--bg-base", `hsl(${h}, ${Math.min(sat, 28)}%, 93%)`);
+  if (normalizedHex === "#091319" && !presetName) {
+    root.removeProperty("--bg-base");
+    root.removeProperty("--bg-canvas-well");
+  } else if (isLight) {
+    root.setProperty("--bg-base", `hsl(${h}, ${Math.min(sat, 22)}%, 94%)`);
+    root.setProperty("--bg-canvas-well", `hsl(${h}, ${Math.min(sat, 26)}%, 89%)`);
   } else {
-    const baseL = Math.min(Math.max(l, 4), 14);
+    const baseL = Math.min(Math.max(l, 4), 12);
     root.setProperty("--bg-base", `hsl(${h}, ${sat}%, ${baseL}%)`);
+    root.setProperty("--bg-canvas-well", `hsl(${h}, ${sat}%, ${Math.max(2, baseL - 3)}%)`);
   }
 
   setGlassClarity(state.config.glass_clarity || 88, false);
@@ -2697,7 +2796,9 @@ function setGlassClarity(val, persist = true) {
   const isLight = document.documentElement.classList.contains("light");
   const alpha = Math.max(0.56, Math.min(0.96, clarity / 100));
   const root = document.documentElement.style;
-  root.setProperty("--surface-glass", isLight ? `rgba(248, 251, 253, ${alpha.toFixed(2)})` : `rgba(14, 24, 31, ${alpha.toFixed(2)})`);
+  const rgbaVal = isLight ? `rgba(255, 255, 255, ${alpha.toFixed(2)})` : `rgba(16, 20, 28, ${alpha.toFixed(2)})`;
+  root.setProperty("--surface-glass", rgbaVal);
+  root.setProperty("--surface-hud", rgbaVal);
 
   if (persist) {
     clearTimeout(_clarityConfigTimer);
@@ -3234,6 +3335,11 @@ function setupGlobalHotkeys() {
         e.preventDefault();
         undoInpaintStroke();
       }
+    }
+    const activeTag = document.activeElement?.tagName;
+    if (!e.ctrlKey && !e.metaKey && !e.altKey && activeTag !== "INPUT" && activeTag !== "TEXTAREA" && activeTag !== "SELECT") {
+      if (e.key === "[") toggleLeftPanel();
+      else if (e.key === "]") toggleRightPanel();
     }
   });
 

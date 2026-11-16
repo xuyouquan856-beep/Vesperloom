@@ -6,7 +6,7 @@
 
 ## 1. 前端静态资源缓存失效机制（硬编码版本参数）
 
-- **现状**：[frontend/index.html](file:///D:/NAI-Studio/frontend/index.html) 中手动使用硬编码查询参数（当前为 `?v=phase1e-2`）加载 `/static/styles.css` 与 `/static/app.js`，FastAPI 仅通过默认 `StaticFiles` 挂载 `/static`，浏览器易命中强缓存或 `304 Not Modified`。
+- **现状**：[frontend/index.html](file:///D:/NAI-Studio/frontend/index.html) 中手动使用硬编码查询参数（当前为 `?v=p2-4`）加载 `/static/styles.css` 与 `/static/app.js`，FastAPI 仅通过默认 `StaticFiles` 挂载 `/static`，浏览器易命中强缓存或 `304 Not Modified`。
 - **影响**：每次更新 `styles.css` 或 `app.js` 均需人工同步修改 `index.html` 的 `?v=...` 参数；遗漏时本地 Edge / Chrome 会静默加载旧前端资源。
 - **建议方案**：后续由后端在渲染入口注入基于文件 mtime / SHA-256 短哈希的版本参数，或对 `/static/*.css`、`/static/*.js` 设置 `Cache-Control: no-cache`（协商缓存 / ETag 验证）。
 
@@ -44,10 +44,10 @@
 
 ---
 
-## 5. 预留至 Phase 2 的已知布局与响应性待办
+## 5. Phase 2 布局与响应性已解决项（留档）
 
-以下问题已在 Phase 1 审计与验证中确认存在，但按 Phase 1 边界约定保持不动，统一移交 Phase 2 处理：
+以下在 Phase 1 登记的布局问题已于 Phase 2「Obsidian Atelier」改版中解决：
 
-1. **窄桌面视口（`1280×800`）底部动作坞紧凑度**：底部操作条按钮较多时可能换行或略显拥挤，需配合阶段二布局优化参数区折行策略。
-2. **图库卡片固定图片高度（`h-60`）**：竖图比例下卡片图区底部存在较明显暗底留白，需在 Phase 2 统一优化图库卡片比例与信息区高度。
-3. **三栏宽度自适应与右侧历史栏折叠/拖拽调宽**：`1280px` / `1366px` 下保证中央画布优先并支持历史栏自动收起。
+1. **窄桌面视口（`1280×800`）底部动作坞紧凑度**：动作坞改为画布底部居中悬浮药丸，并分离左/右折叠面板释放横向空间。
+2. **图库与画师卡片比例（原 `h-60` / `h-52`）**：改为统一 `aspect-[4/5]` 画框搭配暗房底衬，避免竖图裁切与留白失衡。
+3. **三栏宽度自适应与侧栏折叠/拖拽调宽**：已实现左参数检视器（`320–520px`）与右历史胶片栏（`210–360px`）拖拽分割条、按钮及 `[` / `]` 快捷键折叠，并持久化至 `localStorage`。
