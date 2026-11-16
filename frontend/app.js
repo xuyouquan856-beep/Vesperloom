@@ -216,6 +216,8 @@ async function bootstrapApp() {
     // Load latest gallery image onto stage if available
     if (state.gallery.length > 0) {
       setStageFromGalleryItem(state.gallery[0], false);
+    } else {
+      updateStageActionButtons();
     }
 
     setupPromptListeners();
@@ -256,15 +258,31 @@ function saveWorkspaceLayout(patch) {
   } catch (e) {}
 }
 
+function updatePanelToggleBtn(btn, collapsed, label) {
+  if (!btn) return;
+  btn.classList.toggle("is-panel-collapsed", collapsed);
+  btn.setAttribute("aria-pressed", String(!collapsed));
+  const shortcut = btn.id === "toggle-left-panel-btn" ? "[" : "]";
+  btn.title = `${collapsed ? "展开" : "收起"}${label} (快捷键 ${shortcut})`;
+}
+
 function toggleLeftPanel(force) {
   const panel = document.getElementById("left-panel");
   const resizer = document.getElementById("left-resizer");
   const btn = document.getElementById("toggle-left-panel-btn");
   if (!panel) return;
+  if (state.immersionMode && force !== false) {
+    toggleImmersionMode(false);
+    panel.classList.remove("is-collapsed");
+    resizer?.classList.remove("hidden");
+    updatePanelToggleBtn(btn, false, "左侧参数栏");
+    saveWorkspaceLayout({ leftCollapsed: false });
+    return;
+  }
   const nextCollapsed = typeof force === "boolean" ? !force : !panel.classList.contains("is-collapsed");
   panel.classList.toggle("is-collapsed", nextCollapsed);
   resizer?.classList.toggle("hidden", nextCollapsed);
-  btn?.classList.toggle("is-active", !nextCollapsed);
+  updatePanelToggleBtn(btn, nextCollapsed, "左侧参数栏");
   saveWorkspaceLayout({ leftCollapsed: nextCollapsed });
 }
 
@@ -273,10 +291,18 @@ function toggleRightPanel(force) {
   const resizer = document.getElementById("right-resizer");
   const btn = document.getElementById("toggle-right-panel-btn");
   if (!panel) return;
+  if (state.immersionMode && force !== false) {
+    toggleImmersionMode(false);
+    panel.classList.remove("is-collapsed");
+    resizer?.classList.remove("hidden");
+    updatePanelToggleBtn(btn, false, "右侧历史栏");
+    saveWorkspaceLayout({ rightCollapsed: false });
+    return;
+  }
   const nextCollapsed = typeof force === "boolean" ? !force : !panel.classList.contains("is-collapsed");
   panel.classList.toggle("is-collapsed", nextCollapsed);
   resizer?.classList.toggle("hidden", nextCollapsed);
-  btn?.classList.toggle("is-active", !nextCollapsed);
+  updatePanelToggleBtn(btn, nextCollapsed, "右侧历史栏");
   saveWorkspaceLayout({ rightCollapsed: nextCollapsed });
 }
 
@@ -1507,11 +1533,7 @@ function handleI2IFileUpload(event) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = e => {
-    state.stageImageB64 = e.target.result;
-    const img = document.getElementById("stage-img");
-    img.src = e.target.result;
-    img.classList.remove("hidden");
-    document.getElementById("stage-empty")?.classList.add("hidden");
+    setStageLocalImage(e.target.result);
   };
   reader.readAsDataURL(file);
 }
@@ -1895,6 +1917,59 @@ async function runDirectorTool(reqType, extra = {}) {
 }
 
 // ================= Stage, History, Drag-Drop PNG Recipe Restore & Diff =================
+function hasStageImage() {
+  const img = document.getElementById("stage-img");
+  const rawSrc = img?.getAttribute("src") || "";
+  return Boolean(img && !img.classList.contains("hidden") && rawSrc && (state.stageImageUrl || state.stageImageB64));
+}
+
+function getActiveStageImageSource() {
+  if (!hasStageImage()) return "";
+  return state.stageImageB64 || state.stageImageUrl || "";
+}
+
+function updateStageActionButtons() {
+  const active = hasStageImage();
+  const zoomOutBtn = document.getElementById("stage-zoom-out-btn");
+  const zoomResetBtn = document.getElementById("stage-zoom-label");
+  const zoomInBtn = document.getElementById("stage-zoom-in-btn");
+  const copyBtn = document.getElementById("stage-copy-btn");
+  const downloadBtn = document.getElementById("stage-download-btn");
+  const lightboxBtn = document.getElementById("stage-lightbox-btn");
+  const panWrap = document.getElementById("stage-pan-wrap");
+
+  if (zoomOutBtn) zoomOutBtn.disabled = !active || state.stageZoom <= 0.5;
+  if (zoomInBtn) zoomInBtn.disabled = !active || state.stageZoom >= 3.5;
+  if (zoomResetBtn) {
+    zoomResetBtn.disabled = !active;
+    const zoomed = active && Math.abs(state.stageZoom - 1) > 0.01;
+    zoomResetBtn.classList.toggle("text-[var(--text-primary)]", zoomed);
+    zoomResetBtn.classList.toggle("font-semibold", zoomed);
+  }
+  if (copyBtn) copyBtn.disabled = !active;
+  if (downloadBtn) downloadBtn.disabled = !active;
+  if (lightboxBtn) lightboxBtn.disabled = !active && state.gallery.length === 0;
+  if (panWrap) panWrap.classList.toggle("can-pan", active && state.stageZoom > 1.0);
+}
+
+function setStageLocalImage(dataUrl) {
+  if (!dataUrl) return;
+  state.stageItemId = null;
+  state.stageImageUrl = "";
+  state.stageImageB64 = dataUrl;
+  const img = document.getElementById("stage-img");
+  if (img) {
+    img.src = dataUrl;
+    img.classList.remove("hidden");
+  }
+  document.getElementById("stage-empty")?.classList.add("hidden");
+  document.querySelectorAll(".history-film-item.is-active-stage").forEach(el => {
+    el.classList.remove("is-active-stage");
+  });
+  resetStageZoom();
+  updateStageActionButtons();
+}
+
 function setStageFromGalleryItem(item, restoreRecipe = false) {
   if (!item) return;
   state.stageItemId = item.id ?? null;
@@ -1917,6 +1992,7 @@ function setStageFromGalleryItem(item, restoreRecipe = false) {
   document.querySelectorAll(".history-film-item").forEach(el => {
     el.classList.toggle("is-active-stage", Number(el.dataset.id) === Number(state.stageItemId));
   });
+  updateStageActionButtons();
 
   if (restoreRecipe) {
     restoreRecipeToWorkbench(item);
@@ -2034,11 +2110,7 @@ async function inspectPngFile(file) {
       state.pendingInspectB64 = dataUrl;
       openInspectPngModal(meta);
     } else {
-      state.stageImageB64 = dataUrl;
-      const img = document.getElementById("stage-img");
-      img.src = dataUrl;
-      img.classList.remove("hidden");
-      document.getElementById("stage-empty")?.classList.add("hidden");
+      setStageLocalImage(dataUrl);
       showToast("已载入图片至画布（未检测到 NovelAI 内嵌参数，可直接用于图生图或 Director）");
     }
   } catch (err) {
@@ -2104,13 +2176,7 @@ function confirmInspectPngRestore() {
   }
 
   if (imgB64) {
-    state.stageImageB64 = imgB64;
-    const img = document.getElementById("stage-img");
-    if (img) {
-      img.src = imgB64;
-      img.classList.remove("hidden");
-    }
-    document.getElementById("stage-empty")?.classList.add("hidden");
+    setStageLocalImage(imgB64);
     if (useI2I) setWorkbenchAction("img2img");
   }
 
@@ -2119,7 +2185,7 @@ function confirmInspectPngRestore() {
 }
 
 function downloadCurrentStageImage() {
-  const url = state.stageImageUrl || document.getElementById("stage-img")?.src;
+  const url = getActiveStageImageSource();
   if (!url) {
     showToast("当前画布暂无可保存图片");
     return;
@@ -3188,9 +3254,11 @@ function applyStageTransform() {
     stage.style.transform = `translate(${state.stagePanX}px, ${state.stagePanY}px) scale(${state.stageZoom})`;
   }
   if (lbl) lbl.textContent = `${Math.round(state.stageZoom * 100)}%`;
+  updateStageActionButtons();
 }
 
 function zoomStage(delta) {
+  if (!hasStageImage()) return;
   state.stageZoom = Math.max(0.5, Math.min(3.5, Math.round((state.stageZoom + delta) * 100) / 100));
   if (state.stageZoom <= 1.0) {
     state.stagePanX = 0;
@@ -3218,8 +3286,7 @@ function setupStageInteraction() {
   wrap.addEventListener(
     "wheel",
     e => {
-      if (state.action === "infill") return;
-      if (!document.getElementById("stage-img") || document.getElementById("stage-img").classList.contains("hidden")) return;
+      if (state.action === "infill" || !hasStageImage()) return;
       e.preventDefault();
       zoomStage(e.deltaY < 0 ? 0.12 : -0.12);
     },
@@ -3227,12 +3294,13 @@ function setupStageInteraction() {
   );
 
   wrap.addEventListener("pointerdown", e => {
-    if (state.stageZoom <= 1.0 || state.action === "infill" || e.target.closest(".char-stage-dot")) return;
+    if (!hasStageImage() || state.stageZoom <= 1.0 || state.action === "infill" || e.target.closest(".char-stage-dot")) return;
     panning = true;
     sx = e.clientX;
     sy = e.clientY;
     ox = state.stagePanX;
     oy = state.stagePanY;
+    wrap.classList.add("is-panning");
   });
   window.addEventListener("pointermove", e => {
     if (!panning) return;
@@ -3240,20 +3308,27 @@ function setupStageInteraction() {
     state.stagePanY = oy + (e.clientY - sy);
     applyStageTransform();
   });
-  window.addEventListener("pointerup", () => {
+  const endPan = () => {
+    if (!panning) return;
     panning = false;
-  });
+    wrap.classList.remove("is-panning");
+  };
+  window.addEventListener("pointerup", endPan);
+  window.addEventListener("pointercancel", endPan);
 }
 
 function toggleCheckerboard() {
   state.checkerboard = !state.checkerboard;
   document.getElementById("stage-dropzone")?.classList.toggle("checkerboard-bg", state.checkerboard);
   document.getElementById("lightbox-stage")?.classList.toggle("checkerboard-bg", state.checkerboard);
-  document.getElementById("checkerboard-btn")?.classList.toggle("is-active", state.checkerboard);
+  [document.getElementById("checkerboard-btn"), document.getElementById("lightbox-checkerboard-btn")].forEach(btn => {
+    if (!btn) return;
+    btn.classList.toggle("is-active", state.checkerboard);
+    btn.setAttribute("aria-pressed", String(state.checkerboard));
+  });
 }
 
-async function copyStageImage() {
-  const url = state.stageImageUrl || document.getElementById("stage-img")?.src;
+async function copyImageSource(url) {
   if (!url) {
     showToast("当前画布暂无可复制的图片");
     return;
@@ -3272,11 +3347,33 @@ async function copyStageImage() {
   }
 }
 
+async function copyStageImage() {
+  await copyImageSource(getActiveStageImageSource());
+}
+
+async function copyLightboxImage() {
+  const img = document.getElementById("lightbox-img");
+  const rawSrc = img?.getAttribute("src") || "";
+  await copyImageSource(rawSrc);
+}
+
 function openLightbox(idx = null) {
-  if (!state.gallery.length && !state.stageImageUrl) {
+  const activeStageSrc = getActiveStageImageSource();
+  if (!state.gallery.length && !activeStageSrc) {
     showToast("当前暂无可全屏查看的图片");
     return;
   }
+  const img = document.getElementById("lightbox-img");
+  const cap = document.getElementById("lightbox-caption");
+
+  if (idx === null && state.stageImageB64) {
+    state.lightboxIdx = -1;
+    if (img) img.src = state.stageImageB64;
+    if (cap) cap.textContent = "当前画布预览（本地载入）";
+    document.getElementById("lightbox-modal")?.classList.remove("hidden");
+    return;
+  }
+
   if (idx === null) {
     const found = state.gallery.findIndex(g => g.image_url === state.stageImageUrl);
     state.lightboxIdx = found >= 0 ? found : 0;
@@ -3284,9 +3381,7 @@ function openLightbox(idx = null) {
     state.lightboxIdx = Math.max(0, Math.min(idx, state.gallery.length - 1));
   }
   const item = state.gallery[state.lightboxIdx];
-  const img = document.getElementById("lightbox-img");
-  const cap = document.getElementById("lightbox-caption");
-  if (img) img.src = item ? item.image_url : state.stageImageUrl;
+  if (img) img.src = item ? item.image_url : activeStageSrc;
   if (cap) {
     cap.textContent = item
       ? `[${state.lightboxIdx + 1}/${state.gallery.length}] ${item.model_short} · Seed #${item.seed} · ${item.width}×${item.height}`
@@ -3360,12 +3455,18 @@ function setupGlobalHotkeys() {
       return;
     }
     if (e.key === "Escape") {
+      const lbOpen = !document.getElementById("lightbox-modal")?.classList.contains("hidden");
+      const diffOpen = !document.getElementById("diff-modal")?.classList.contains("hidden");
+      const acOpen = !document.getElementById("inline-autocomplete-menu")?.classList.contains("hidden");
       closeLightbox();
       document.getElementById("diff-modal")?.classList.add("hidden");
       toggleOcModal(false);
       toggleSnippetModal(false);
       toggleCustomArtistModal(false);
       document.getElementById("inline-autocomplete-menu")?.classList.add("hidden");
+      if (!lbOpen && !diffOpen && !acOpen && state.immersionMode) {
+        toggleImmersionMode(false);
+      }
       return;
     }
     const lbOpen = !document.getElementById("lightbox-modal")?.classList.contains("hidden");
@@ -3405,11 +3506,7 @@ function setupGlobalHotkeys() {
         if (!blob) continue;
         const reader = new FileReader();
         reader.onload = ev => {
-          state.stageImageB64 = ev.target.result;
-          const img = document.getElementById("stage-img");
-          img.src = ev.target.result;
-          img.classList.remove("hidden");
-          document.getElementById("stage-empty")?.classList.add("hidden");
+          setStageLocalImage(ev.target.result);
           setWorkbenchAction("img2img");
           showToast("已从剪贴板粘贴图像并切换至图生图模式");
         };
@@ -3684,14 +3781,17 @@ async function deleteSnippetRecord(id) {
 }
 
 // ================= V2.2 & V2.3: Immersion, Backfill, Wildcard Editor, XYZ Matrix & Snapshots =================
-function toggleImmersionMode() {
-  state.immersionMode = !state.immersionMode;
+function toggleImmersionMode(force) {
+  state.immersionMode = typeof force === "boolean" ? force : !state.immersionMode;
   const view = document.getElementById("view-workbench");
   const btn = document.getElementById("immersion-btn");
+  const lbl = document.getElementById("immersion-btn-label");
   if (view) view.classList.toggle("immersion-active", state.immersionMode);
+  if (lbl) lbl.textContent = state.immersionMode ? "退出" : "沉浸";
   if (btn) {
-    btn.innerHTML = `${uiIcon("maximize", "ui-ic-sm")}<span>${state.immersionMode ? "退出沉浸" : "沉浸"}</span>`;
     btn.classList.toggle("is-active", state.immersionMode);
+    btn.setAttribute("aria-pressed", String(state.immersionMode));
+    btn.title = state.immersionMode ? "退出沉浸模式 (快捷键 Esc)" : "隐藏左右面板专注看图 (Esc 退出)";
   }
 }
 

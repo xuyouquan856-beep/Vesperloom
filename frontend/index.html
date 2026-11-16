@@ -6,7 +6,7 @@
   <title>NAI Studio — 个人创作工作台</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23111318'/%3E%3Cpath d='M20 44V20l24 24V20' stroke='%23ffffff' stroke-width='6' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E" />
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="/static/styles.css?v=p2-6" />
+  <link rel="stylesheet" href="/static/styles.css?v=p2-7" />
 </head>
 <body class="lg:h-screen min-h-screen flex flex-col lg:overflow-hidden overflow-y-auto">
 
@@ -50,6 +50,10 @@
       <symbol id="ic-panel-left" viewBox="0 0 16 16"><rect x="2" y="2.5" width="12" height="11" rx="1.5"/><path d="M6 2.5v11"/></symbol>
       <symbol id="ic-panel-right" viewBox="0 0 16 16"><rect x="2" y="2.5" width="12" height="11" rx="1.5"/><path d="M10 2.5v11"/></symbol>
       <symbol id="ic-chevron" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></symbol>
+      <symbol id="ic-minus" viewBox="0 0 16 16"><path d="M3.5 8h9"/></symbol>
+      <symbol id="ic-plus" viewBox="0 0 16 16"><path d="M8 3.5v9M3.5 8h9"/></symbol>
+      <symbol id="ic-checkerboard" viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="11" height="11" rx="1.5"/><rect x="3.1" y="3.1" width="3.2" height="3.2" fill="currentColor" stroke="none"/><rect x="9.7" y="3.1" width="3.2" height="3.2" fill="currentColor" stroke="none"/><rect x="6.4" y="6.4" width="3.2" height="3.2" fill="currentColor" stroke="none"/><rect x="3.1" y="9.7" width="3.2" height="3.2" fill="currentColor" stroke="none"/><rect x="9.7" y="9.7" width="3.2" height="3.2" fill="currentColor" stroke="none"/></symbol>
+      <symbol id="ic-import-img" viewBox="0 0 16 16"><path d="M13 8.5V12a1.5 1.5 0 0 1-1.5 1.5h-8A1.5 1.5 0 0 1 2 12V4a1.5 1.5 0 0 1 1.5-1.5H8"/><path d="m2.8 11.2 2.9-2.9 2.1 2.1 1.7-1.7 3 3"/><path d="M12.5 1.5v4.5M10.5 4l2 2 2-2"/></symbol>
     </defs>
   </svg>
 
@@ -550,55 +554,64 @@
 
       <!-- 顶部悬浮 HUD：侧栏折叠开关 + 画布状态 + 工具条 -->
       <div class="absolute top-3 left-3 right-3 z-20 flex items-center justify-between gap-2 pointer-events-none">
-        <div class="pointer-events-auto studio-hud rounded-[10px] px-2 py-1 flex items-center gap-1.5 min-w-0">
-          <button id="toggle-left-panel-btn" onclick="toggleLeftPanel()" class="spring-btn inline-flex items-center gap-1 px-2 py-1 rounded-[6px] ui-btn-ghost text-[12px] whitespace-nowrap shrink-0 is-active" title="收起/展开左侧参数栏 (快捷键 [)">
-            <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-panel-left"/></svg>
+        <div class="pointer-events-auto studio-hud rounded-[8px] px-1.5 py-1 flex items-center gap-1.5 min-w-0">
+          <button id="toggle-left-panel-btn" type="button" onclick="toggleLeftPanel()" aria-pressed="true" class="spring-btn hud-panel-toggle inline-flex items-center gap-1.5 h-7 px-2 rounded-[5px] text-[12px] whitespace-nowrap shrink-0" title="收起左侧参数栏 (快捷键 [)">
+            <svg class="ui-ic" aria-hidden="true"><use href="#ic-panel-left"/></svg>
             <span class="hidden sm:inline">参数</span>
           </button>
           <span class="h-3.5 w-px bg-[var(--border-hairline)] shrink-0"></span>
-          <button id="stage-info-pill" onclick="switchInspectorTab('sampling')" class="px-1.5 py-0.5 rounded-[5px] hover:bg-[var(--surface-well-hover)] text-[11.5px] text-[var(--text-secondary)] font-mono truncate cursor-pointer transition-colors" title="点击快速跳转至采样与步数参数">
+          <button id="stage-info-pill" type="button" onclick="switchInspectorTab('sampling')" class="h-7 px-1.5 rounded-[5px] hover:bg-[var(--surface-well-hover)] text-[11.5px] text-[var(--text-secondary)] font-mono truncate cursor-pointer transition-colors" title="点击快速跳转至采样与步数参数">
             V5 Full · 832×1216 · Steps 28
           </button>
-          <span id="stage-mode-pill" class="px-1.5 py-0.5 rounded-[5px] bg-[var(--accent-tint)] text-[var(--text-primary)] text-[11px] font-medium whitespace-nowrap shrink-0">
+          <span id="stage-mode-pill" class="px-2 py-0.5 rounded-[5px] bg-[var(--accent-tint)] text-[var(--text-primary)] text-[11px] font-medium whitespace-nowrap shrink-0">
             模式：文生图
           </span>
         </div>
 
-        <div class="pointer-events-auto studio-hud rounded-[10px] px-2 py-1 flex items-center gap-1 shrink-0">
-          <button id="immersion-btn" onclick="toggleImmersionMode()" class="spring-btn inline-flex items-center gap-1 px-2 py-1 rounded-[6px] ui-btn-ghost text-[12px] whitespace-nowrap" title="专注看图模式">
-            <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-maximize"/></svg>
-            <span class="hidden lg:inline">沉浸</span>
+        <div class="pointer-events-auto studio-hud rounded-[8px] px-1.5 py-1 flex items-center gap-0.5 shrink-0">
+          <!-- 缩放控制 -->
+          <button id="stage-zoom-out-btn" type="button" onclick="zoomStage(-0.15)" class="spring-btn w-7 h-7 rounded-[5px] ui-btn-ghost flex items-center justify-center" title="缩小画布">
+            <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-minus"/></svg>
           </button>
-          <div class="inline-flex items-center rounded-[6px] ui-segmented px-1 py-0.5 gap-0.5">
-            <button onclick="zoomStage(-0.15)" class="spring-btn px-1.5 rounded-[4px] ui-btn-ghost text-[12px]" title="缩小">−</button>
-            <button onclick="resetStageZoom()" id="stage-zoom-label" class="font-mono text-[11.5px] px-1 text-[var(--text-secondary)]" title="重置缩放与位置">100%</button>
-            <button onclick="zoomStage(0.15)" class="spring-btn px-1.5 rounded-[4px] ui-btn-ghost text-[12px]" title="放大">+</button>
-          </div>
-          <button id="checkerboard-btn" onclick="toggleCheckerboard()" class="spring-btn inline-flex items-center justify-center gap-1 px-1.5 py-1 rounded-[6px] ui-btn-ghost text-[12px] whitespace-nowrap" title="透明底棋盘格">
-            <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-grid"/></svg>
-            <span class="hidden 2xl:inline">棋盘</span>
+          <button id="stage-zoom-label" type="button" onclick="resetStageZoom()" class="h-7 min-w-[44px] px-1.5 rounded-[5px] ui-btn-ghost font-mono text-[11.5px] flex items-center justify-center" title="重置缩放与位置 (100%)">100%</button>
+          <button id="stage-zoom-in-btn" type="button" onclick="zoomStage(0.15)" class="spring-btn w-7 h-7 rounded-[5px] ui-btn-ghost flex items-center justify-center" title="放大画布">
+            <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-plus"/></svg>
           </button>
-          <button onclick="copyStageImage()" class="spring-btn inline-flex items-center justify-center gap-1 px-1.5 py-1 rounded-[6px] ui-btn-ghost text-[12px] whitespace-nowrap" title="复制原图到剪贴板">
-            <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-copy"/></svg>
-            <span class="hidden 2xl:inline">复制</span>
+
+          <span class="h-3.5 w-px bg-[var(--border-hairline)] mx-1 shrink-0"></span>
+
+          <!-- 画布视图 -->
+          <button id="checkerboard-btn" type="button" onclick="toggleCheckerboard()" aria-pressed="false" class="spring-btn w-7 h-7 rounded-[5px] ui-btn-ghost flex items-center justify-center" title="切换透明底棋盘格">
+            <svg class="ui-ic" aria-hidden="true"><use href="#ic-checkerboard"/></svg>
           </button>
-          <button onclick="openLightbox()" class="spring-btn inline-flex items-center justify-center gap-1 px-1.5 py-1 rounded-[6px] ui-btn-ghost text-[12px] whitespace-nowrap" title="全屏灯箱看图">
-            <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-expand"/></svg>
-            <span class="hidden 2xl:inline">全屏</span>
+          <button id="stage-lightbox-btn" type="button" onclick="openLightbox()" class="spring-btn w-7 h-7 rounded-[5px] ui-btn-ghost flex items-center justify-center" title="全屏灯箱看图">
+            <svg class="ui-ic" aria-hidden="true"><use href="#ic-expand"/></svg>
           </button>
-          <label class="spring-btn inline-flex items-center justify-center gap-1 px-1.5 py-1 rounded-[6px] ui-btn-ghost cursor-pointer text-[12px] whitespace-nowrap" title="导入 NovelAI PNG 读取生成参数">
-            <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-folder"/></svg>
-            <span class="hidden 2xl:inline">读参</span>
+          <button id="immersion-btn" type="button" onclick="toggleImmersionMode()" aria-pressed="false" class="spring-btn h-7 px-2 rounded-[5px] ui-btn-ghost inline-flex items-center gap-1.5 text-[12px] whitespace-nowrap" title="隐藏左右面板专注看图 (Esc 退出)">
+            <svg class="ui-ic" aria-hidden="true"><use href="#ic-maximize"/></svg>
+            <span id="immersion-btn-label" class="hidden lg:inline">沉浸</span>
+          </button>
+
+          <span class="h-3.5 w-px bg-[var(--border-hairline)] mx-1 shrink-0"></span>
+
+          <!-- 图像导入与导出 -->
+          <label class="spring-btn w-7 h-7 rounded-[5px] ui-btn-ghost flex items-center justify-center cursor-pointer" title="导入 NovelAI PNG 读取生成参数">
+            <svg class="ui-ic" aria-hidden="true"><use href="#ic-import-img"/></svg>
             <input type="file" accept="image/png,image/webp,image/jpeg" class="hidden" onchange="handleInspectPngUpload(event)" />
           </label>
-          <button onclick="downloadCurrentStageImage()" class="spring-btn inline-flex items-center justify-center gap-1 px-1.5 py-1 rounded-[6px] ui-btn-ghost text-[12px] whitespace-nowrap" title="下载高清原图">
-            <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-download"/></svg>
-            <span class="hidden 2xl:inline">保存</span>
+          <button id="stage-copy-btn" type="button" onclick="copyStageImage()" class="spring-btn w-7 h-7 rounded-[5px] ui-btn-ghost flex items-center justify-center" title="复制原图到剪贴板">
+            <svg class="ui-ic" aria-hidden="true"><use href="#ic-copy"/></svg>
           </button>
-          <span class="h-3.5 w-px bg-[var(--border-hairline)] shrink-0"></span>
-          <button id="toggle-right-panel-btn" onclick="toggleRightPanel()" class="spring-btn inline-flex items-center gap-1 px-2 py-1 rounded-[6px] ui-btn-ghost text-[12px] whitespace-nowrap shrink-0 is-active" title="收起/展开右侧历史胶片栏 (快捷键 ])">
+          <button id="stage-download-btn" type="button" onclick="downloadCurrentStageImage()" class="spring-btn w-7 h-7 rounded-[5px] ui-btn-ghost flex items-center justify-center" title="下载高清原图">
+            <svg class="ui-ic" aria-hidden="true"><use href="#ic-download"/></svg>
+          </button>
+
+          <span class="h-3.5 w-px bg-[var(--border-hairline)] mx-1 shrink-0"></span>
+
+          <!-- 右侧历史栏开关 -->
+          <button id="toggle-right-panel-btn" type="button" onclick="toggleRightPanel()" aria-pressed="true" class="spring-btn hud-panel-toggle inline-flex items-center gap-1.5 h-7 px-2 rounded-[5px] text-[12px] whitespace-nowrap shrink-0" title="收起右侧历史栏 (快捷键 ])">
             <span class="hidden sm:inline">历史</span>
-            <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-panel-right"/></svg>
+            <svg class="ui-ic" aria-hidden="true"><use href="#ic-panel-right"/></svg>
           </button>
         </div>
       </div>
@@ -1223,11 +1236,11 @@
       <div class="flex items-center gap-2 shrink-0">
         <button onclick="navigateLightbox(-1)" class="spring-btn px-3 py-1 rounded-[6px] ui-btn text-[13px]">← 上一张</button>
         <button onclick="navigateLightbox(1)" class="spring-btn px-3 py-1 rounded-[6px] ui-btn text-[13px]">下一张 →</button>
-        <button onclick="toggleCheckerboard()" class="spring-btn inline-flex items-center gap-1 px-2 py-1 rounded-[6px] ui-btn text-[13px]">
-          <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-grid"/></svg>
+        <button id="lightbox-checkerboard-btn" onclick="toggleCheckerboard()" aria-pressed="false" class="spring-btn inline-flex items-center gap-1 px-2 py-1 rounded-[6px] ui-btn text-[13px]">
+          <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-checkerboard"/></svg>
           <span>棋盘底</span>
         </button>
-        <button onclick="copyStageImage()" class="spring-btn inline-flex items-center gap-1 px-2 py-1 rounded-[6px] ui-btn text-[13px]">
+        <button onclick="copyLightboxImage()" class="spring-btn inline-flex items-center gap-1 px-2 py-1 rounded-[6px] ui-btn text-[13px]">
           <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-copy"/></svg>
           <span>复制</span>
         </button>
@@ -1242,6 +1255,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=p2-6"></script>
+  <script src="/static/app.js?v=p2-7"></script>
 </body>
 </html>

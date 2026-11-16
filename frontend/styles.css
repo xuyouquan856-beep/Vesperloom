@@ -334,6 +334,19 @@ body {
   box-shadow: var(--stage-art-shadow);
 }
 
+#stage-pan-wrap.can-pan {
+  cursor: grab;
+}
+#stage-pan-wrap.is-panning {
+  cursor: grabbing;
+}
+
+#view-workbench.immersion-active #left-panel,
+#view-workbench.immersion-active #right-panel,
+#view-workbench.immersion-active .studio-resizer {
+  display: none !important;
+}
+
 /* Workbench Splitters & Collapsible Sidebars (Desktop >= 1024px) */
 @media (min-width: 1024px) {
   .studio-workbench {
@@ -366,11 +379,6 @@ body {
     overflow: hidden !important;
     opacity: 0;
     pointer-events: none;
-  }
-  #view-workbench.immersion-active #left-panel,
-  #view-workbench.immersion-active #right-panel,
-  #view-workbench.immersion-active .studio-resizer {
-    display: none !important;
   }
 }
 
@@ -533,6 +541,26 @@ html.light .ui-btn {
   border-color: var(--border-hover);
   color: var(--text-primary);
   font-weight: 600;
+}
+
+/* Quiet Panel Collapse Toggles inside HUD (no nested card outline when expanded) */
+.hud-panel-toggle {
+  background-color: transparent;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  transition: background-color 0.08s ease, border-color 0.08s ease, color 0.08s ease, transform 0.06s ease;
+}
+.hud-panel-toggle:hover:not(:disabled) {
+  background-color: var(--surface-well-hover);
+  color: var(--text-primary);
+}
+.hud-panel-toggle:active:not(:disabled) {
+  transform: scale(0.975);
+}
+.hud-panel-toggle.is-panel-collapsed {
+  background-color: var(--accent-tint);
+  color: var(--text-primary);
+  font-weight: 500;
 }
 
 /* Clickable Header Chip */
@@ -805,6 +833,7 @@ html.light .ui-btn {
 .ui-btn:focus-visible,
 .ui-btn-accent:focus-visible,
 .ui-btn-ghost:focus-visible,
+.hud-panel-toggle:focus-visible,
 .ui-chip:focus-visible,
 .spring-btn:focus-visible,
 .liquid-cta:focus-visible,
@@ -1080,6 +1109,7 @@ html.theme-sync * {
   .ui-btn:active:not(:disabled),
   .ui-btn-accent:active:not(:disabled),
   .ui-btn-ghost:active:not(:disabled),
+  .hud-panel-toggle:active:not(:disabled),
   .ui-chip:active:not(:disabled),
   .spring-btn:active:not(:disabled),
   .liquid-cta:active:not(:disabled),
