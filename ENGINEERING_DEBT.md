@@ -1,0 +1,53 @@
+# NAI Studio 工程改进与技术债清单 (Phase 1C Audit)
+
+> 本清单用于记录 Phase 1A–1C UI 改造期间识别出的**工程架构、构建与可维护性债务**。按 Phase 1C 范围约束，本阶段仅做盘点与归档，不在当前阶段直接修改构建链或依赖结构。
+
+---
+
+## 1. 前端静态资源缓存失效机制（硬编码版本参数）
+
+- **现状**：[frontend/index.html](file:///D:/NAI-Studio/frontend/index.html) 中手动使用硬编码查询参数（当前为 `?v=phase1c-1`）加载 `/static/styles.css` 与 `/static/app.js`，FastAPI 仅通过默认 `StaticFiles` 挂载 `/static`，浏览器易命中强缓存或 `304 Not Modified`。
+- **影响**：每次更新 `styles.css` 或 `app.js` 均需人工同步修改 `index.html` 的 `?v=...` 参数；遗漏时本地 Edge / Chrome 会静默加载旧前端资源。
+- **建议方案**：后续由后端在渲染入口注入基于文件 mtime / SHA-256 短哈希的版本参数，或对 `/static/*.css`、`/static/*.js` 设置 `Cache-Control: no-cache`（协商缓存 / ETag 验证）。
+
+---
+
+## 2. Tailwind Play CDN 运行时依赖与离线可用性
+
+- **现状**：[frontend/index.html](file:///D:/NAI-Studio/frontend/index.html) 第 8 行直接通过 `<script src="https://cdn.tailwindcss.com"></script>` 在浏览器端运行时扫描 DOM 并动态注入 `<style>` 规则。
+- **影响**：
+  - 强依赖外网 CDN 可达性；无网或代理受限环境下页面排版会完全退化。
+  - 首屏存在运行时 CSS 编译开销，且动态模板字符串（[frontend/app.js](file:///D:/NAI-Studio/frontend/app.js)）中的类名需依赖 Play CDN `MutationObserver` 实时生成。
+  - 与 `styles.css` 的原生语义类混用时，部分深色尾缀类（如 `text-sky-300`、`text-emerald-300`）需在 `html.light` 中通过 `!important` 覆盖。
+- **建议方案**：在确认合适阶段时改为预编译产出的本地静态 `tailwind.generated.css`（无需引入重型前端框架），或逐步将残留颜色工具类迁入 `styles.css` 的 CSS 变量语义类中，消除 `html.light` 下的 `!important` 覆盖。
+
+---
+
+## 3. 缺失 Python / 开发环境依赖清单
+
+- **现状**：仓库根目录（`D:\NAI-Studio`）缺少 `requirements.txt`、`pyproject.toml` 或锁文件，[启动_NAI_Studio.bat](file:///D:/NAI-Studio/启动_NAI_Studio.bat) 直接调用本机绝对路径 `"C:\Users\21815\AppData\Local\Python\bin\python.exe"`。
+- **观测到的实际第三方依赖**：
+  - 运行时：`fastapi`、`uvicorn`、`httpx`、`pillow`（`PIL`）、`starlette`（FastAPI 传递依赖）
+  - 测试：`pytest`（`tests/test_all.py`）
+- **影响**：更换机器、重建 Python 环境或交由他人部署时，缺乏可复现的环境安装清单与版本约束。
+- **建议方案**：补充 `requirements.txt`（区分运行依赖与测试依赖或提供 `requirements-dev.txt`），并在启动脚本中支持通过 `PATH` / 虚拟环境优先解析 Python 路径。
+
+---
+
+## 4. `frontend/app.js` 单文件体量与内联事件绑定
+
+- **现状**：[frontend/app.js](file:///D:/NAI-Studio/frontend/app.js) 单文件约 `3780+` 行，混合状态管理、API 请求、Canvas Inpaint 交互与 HTML 模板拼接；大量交互通过 HTML `onclick="..."` 属性触发全局函数。
+- **影响**：
+  - 动态列表项中的文本转义依赖人工确保每处调用 `escapeHtml(...)`，稍有遗漏存在参数注入/断串风险。
+  - 全局命名空间函数众多，局部重构和单元测试粒度受限。
+- **建议方案**：在 Phase 2+ 稳步按功能域拆分为轻量原生 ES Module（无需迁移 React/Vue），并将高频动态列表逐步改为事件委托。
+
+---
+
+## 5. 预留至 Phase 2 的已知布局与响应性待办
+
+以下问题已在 Phase 1 审计与验证中确认存在，但按 Phase 1 边界约定保持不动，统一移交 Phase 2 处理：
+
+1. **窄桌面视口（`1280×800`）底部动作坞紧凑度**：底部操作条按钮较多时可能换行或略显拥挤，需配合阶段二布局优化参数区折行策略。
+2. **图库卡片固定图片高度（`h-60`）**：竖图比例下卡片图区底部存在较明显暗底留白，需在 Phase 2 统一优化图库卡片比例与信息区高度。
+3. **三栏宽度自适应与右侧历史栏折叠/拖拽调宽**：`1280px` / `1366px` 下保证中央画布优先并支持历史栏自动收起。

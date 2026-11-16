@@ -1,12 +1,7 @@
 /* ==========================================================================
-   NAI Studio — Liquid Glass Optical Design System (2026)
-   Five-Step Water-Droplet Glass + Bespoke Controls + Non-Selectable UI Chrome
+   NAI Studio V2.3 — Studio Slate + Restrained Hydro-Mist Design System
+   Canonical Design System (DESIGN.md Phase 1A-1C)
    ========================================================================== */
-
-/* ============================================================
-   NAI Studio V2.3 — Studio Slate + Restrained Hydro-Mist Tokens
-   Canonical Design System (DESIGN.md Phase 1A)
-   ============================================================ */
 
 :root {
   /* 1. Scenery Backdrop Tokens (Overridden dynamically by applyBgHex) */
@@ -310,8 +305,7 @@ body {
 }
 
 /* Recessed Control Well (Editable inputs, textareas, prompt wrap, selects) */
-.ui-well,
-.glass-field {
+.ui-well {
   background-color: var(--bg-canvas-well);
   background-image:
     var(--well-gradient),
@@ -322,31 +316,28 @@ body {
   transition: border-color 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease;
 }
 
-select.ui-well option,
-select.glass-field option {
+select.ui-well option {
   background-color: #0b171e;
   color: #eef6fb;
 }
 
-.ui-well:hover,
-.glass-field:hover {
+.ui-well:hover:not(:disabled) {
   border-color: var(--border-hover);
 }
 
 .ui-well:focus-within,
 .ui-well:focus,
-.glass-field:focus-within,
-.glass-field:focus {
+.ui-well:focus-visible {
   outline: none;
   border-color: var(--border-focus);
   box-shadow:
-    0 0 0 2.5px rgba(56, 189, 248, 0.22),
+    0 0 0 2.5px rgba(56, 189, 248, 0.24),
     inset 0 1px 2px rgba(0, 0, 0, 0.12);
 }
 
 .ui-well:disabled,
-.glass-field:disabled {
-  opacity: 0.45;
+.ui-well[aria-disabled="true"] {
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
@@ -372,7 +363,7 @@ select.glass-field option {
   transform: scale(0.985);
 }
 .ui-btn:disabled {
-  opacity: 0.42;
+  opacity: 0.5;
   cursor: not-allowed;
   pointer-events: none;
 }
@@ -398,7 +389,7 @@ select.glass-field option {
   transform: scale(0.985);
 }
 .ui-btn-accent:disabled {
-  opacity: 0.42;
+  opacity: 0.5;
   cursor: not-allowed;
   pointer-events: none;
 }
@@ -414,6 +405,11 @@ select.glass-field option {
   background: rgba(255, 255, 255, 0.07);
   border-color: var(--border-hairline);
   color: var(--text-primary);
+}
+.ui-btn-ghost:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 .ui-btn-ghost.is-active {
   background: var(--accent-tint);
@@ -431,6 +427,11 @@ select.glass-field option {
 .ui-chip:hover:not(:disabled) {
   background: var(--surface-well-hover);
   border-color: var(--border-hover);
+}
+.ui-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 /* Non-Interactive Telemetry & Status Badge */
@@ -591,9 +592,14 @@ select.glass-field option {
   transition: background-color 0.15s ease, color 0.15s ease;
 }
 
-.glass-stepper-btn:hover {
+.glass-stepper-btn:hover:not(:disabled) {
   background: var(--accent-tint);
   color: var(--text-primary);
+}
+.glass-stepper-btn:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 /* Bespoke Liquid Switch */
@@ -644,7 +650,7 @@ select.glass-field option {
   transform: scale(0.975);
 }
 .spring-btn:disabled {
-  opacity: 0.42;
+  opacity: 0.5;
   cursor: not-allowed;
   pointer-events: none;
 }
@@ -669,11 +675,30 @@ select.glass-field option {
   transform: scale(0.98);
 }
 .liquid-cta:disabled {
-  opacity: 0.45;
+  opacity: 0.5;
   cursor: not-allowed;
   box-shadow: none;
   filter: none;
   transform: none;
+}
+
+/* Unified Keyboard Focus Accessibility */
+.ui-btn:focus-visible,
+.ui-btn-accent:focus-visible,
+.ui-btn-ghost:focus-visible,
+.ui-chip:focus-visible,
+.spring-btn:focus-visible,
+.liquid-cta:focus-visible,
+.glass-select-trigger:focus-visible,
+.glass-select-option:focus-visible,
+.glass-stepper-btn:focus-visible,
+.glass-switch:focus-visible,
+.tag-pill:focus-visible,
+.tab-btn:focus-visible,
+.batch-btn:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
 }
 
 /* Sliding Tab Pill Indicator */
@@ -693,6 +718,14 @@ input[type="range"] {
   background: var(--glass-border);
   outline: none;
   cursor: pointer;
+}
+input[type="range"]:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 4px;
+}
+input[type="range"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
@@ -752,8 +785,7 @@ html.light .liquid-panel {
   border-color: rgba(15, 42, 60, 0.16);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), var(--glass-shadow);
 }
-html.light .ui-well,
-html.light .glass-field {
+html.light .ui-well {
   background-color: rgba(232, 241, 248, 0.92);
   background-image:
     linear-gradient(180deg, rgba(12, 31, 43, 0.04) 0%, rgba(255, 255, 255, 0.34) 100%),
@@ -761,8 +793,7 @@ html.light .glass-field {
   border-color: rgba(15, 42, 60, 0.20);
   color: #0c1f2b;
 }
-html.light select.ui-well option,
-html.light select.glass-field option {
+html.light select.ui-well option {
   background-color: #f4f9fc;
   color: #0c1f2b;
 }
@@ -876,15 +907,27 @@ html.light .text-violet-200,
 html.light .text-violet-300 {
   color: #6d28d9 !important;
 }
+html.light .text-indigo-200,
+html.light .text-indigo-300 {
+  color: #4338ca !important;
+}
 html.light .text-rose-200,
 html.light .text-rose-300 {
   color: #be123c !important;
+}
+html.light .hover\:bg-white\/10:hover {
+  background-color: rgba(2, 132, 199, 0.12) !important;
+}
+html.light .bg-white\/15 {
+  background-color: rgba(15, 42, 60, 0.16) !important;
+}
+html.light .hover\:bg-white\/35:hover {
+  background-color: rgba(2, 132, 199, 0.28) !important;
 }
 html.light .text-white\/70 {
   color: rgba(255, 255, 255, 0.92);
 }
 html.light .liquid-popover .text-white\/70,
-html.light .glass-field .text-white\/70,
 html.light .ui-well .text-white\/70,
 html.light .ui-card .text-white\/70 {
   color: var(--text-secondary);
@@ -1099,10 +1142,22 @@ html.light .checkerboard-bg {
 @media (prefers-reduced-motion: reduce) {
   .cloud-drift,
   .water-breath,
-  .animate-pulse {
+  .animate-pulse,
+  .animate-spin,
+  .glass-select-menu {
     animation: none !important;
+  }
+  .ui-btn:active:not(:disabled),
+  .ui-btn-accent:active:not(:disabled),
+  .spring-btn:hover:not(:disabled),
+  .spring-btn:active:not(:disabled),
+  .liquid-cta:hover:not(:disabled),
+  .liquid-cta:active:not(:disabled),
+  .tag-pill:hover {
+    transform: none !important;
   }
   * {
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

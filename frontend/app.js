@@ -734,7 +734,28 @@ async function updateCostEstimate() {
 let _lintTimer = null;
 let _tagTimer = null;
 
+function bindSwitchA11y() {
+  document.querySelectorAll(".glass-switch").forEach(sw => {
+    if (sw.dataset.a11yBound) return;
+    sw.dataset.a11yBound = "1";
+    sw.setAttribute("role", "switch");
+    if (!sw.hasAttribute("tabindex")) sw.setAttribute("tabindex", "0");
+    sw.setAttribute("aria-checked", sw.classList.contains("on") ? "true" : "false");
+    sw.addEventListener("keydown", e => {
+      if (e.key === " " || e.key === "Enter") {
+        e.preventDefault();
+        sw.click();
+      }
+    });
+    const obs = new MutationObserver(() => {
+      sw.setAttribute("aria-checked", sw.classList.contains("on") ? "true" : "false");
+    });
+    obs.observe(sw, { attributes: true, attributeFilter: ["class"] });
+  });
+}
+
 function setupPromptListeners() {
+  bindSwitchA11y();
   const ta = document.getElementById("prompt-input");
   const bd = document.getElementById("prompt-backdrop");
   if (ta && bd) {
@@ -747,6 +768,7 @@ function setupPromptListeners() {
     });
     ta.addEventListener("scroll", () => {
       bd.scrollTop = ta.scrollTop;
+      bd.scrollLeft = ta.scrollLeft;
     });
   }
 
@@ -777,7 +799,10 @@ async function runPromptLinter() {
     });
     const data = await res.json();
     state.lastLintResult = data;
-    bd.innerHTML = data.highlighted_html || escapeHtml(ta.value);
+    const rawHtml = data.highlighted_html || escapeHtml(ta.value);
+    bd.innerHTML = ta.value.endsWith("\n") ? `${rawHtml}\u200b` : rawHtml;
+    bd.scrollTop = ta.scrollTop;
+    bd.scrollLeft = ta.scrollLeft;
     renderTagPillsBar();
     updateDynamicPromptIndicator();
 
@@ -787,7 +812,7 @@ async function runPromptLinter() {
       listEl.innerHTML = data.issues
         .map(
           (iss, idx) => `
-          <div class="flex items-center justify-between gap-2 py-1 px-2 rounded-lg bg-black/20">
+          <div class="flex items-center justify-between gap-2 py-1 px-2 rounded-lg ui-subgroup">
             <span class="truncate text-[var(--muted-foreground)]">${escapeHtml(iss.message)}</span>
             <button onclick="applySingleLintFix(${idx})" class="shrink-0 text-[12px] px-2 py-0.5 rounded ui-btn text-sky-300">修复</button>
           </div>
@@ -2752,11 +2777,11 @@ let _inlineTimer = null;
 function getCursorTagFragment(el) {
   const pos = el.selectionStart || 0;
   const before = el.value.slice(0, pos);
-  const lastComma = before.lastIndexOf(",");
+  const lastSep = Math.max(before.lastIndexOf(","), before.lastIndexOf("\n"));
   return {
-    start: lastComma + 1,
+    start: lastSep + 1,
     end: pos,
-    frag: before.slice(lastComma + 1).trim(),
+    frag: before.slice(lastSep + 1).trim(),
   };
 }
 
@@ -2854,7 +2879,7 @@ function acceptInlineSuggestion(idx) {
   const menu = document.getElementById("inline-autocomplete-menu");
   if (!el || !item) return;
   const { start, end } = getCursorTagFragment(el);
-  const leading = start > 0 ? " " : "";
+  const leading = start > 0 && el.value[start - 1] === "," ? " " : "";
   const inserted = leading + item.tag;
   el.value = el.value.slice(0, start) + inserted + el.value.slice(end);
   const caret = start + inserted.length;
