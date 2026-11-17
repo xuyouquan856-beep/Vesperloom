@@ -301,6 +301,25 @@ async def api_estimate_cost(body: Dict[str, Any]) -> Dict[str, Any]:
     )
 
 
+def _log_api_error(endpoint: str, body: Dict[str, Any], exc: Exception) -> int:
+    status_code = getattr(exc, "status_code", 400)
+    model = body.get("model", "")
+    action = body.get("action") or body.get("req_type") or ""
+    dims = f"{body.get('width', '?')}x{body.get('height', '?')}"
+    steps = body.get("steps", "?")
+    line = f"[NAI-API ERROR] endpoint={endpoint} status={status_code} model={model} action={action} size={dims} steps={steps} detail={exc}\n"
+    print(line, flush=True)
+    try:
+        err_log = Path(__file__).resolve().parent.parent / "tmp" / "api_errors.log"
+        err_log.parent.mkdir(parents=True, exist_ok=True)
+        with err_log.open("a", encoding="utf-8") as fh:
+            import datetime
+            fh.write(f"{datetime.datetime.now().isoformat(timespec='seconds')} {line}")
+    except Exception:
+        pass
+    return status_code
+
+
 @app.post("/api/generate")
 async def api_generate(body: Dict[str, Any]) -> Dict[str, Any]:
     cfg = load_config()
@@ -309,7 +328,8 @@ async def api_generate(body: Dict[str, Any]) -> Dict[str, Any]:
         account = await fetch_account_status(cfg)
         return {"ok": True, "item": item, "account": account, "storage": _get_storage_stats()}
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        code = _log_api_error("/api/generate", body, exc)
+        raise HTTPException(status_code=code, detail=str(exc))
 
 
 @app.post("/api/augment")
@@ -320,7 +340,8 @@ async def api_augment(body: Dict[str, Any]) -> Dict[str, Any]:
         account = await fetch_account_status(cfg)
         return {"ok": True, "item": item, "account": account, "storage": _get_storage_stats()}
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        code = _log_api_error("/api/augment", body, exc)
+        raise HTTPException(status_code=code, detail=str(exc))
 
 
 @app.post("/api/vibe/parse")

@@ -6,7 +6,7 @@
   <title>NAI Studio — 个人创作工作台</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23111318'/%3E%3Cpath d='M20 44V20l24 24V20' stroke='%23ffffff' stroke-width='6' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E" />
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="/static/styles.css?v=p2-9" />
+  <link rel="stylesheet" href="/static/styles.css?v=p2-10" />
 </head>
 <body class="lg:h-screen min-h-screen flex flex-col lg:overflow-hidden overflow-y-auto">
 
@@ -618,6 +618,29 @@
         </div>
 
       </div>
+
+      <!-- 4. 固定生成执行区（与画布编辑工具分离） -->
+      <div class="px-3.5 py-2.5 border-t border-[var(--border-hairline)] bg-[var(--surface-panel)] space-y-2 shrink-0">
+        <div class="flex items-center justify-between gap-2">
+          <span id="cost-estimate-badge" class="text-[11.5px] px-2 py-0.5 rounded-[5px] ui-badge text-[var(--status-success)] font-mono whitespace-nowrap">
+            0 Anlas
+          </span>
+          <div class="inline-flex items-center rounded-[6px] ui-segmented p-0.5 gap-0.5 text-[11.5px]" title="单次连续生成张数（Opus 免费）">
+            <button onclick="setBatchCount(1)" data-batch="1" class="batch-btn px-2 py-0.5 rounded-[5px] font-mono bg-[var(--accent-tint)] text-[var(--text-primary)] font-semibold">1张</button>
+            <button onclick="setBatchCount(3)" data-batch="3" class="batch-btn px-2 py-0.5 rounded-[5px] font-mono text-[var(--text-muted)]">3</button>
+            <button onclick="setBatchCount(5)" data-batch="5" class="batch-btn px-2 py-0.5 rounded-[5px] font-mono text-[var(--text-muted)]">5</button>
+            <button onclick="setBatchCount(0)" data-batch="0" class="batch-btn px-2 py-0.5 rounded-[5px] font-mono text-[var(--text-muted)]" title="持续生成（直至手动停止）">∞</button>
+          </div>
+        </div>
+        <button id="stop-queue-btn" onclick="stopAutoRollQueue()" class="hidden spring-btn w-full inline-flex items-center justify-center gap-1.5 py-2 rounded-[8px] ui-btn text-[var(--status-danger)] text-[13px] font-semibold whitespace-nowrap">
+          <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-stop"/></svg>
+          <span>停止队列 (<span id="queue-progress-text">0</span>)</span>
+        </button>
+        <button id="generate-btn" onclick="triggerGenerate()" class="liquid-cta w-full inline-flex items-center justify-center gap-2 py-2 rounded-[8px] text-[13.5px] font-semibold tracking-wide whitespace-nowrap" title="开始生成 (快捷键 Ctrl+Enter)">
+          <svg class="ui-ic" aria-hidden="true"><use href="#ic-play"/></svg>
+          <span id="generate-btn-label">生成图片</span>
+        </button>
+      </div>
     </aside>
 
     <!-- 左侧拖拽调宽分割条 -->
@@ -800,56 +823,39 @@
           <button onclick="setWorkbenchAction('generate')" class="spring-btn px-2 py-1 rounded-[6px] ui-btn text-[12px]">退出</button>
         </div>
 
-        <!-- 核心悬浮命令坞 -->
-        <div class="pointer-events-auto studio-hud w-full rounded-[12px] px-2.5 py-1.5 flex items-center justify-between gap-2 flex-wrap md:flex-nowrap">
-          <div class="flex items-center gap-0.5 text-[12px] shrink-0">
-            <button id="act-btn-generate" onclick="setWorkbenchAction('generate')" class="spring-btn px-2 py-1 rounded-[6px] ui-btn-ghost is-active whitespace-nowrap">文生图</button>
-            <button id="act-btn-img2img" onclick="setWorkbenchAction('img2img')" class="spring-btn px-2 py-1 rounded-[6px] ui-btn-ghost whitespace-nowrap">图生图</button>
-            <button id="act-btn-infill" onclick="setWorkbenchAction('infill')" class="spring-btn px-2 py-1 rounded-[6px] ui-btn-ghost whitespace-nowrap">局部重绘</button>
-            <button id="act-btn-outpaint" onclick="setWorkbenchAction('outpaint')" class="spring-btn px-2 py-1 rounded-[6px] ui-btn-ghost whitespace-nowrap">扩图</button>
-            <div class="relative">
-              <button onclick="toggleDirectorMenu()" class="spring-btn px-2 py-1 rounded-[6px] ui-btn-ghost whitespace-nowrap">Director ▾</button>
-              <div id="director-menu" class="hidden absolute bottom-10 left-0 w-56 liquid-popover rounded-[10px] p-1 space-y-1 z-50 text-[13px]">
-                <div class="px-2 py-1 text-[12px] text-[var(--text-muted)] border-b border-[var(--border-hairline)]">对当前画布执行 Director 处理</div>
-                <button onclick="runDirectorTool('lineart')" class="ui-menu-item w-full flex justify-between items-center px-3 py-1.5">
-                  <span>提取线稿 Line Art</span><span class="text-[11.5px] text-[var(--status-success)] font-mono">0点数</span>
-                </button>
-                <button onclick="runDirectorTool('sketch')" class="ui-menu-item w-full flex justify-between items-center px-3 py-1.5">
-                  <span>转草图 Sketch</span><span class="text-[11.5px] text-[var(--status-success)] font-mono">0点数</span>
-                </button>
-                <button onclick="runDirectorTool('colorize')" class="ui-menu-item w-full flex justify-between items-center px-3 py-1.5">
-                  <span>智能上色 Colorize</span><span class="text-[11.5px] text-[var(--status-success)] font-mono">0点数</span>
-                </button>
-                <button onclick="openDirectorEmotionBar()" class="ui-menu-item w-full flex justify-between items-center px-3 py-1.5">
-                  <span>表情微调 (24种)</span><span class="text-[11.5px] text-[var(--status-success)] font-mono">0点数</span>
-                </button>
-                <button onclick="runDirectorTool('declutter')" class="ui-menu-item w-full flex justify-between items-center px-3 py-1.5">
-                  <span>去杂物 Declutter</span><span class="text-[11.5px] text-[var(--status-success)] font-mono">0点数</span>
-                </button>
-              </div>
+        <!-- 纯净画布模式与图像处理工具条（不再混入主生成按钮） -->
+        <div class="pointer-events-auto studio-hud rounded-[10px] px-2 py-1 flex items-center justify-center gap-1 flex-wrap">
+          <button id="act-btn-generate" onclick="setWorkbenchAction('generate')" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn-ghost is-active text-[12px] whitespace-nowrap">文生图</button>
+          <button id="act-btn-img2img" onclick="setWorkbenchAction('img2img')" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn-ghost text-[12px] whitespace-nowrap">图生图</button>
+          <button id="act-btn-infill" onclick="setWorkbenchAction('infill')" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn-ghost text-[12px] whitespace-nowrap">局部重绘</button>
+          <button id="act-btn-outpaint" onclick="setWorkbenchAction('outpaint')" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn-ghost text-[12px] whitespace-nowrap">扩图</button>
+          <span class="h-3.5 w-px bg-[var(--border-hairline)] mx-0.5 shrink-0"></span>
+          <div class="relative">
+            <button onclick="toggleDirectorMenu()" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn-ghost text-[12px] whitespace-nowrap" title="对当前画布执行线稿/上色/表情等后处理">Director ▾</button>
+            <div id="director-menu" class="hidden absolute bottom-10 left-0 w-56 liquid-popover rounded-[10px] p-1 space-y-1 z-50 text-[13px]">
+              <div class="px-2 py-1 text-[12px] text-[var(--text-muted)] border-b border-[var(--border-hairline)]">对当前画布执行 Director 处理</div>
+              <button onclick="runDirectorTool('lineart')" class="ui-menu-item w-full flex justify-between items-center px-3 py-1.5">
+                <span>提取线稿 Line Art</span><span class="text-[11.5px] text-[var(--status-success)] font-mono">0点数</span>
+              </button>
+              <button onclick="runDirectorTool('sketch')" class="ui-menu-item w-full flex justify-between items-center px-3 py-1.5">
+                <span>转草图 Sketch</span><span class="text-[11.5px] text-[var(--status-success)] font-mono">0点数</span>
+              </button>
+              <button onclick="runDirectorTool('colorize')" class="ui-menu-item w-full flex justify-between items-center px-3 py-1.5">
+                <span>智能上色 Colorize</span><span class="text-[11.5px] text-[var(--status-success)] font-mono">0点数</span>
+              </button>
+              <button onclick="openDirectorEmotionBar()" class="ui-menu-item w-full flex justify-between items-center px-3 py-1.5">
+                <span>表情微调 (24种)</span><span class="text-[11.5px] text-[var(--status-success)] font-mono">0点数</span>
+              </button>
+              <button onclick="runDirectorTool('declutter')" class="ui-menu-item w-full flex justify-between items-center px-3 py-1.5">
+                <span>去杂物 Declutter</span><span class="text-[11.5px] text-[var(--status-success)] font-mono">0点数</span>
+              </button>
             </div>
-            <button onclick="openXyzModal()" class="spring-btn px-2 py-1 rounded-[6px] ui-btn-ghost whitespace-nowrap" title="固定 Seed 对比 CFG / 步数 / 采样器 / 画师词并自动拼接对比大图">X/Y</button>
           </div>
-
-          <div class="flex items-center gap-1.5 ml-auto shrink-0">
-            <span id="cost-estimate-badge" class="hidden sm:inline-block text-[11.5px] px-2 py-1 rounded-[6px] ui-badge text-[var(--status-success)] font-mono whitespace-nowrap">
-              0 Anlas
-            </span>
-            <div class="inline-flex items-center rounded-[6px] ui-segmented p-0.5 gap-0.5 text-[11.5px]" title="单次连续生成张数（Opus 免费）">
-              <button onclick="setBatchCount(1)" data-batch="1" class="batch-btn px-2 py-1 rounded-[5px] font-mono bg-[var(--accent-tint)] text-[var(--text-primary)] font-semibold">1张</button>
-              <button onclick="setBatchCount(3)" data-batch="3" class="batch-btn px-2 py-1 rounded-[5px] font-mono text-[var(--text-muted)]">3</button>
-              <button onclick="setBatchCount(5)" data-batch="5" class="batch-btn px-2 py-1 rounded-[5px] font-mono text-[var(--text-muted)]">5</button>
-              <button onclick="setBatchCount(0)" data-batch="0" class="batch-btn px-2 py-1 rounded-[5px] font-mono text-[var(--text-muted)]" title="持续生成（直至手动停止）">∞</button>
-            </div>
-            <button id="stop-queue-btn" onclick="stopAutoRollQueue()" class="hidden spring-btn inline-flex items-center gap-1 px-2.5 py-1 rounded-[8px] ui-btn text-[var(--status-danger)] text-[12.5px] font-semibold whitespace-nowrap">
-              <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-stop"/></svg>
-              <span>停止 (<span id="queue-progress-text">0</span>)</span>
-            </button>
-            <button id="generate-btn" onclick="triggerGenerate()" class="liquid-cta inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-[8px] text-[13px] font-semibold tracking-wide whitespace-nowrap">
-              <svg class="ui-ic" aria-hidden="true"><use href="#ic-play"/></svg>
-              <span>生成图片</span>
-            </button>
-          </div>
+          <button onclick="openXyzModal()" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn-ghost text-[12px] whitespace-nowrap" title="固定 Seed 对比 CFG / 步数 / 采样器 / 画师词并自动拼接对比大图">X/Y 矩阵</button>
+          <button id="collapsed-generate-btn" type="button" onclick="triggerGenerate()" class="hidden liquid-cta inline-flex items-center gap-1 px-2.5 py-1 rounded-[6px] text-[12px] font-semibold whitespace-nowrap ml-1" title="在隐藏参数栏时快速生成 (Ctrl+Enter)">
+            <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-play"/></svg>
+            <span>生成</span>
+          </button>
         </div>
       </div>
     </section>
@@ -937,6 +943,29 @@
           <button onclick="runArtistAbTest()" class="spring-btn px-3 py-1.5 rounded-[6px] ui-btn text-[12.5px]" title="使用相同基础提示词与固定 Seed 对当前画师依次生成对照图">A/B 对照</button>
           <button onclick="applyMixerToWorkbench()" class="flex-1 liquid-cta spring-btn py-1.5 rounded-[6px] text-[13px] font-semibold">应用到工作台 →</button>
         </div>
+      </div>
+
+      <!-- 4. 固定生成执行区（与画布编辑工具分离） -->
+      <div class="px-3.5 py-2.5 border-t border-[var(--border-hairline)] bg-[var(--surface-panel)] space-y-2 shrink-0">
+        <div class="flex items-center justify-between gap-2">
+          <span id="cost-estimate-badge" class="text-[11.5px] px-2 py-0.5 rounded-[5px] ui-badge text-[var(--status-success)] font-mono whitespace-nowrap">
+            0 Anlas
+          </span>
+          <div class="inline-flex items-center rounded-[6px] ui-segmented p-0.5 gap-0.5 text-[11.5px]" title="单次连续生成张数（Opus 免费）">
+            <button onclick="setBatchCount(1)" data-batch="1" class="batch-btn px-2 py-0.5 rounded-[5px] font-mono bg-[var(--accent-tint)] text-[var(--text-primary)] font-semibold">1张</button>
+            <button onclick="setBatchCount(3)" data-batch="3" class="batch-btn px-2 py-0.5 rounded-[5px] font-mono text-[var(--text-muted)]">3</button>
+            <button onclick="setBatchCount(5)" data-batch="5" class="batch-btn px-2 py-0.5 rounded-[5px] font-mono text-[var(--text-muted)]">5</button>
+            <button onclick="setBatchCount(0)" data-batch="0" class="batch-btn px-2 py-0.5 rounded-[5px] font-mono text-[var(--text-muted)]" title="持续生成（直至手动停止）">∞</button>
+          </div>
+        </div>
+        <button id="stop-queue-btn" onclick="stopAutoRollQueue()" class="hidden spring-btn w-full inline-flex items-center justify-center gap-1.5 py-2 rounded-[8px] ui-btn text-[var(--status-danger)] text-[13px] font-semibold whitespace-nowrap">
+          <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-stop"/></svg>
+          <span>停止队列 (<span id="queue-progress-text">0</span>)</span>
+        </button>
+        <button id="generate-btn" onclick="triggerGenerate()" class="liquid-cta w-full inline-flex items-center justify-center gap-2 py-2 rounded-[8px] text-[13.5px] font-semibold tracking-wide whitespace-nowrap" title="开始生成 (快捷键 Ctrl+Enter)">
+          <svg class="ui-ic" aria-hidden="true"><use href="#ic-play"/></svg>
+          <span id="generate-btn-label">生成图片</span>
+        </button>
       </div>
     </aside>
   </main>
@@ -1332,6 +1361,6 @@
 
   <div id="studio-tooltip" role="tooltip" aria-hidden="true"></div>
 
-  <script src="/static/app.js?v=p2-9"></script>
+  <script src="/static/app.js?v=p2-10"></script>
 </body>
 </html>

@@ -29,6 +29,68 @@ def _get_client() -> httpx.AsyncClient:
     return _HTTP_CLIENT
 
 
+class NaiApiError(ValueError):
+    def __init__(self, status_code: int, message: str):
+        super().__init__(message)
+        self.status_code = status_code
+
+
+def _extract_nai_error_detail(r: httpx.Response) -> str:
+    try:
+        j = r.json()
+        msg = j.get("message") or j.get("detail") or j.get("error")
+        if msg:
+            return str(msg)[:260]
+    except Exception:
+        pass
+    return (r.text or "")[:260]
+
+
+async def _post_nai_with_retry(
+    client: httpx.AsyncClient,
+    url: str,
+    headers: Dict[str, str],
+    payload: Dict[str, Any],
+    op_label: str = "图像生成",
+) -> httpx.Response:
+    last_exc: Optional[Exception] = None
+    for attempt in range(2):
+        try:
+            r = await client.post(url, headers=headers, json=payload)
+        except httpx.TimeoutException as exc:
+            last_exc = exc
+            if attempt == 0:
+                await asyncio.sleep(1.5)
+                continue
+            raise NaiApiError(504, f"{op_label}连接 NovelAI 超时 (90s)，请检查网络后重试。")
+        except httpx.TransportError as exc:
+            last_exc = exc
+            if attempt == 0:
+                await asyncio.sleep(1.5)
+                continue
+            raise NaiApiError(502, f"{op_label}网络传输异常: {exc}")
+
+        if r.status_code == 200:
+            return r
+
+        detail = _extract_nai_error_detail(r)
+        if r.status_code in (429, 502, 503, 504) and attempt == 0:
+            await asyncio.sleep(2.0 if r.status_code == 429 else 1.5)
+            continue
+
+        if r.status_code in (401, 403):
+            raise NaiApiError(r.status_code, f"NovelAI Token 无效或已过期 ({r.status_code})：{detail}")
+        if r.status_code == 402:
+            raise NaiApiError(402, f"Anlas 点数不足 (402)：{detail}")
+        if r.status_code == 429:
+            raise NaiApiError(429, f"NovelAI 上游并发/频率受限 (429)：请等待上一任务完全结束 2 秒后再重试（{detail}）")
+        if r.status_code >= 500:
+            raise NaiApiError(502, f"NovelAI 服务器暂时异常 ({r.status_code})：{detail}")
+        raise NaiApiError(400, f"{op_label}被 NovelAI 拒绝 ({r.status_code})：{detail}")
+
+    raise NaiApiError(502, f"{op_label}请求失败: {last_exc}")
+
+
 def _num(val: Any, default: float, cast=float) -> Any:
     if val is None or val == "":
         return cast(default)
@@ -623,10 +685,7 @@ async def generate_image(req: Dict[str, Any], cfg: Optional[Dict[str, Any]] = No
         "Accept": "*/*",
     }
     client = _get_client()
-    r = await client.post(f"{base_url}/ai/generate-image", headers=headers, json=payload)
-    if r.status_code != 200:
-        err_msg = r.text[:300]
-        raise ValueError(f"NovelAI 官方接口返回错误 ({r.status_code}): {err_msg}")
+    r = await _post_nai_with_retry(client, f"{base_url}/ai/generate-image", headers, payload, "图像生成")
 
     zf = zipfile.ZipFile(io.BytesIO(r.content))
     png_names = [n for n in zf.namelist() if n.lower().endswith(".png")] or zf.namelist()
@@ -740,9 +799,7 @@ async def augment_image(req: Dict[str, Any], cfg: Optional[Dict[str, Any]] = Non
         "Accept": "*/*",
     }
     client = _get_client()
-    r = await client.post(f"{base_url}/ai/augment-image", headers=headers, json=payload)
-    if r.status_code != 200:
-        raise ValueError(f"Director 工具调用失败 ({r.status_code}): {r.text[:250]}")
+    r = await _post_nai_with_retry(client, f"{base_url}/ai/augment-image", headers, payload, "Director 工具")
     zf = zipfile.ZipFile(io.BytesIO(r.content))
     png_bytes = zf.read(zf.namelist()[0])
 

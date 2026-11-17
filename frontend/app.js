@@ -281,6 +281,12 @@ function updatePanelToggleBtn(btn, collapsed, label) {
   setElementTooltip(btn, `${collapsed ? "展开" : "收起"}${label} (快捷键 ${shortcut})`);
 }
 
+function syncCollapsedGenerateVisibility() {
+  const leftCollapsed = document.getElementById("left-panel")?.classList.contains("is-collapsed");
+  const showQuickGen = Boolean(leftCollapsed || state.immersionMode);
+  document.getElementById("collapsed-generate-btn")?.classList.toggle("hidden", !showQuickGen);
+}
+
 function toggleLeftPanel(force) {
   const panel = document.getElementById("left-panel");
   const resizer = document.getElementById("left-resizer");
@@ -292,6 +298,7 @@ function toggleLeftPanel(force) {
     resizer?.classList.remove("is-resizer-hidden");
     updatePanelToggleBtn(btn, false, "左侧参数栏");
     saveWorkspaceLayout({ leftCollapsed: false });
+    syncCollapsedGenerateVisibility();
     return;
   }
   const nextCollapsed = typeof force === "boolean" ? !force : !panel.classList.contains("is-collapsed");
@@ -299,6 +306,7 @@ function toggleLeftPanel(force) {
   resizer?.classList.toggle("is-resizer-hidden", nextCollapsed);
   updatePanelToggleBtn(btn, nextCollapsed, "左侧参数栏");
   saveWorkspaceLayout({ leftCollapsed: nextCollapsed });
+  syncCollapsedGenerateVisibility();
 }
 
 function toggleRightPanel(force) {
@@ -1565,6 +1573,14 @@ function setWorkbenchAction(act) {
     outpaint: "模式：智能扩图 (Outpaint)",
   };
   document.getElementById("stage-mode-pill").textContent = modeLabels[act] || "模式：文生图";
+  const genActionLabels = {
+    generate: "生成图片",
+    img2img: "执行图生图",
+    infill: "生成局部重绘",
+    outpaint: "执行智能扩图",
+  };
+  const genLbl = document.getElementById("generate-btn-label");
+  if (genLbl) genLbl.textContent = genActionLabels[act] || "生成图片";
 
   document.getElementById("i2i-toolbar")?.classList.toggle("hidden", act !== "img2img");
   document.getElementById("inpaint-toolbar")?.classList.toggle("hidden", act !== "infill");
@@ -1875,7 +1891,9 @@ async function triggerGenerate() {
     return;
   }
 
+  const quickBtn = document.getElementById("collapsed-generate-btn");
   btn.disabled = true;
+  if (quickBtn) quickBtn.disabled = true;
   if (state.activeGenController) state.activeGenController.abort();
   state.activeGenController = new AbortController();
 
@@ -1896,7 +1914,7 @@ async function triggerGenerate() {
     });
 
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || "生成失败");
+    if (!res.ok) throw new Error(data.detail || `生成失败 (${res.status})`);
 
     if (data.account) state.account = data.account;
     if (data.storage) state.storage = data.storage;
@@ -1919,10 +1937,11 @@ async function triggerGenerate() {
     showToast(`出图完成 (${data.item.generation_time}s) · 已保存至 D:\\NAI-Studio\\outputs`);
   } catch (err) {
     if (err?.name !== "AbortError") {
-      showToast(err.message || "生成失败", 4200);
+      showToast(err.message || "生成失败", 6000);
     }
   } finally {
     btn.disabled = false;
+    if (quickBtn) quickBtn.disabled = false;
     stopGeneratingOverlay();
   }
 }
@@ -2550,11 +2569,35 @@ async function generateArtistCard(artistId) {
   }
 }
 
-function useSingleArtist(tag, name) {
-  state.activeArtistMix = [{ tag, name, weight: 1.0 }];
+function injectArtistsIntoPrompt(items, toastLabel) {
+  const ta = document.getElementById("prompt-input");
+  const mixStr = formatMixString(items);
+  if (ta && mixStr) {
+    const knownTags = new Set((state.artists || []).map(a => String(a.tag || "").trim().toLowerCase()));
+    const kept = parsePromptSegments(ta.value).filter(seg => {
+      const clean = seg.replace(/^\{+|\[+|\}+|\]+$/g, "").replace(/^-?\d+(?:\.\d+)?::|::$/g, "").trim().toLowerCase();
+      return !(clean.startsWith("artist:") || knownTags.has(clean));
+    });
+    kept.push(mixStr);
+    ta.value = kept.join(", ");
+  }
+  state.activeArtistMix = [];
   renderActiveArtistMixBar();
   switchTab("workbench");
-  showToast(`已选用画师：${name} (${tag})`);
+  switchInspectorTab("prompts");
+  switchPromptSide("pos");
+  syncPromptImmediateVisuals("pos");
+  runPromptLinter("pos");
+  const wrap = document.getElementById("prompt-editor-wrap");
+  if (wrap) {
+    wrap.style.borderColor = "var(--border-focus)";
+    setTimeout(() => { wrap.style.borderColor = ""; }, 900);
+  }
+  showToast(toastLabel || `已将画师风格写入提示词框：${mixStr}`);
+}
+
+function useSingleArtist(tag, name) {
+  injectArtistsIntoPrompt([{ tag, name, weight: 1.0 }], `已将画师「${name}」加入提示词框`);
 }
 
 function addArtistToMixer(tag, name) {
@@ -2646,10 +2689,7 @@ function applyMixerToWorkbench() {
     showToast("请先添加至少一位画师");
     return;
   }
-  state.activeArtistMix = JSON.parse(JSON.stringify(state.mixerItems));
-  renderActiveArtistMixBar();
-  switchTab("workbench");
-  showToast("已将多画师混合权重应用到工作台");
+  injectArtistsIntoPrompt(state.mixerItems, "已将混合画师权重写入提示词框");
 }
 
 function renderActiveArtistMixBar() {
@@ -4238,6 +4278,7 @@ function toggleImmersionMode(force) {
     btn.setAttribute("aria-pressed", String(state.immersionMode));
     setElementTooltip(btn, state.immersionMode ? "退出沉浸模式 (快捷键 Esc)" : "隐藏左右面板专注看图 (Esc 退出)");
   }
+  syncCollapsedGenerateVisibility();
 }
 
 // ================= Fast Custom Tooltip & Modal Backdrop UX =================
