@@ -66,9 +66,16 @@ const state = {
   galleryOffset: 0,
 
   // Linter & V2.1/V2.2/V2.3 Interactive State
+  promptSide: "pos",
   lastLintResult: null,
+  lastUcLintResult: null,
   promptUndoStack: [],
+  ucUndoStack: [],
   mutedTags: new Set(),
+  mutedUcTags: new Set(),
+  canvasTexture: "dots",
+  glassBlur: 18,
+  activeGenController: null,
   batchCount: 1,
   queuePollTimer: null,
   stageZoom: 1,
@@ -152,12 +159,17 @@ document.addEventListener("click", e => {
       dirMenu.classList.add("hidden");
     }
   }
-  const tagMenu = document.getElementById("tag-suggestions-menu");
-  if (tagMenu && !tagMenu.classList.contains("hidden")) {
-    if (!e.target.closest("#tag-suggestions-menu") && !e.target.closest("#tag-search-input")) {
-      tagMenu.classList.add("hidden");
+  [
+    ["tag-suggestions-menu", "tag-search-input"],
+    ["uc-tag-suggestions-menu", "uc-tag-search-input"],
+  ].forEach(([menuId, inputId]) => {
+    const tagMenu = document.getElementById(menuId);
+    if (tagMenu && !tagMenu.classList.contains("hidden")) {
+      if (!e.target.closest(`#${menuId}`) && !e.target.closest(`#${inputId}`)) {
+        tagMenu.classList.add("hidden");
+      }
     }
-  }
+  });
 });
 
 // ================= Bootstrap & Initialization =================
@@ -184,19 +196,8 @@ async function bootstrapApp() {
     state.currentModel = state.config.default_model || "nai-diffusion-5-full";
     state.autoQuality = state.config.auto_quality_tags !== false;
 
-    // Apply saved appearance
-    if (state.config.theme === "light") {
-      document.documentElement.classList.add("light");
-      document.getElementById("theme-label").textContent = "深色模式";
-      document.getElementById("theme-icon-use")?.setAttribute("href", "#ic-moon");
-    } else {
-      document.getElementById("theme-label").textContent = "浅色模式";
-      document.getElementById("theme-icon-use")?.setAttribute("href", "#ic-sun");
-    }
-    const legacyDefaultBg = !state.config.bg_hex || ["#0b262c", "#0b0c0e"].includes(state.config.bg_hex.toLowerCase());
-    const savedBg = legacyDefaultBg ? "#091319" : state.config.bg_hex;
-    applyBgHex(savedBg, null, false);
-    setGlassClarity(state.config.glass_clarity || 88, false);
+    // Apply saved appearance (theme, presets, texture, glass clarity & blur)
+    initAppearanceSettings(state.config);
 
     renderAccountHeader();
     renderStorageBadges();
@@ -230,7 +231,9 @@ async function bootstrapApp() {
     initWorkspacePanels();
     switchInspectorTab("prompts");
     updateLeftRefsBadge();
-    renderTagPillsBar();
+    renderTagPillsBar("pos");
+    renderTagPillsBar("uc");
+    runPromptLinter("uc");
     if (data.queue?.running) {
       startQueuePolling();
     }
@@ -376,17 +379,20 @@ function switchInspectorTab(tab) {
 }
 
 function switchPromptSide(side) {
+  state.promptSide = side === "uc" ? "uc" : "pos";
   ["pos", "uc"].forEach(id => {
-    document.getElementById(`prompt-side-${id}`)?.classList.toggle("hidden", id !== side);
+    document.getElementById(`prompt-side-${id}`)?.classList.toggle("hidden", id !== state.promptSide);
   });
   document.querySelectorAll(".prompt-side-btn").forEach(btn => {
-    const act = btn.dataset.promptSide === side;
+    const act = btn.dataset.promptSide === state.promptSide;
     btn.className = act
       ? "prompt-side-btn px-2.5 py-1 rounded-[5px] font-medium bg-[var(--cta-bg)] text-[var(--cta-fg)] transition-colors inline-flex items-center gap-1.5"
       : "prompt-side-btn px-2.5 py-1 rounded-[5px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors inline-flex items-center gap-1.5";
   });
   document.getElementById("inline-autocomplete-menu")?.classList.add("hidden");
-  if (side === "pos") {
+  document.getElementById("lint-drawer")?.classList.add("hidden");
+  updateLintDrawerForSide(state.promptSide);
+  if (state.promptSide === "pos") {
     document.getElementById("prompt-input")?.focus();
   } else {
     document.getElementById("uc-input")?.focus();
@@ -674,8 +680,9 @@ function selectModel(modelId, notify = true) {
   document.getElementById("v45-extra-toggles")?.classList.toggle("hidden", !spec.supports_variety_plus);
   document.getElementById("v3-smea-toggles")?.classList.toggle("hidden", !spec.supports_smea);
 
-  // 8. Re-lint Prompt for the selected model & update stage info + cost estimate
-  runPromptLinter();
+  // 8. Re-lint Prompt & UC for the selected model & update stage info + cost estimate
+  runPromptLinter("pos");
+  runPromptLinter("uc");
   renderActiveArtistMixBar();
   updateStageInfoPill();
   updateCostEstimate();
@@ -715,6 +722,17 @@ function selectUcPreset(key) {
   document.getElementById("uc-input").value = spec.uc_presets[key].tags;
   toggleGlassSelect("uc-select", false);
   renderUcSelectMenu(spec);
+  syncPromptImmediateVisuals("uc");
+  runPromptLinter("uc");
+}
+
+function clearUcPrompt() {
+  const ta = document.getElementById("uc-input");
+  if (!ta) return;
+  state.ucUndoStack.push(ta.value);
+  ta.value = "";
+  syncPromptImmediateVisuals("uc");
+  runPromptLinter("uc");
 }
 
 function renderSamplerSelectMenu(spec) {
@@ -958,24 +976,46 @@ function updateCostEstimate() {
   }, 120);
 }
 
-// ================= Prompt Linter, Weight Adjuster & Hybrid Tag Search =================
+// ================= Prompt Linter, Weight Adjuster & Hybrid Tag Search (Pos + UC Unified) =================
 let _lintTimer = null;
+let _ucLintTimer = null;
 let _lintController = null;
+let _ucLintController = null;
 let _tagTimer = null;
 let _tagController = null;
 
-function syncPromptImmediateVisuals() {
-  const ta = document.getElementById("prompt-input");
-  const bd = document.getElementById("prompt-backdrop");
-  if (!ta || !bd) return;
-  if (!state.lastLintResult || state.lastLintResult._raw !== ta.value) {
-    const escaped = escapeHtml(ta.value);
-    bd.innerHTML = ta.value.endsWith("\n") ? `${escaped}\u200b` : escaped;
+function getSideElements(side = state.promptSide) {
+  const s = side === "uc" ? "uc" : "pos";
+  return {
+    side: s,
+    ta: document.getElementById(s === "uc" ? "uc-input" : "prompt-input"),
+    bd: document.getElementById(s === "uc" ? "uc-backdrop" : "prompt-backdrop"),
+    pillsBar: document.getElementById(s === "uc" ? "uc-tag-pills-bar" : "tag-pills-bar"),
+    countEl: document.getElementById(s === "uc" ? "uc-token-count" : "prompt-token-count"),
+    mutedSet: s === "uc" ? state.mutedUcTags : state.mutedTags,
+    searchInput: document.getElementById(s === "uc" ? "uc-tag-search-input" : "tag-search-input"),
+    searchMenu: document.getElementById(s === "uc" ? "uc-tag-suggestions-menu" : "tag-suggestions-menu"),
+    undoStack: s === "uc" ? state.ucUndoStack : state.promptUndoStack,
+  };
+}
+
+function getSideLintResult(side = state.promptSide) {
+  return side === "uc" ? state.lastUcLintResult : state.lastLintResult;
+}
+
+function syncPromptImmediateVisuals(side = "pos") {
+  const { ta, bd } = getSideElements(side);
+  const lastLint = getSideLintResult(side);
+  if (ta && bd) {
+    if (!lastLint || lastLint._raw !== ta.value) {
+      const escaped = escapeHtml(ta.value);
+      bd.innerHTML = ta.value.endsWith("\n") ? `${escaped}\u200b` : escaped;
+    }
+    bd.scrollTop = ta.scrollTop;
+    bd.scrollLeft = ta.scrollLeft;
   }
-  bd.scrollTop = ta.scrollTop;
-  bd.scrollLeft = ta.scrollLeft;
-  renderTagPillsBar();
-  updateDynamicPromptIndicator();
+  renderTagPillsBar(side);
+  if (side === "pos") updateDynamicPromptIndicator();
 }
 
 function bindSwitchA11y() {
@@ -1000,88 +1040,107 @@ function bindSwitchA11y() {
 
 function setupPromptListeners() {
   bindSwitchA11y();
-  const ta = document.getElementById("prompt-input");
-  const bd = document.getElementById("prompt-backdrop");
-  if (ta && bd) {
-    ta.addEventListener("input", () => {
-      syncPromptImmediateVisuals();
-      clearTimeout(_lintTimer);
-      _lintTimer = setTimeout(() => {
-        runPromptLinter();
-      }, 80);
-    });
-    ta.addEventListener("scroll", () => {
-      bd.scrollTop = ta.scrollTop;
-      bd.scrollLeft = ta.scrollLeft;
-    });
-  }
+  ["pos", "uc"].forEach(side => {
+    const { ta, bd, searchInput } = getSideElements(side);
+    if (ta && bd) {
+      ta.addEventListener("input", () => {
+        syncPromptImmediateVisuals(side);
+        if (side === "uc") {
+          clearTimeout(_ucLintTimer);
+          _ucLintTimer = setTimeout(() => runPromptLinter("uc"), 80);
+        } else {
+          clearTimeout(_lintTimer);
+          _lintTimer = setTimeout(() => runPromptLinter("pos"), 80);
+        }
+      });
+      ta.addEventListener("scroll", () => {
+        bd.scrollTop = ta.scrollTop;
+        bd.scrollLeft = ta.scrollLeft;
+      });
+    }
+    if (searchInput) {
+      searchInput.addEventListener("input", () => {
+        clearTimeout(_tagTimer);
+        _tagTimer = setTimeout(() => queryTagSuggestions(searchInput.value, side), 60);
+      });
+      searchInput.addEventListener("focus", () => {
+        if (searchInput.value.trim()) queryTagSuggestions(searchInput.value, side);
+      });
+    }
+  });
+}
 
-  const searchIn = document.getElementById("tag-search-input");
-  if (searchIn) {
-    searchIn.addEventListener("input", () => {
-      clearTimeout(_tagTimer);
-      _tagTimer = setTimeout(() => queryTagSuggestions(searchIn.value), 60);
-    });
-    searchIn.addEventListener("focus", () => {
-      if (searchIn.value.trim()) queryTagSuggestions(searchIn.value);
-    });
+function updateLintDrawerForSide(side = state.promptSide) {
+  const btn = document.getElementById("lint-status-btn");
+  const listEl = document.getElementById("lint-issues-list");
+  const undoBtn = document.getElementById("undo-lint-btn");
+  const data = getSideLintResult(side);
+  const { undoStack } = getSideElements(side);
+  if (undoBtn) undoBtn.classList.toggle("hidden", undoStack.length === 0);
+  if (!btn || !listEl || !data) return;
+
+  if (data.issue_count > 0) {
+    btn.innerHTML = `${uiIcon("alert", "ui-ic-sm")}<span>发现 ${data.issue_count} 处可规范</span>`;
+    btn.className = "spring-btn inline-flex items-center gap-1 text-[11.5px] px-2 py-0.5 rounded-[6px] ui-btn text-[var(--status-warning)] border-[var(--status-warning)] shrink-0";
+    listEl.innerHTML = data.issues
+      .map(
+        (iss, idx) => `
+        <div class="flex items-center justify-between gap-2 py-1 px-2 rounded-[6px] ui-subgroup">
+          <span class="truncate text-[var(--text-secondary)]">${escapeHtml(iss.message)}</span>
+          <button onclick="applySingleLintFix(${idx})" class="shrink-0 text-[12px] px-2 py-1 rounded-[6px] ui-btn">修复</button>
+        </div>
+      `
+      )
+      .join("");
+  } else {
+    btn.innerHTML = `${uiIcon("check", "ui-ic-sm")}<span>格式规范</span>`;
+    btn.className = "spring-btn inline-flex items-center gap-1 text-[11.5px] px-2 py-0.5 rounded-[6px] ui-btn text-[var(--status-success)] shrink-0";
+    document.getElementById("lint-drawer")?.classList.add("hidden");
   }
 }
 
-async function runPromptLinter() {
-  const ta = document.getElementById("prompt-input");
-  const bd = document.getElementById("prompt-backdrop");
-  const btn = document.getElementById("lint-status-btn");
-  const listEl = document.getElementById("lint-issues-list");
+async function runPromptLinter(side = "pos") {
+  const { ta, bd } = getSideElements(side);
   if (!ta || !bd) return;
 
   const promptSnapshot = ta.value;
-  if (_lintController) _lintController.abort();
-  _lintController = new AbortController();
+  if (side === "uc") {
+    if (_ucLintController) _ucLintController.abort();
+    _ucLintController = new AbortController();
+  } else {
+    if (_lintController) _lintController.abort();
+    _lintController = new AbortController();
+  }
+  const signal = side === "uc" ? _ucLintController.signal : _lintController.signal;
 
   try {
     const res = await fetch("/api/prompt/lint", {
       method: "POST",
-      signal: _lintController.signal,
+      signal,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ prompt: promptSnapshot, model: state.currentModel }),
     });
     const data = await res.json();
     if (ta.value !== promptSnapshot) return;
     data._raw = promptSnapshot;
-    state.lastLintResult = data;
+    if (side === "uc") state.lastUcLintResult = data;
+    else state.lastLintResult = data;
+
     const rawHtml = data.highlighted_html || escapeHtml(ta.value);
     bd.innerHTML = ta.value.endsWith("\n") ? `${rawHtml}\u200b` : rawHtml;
     bd.scrollTop = ta.scrollTop;
     bd.scrollLeft = ta.scrollLeft;
-    renderTagPillsBar();
-    updateDynamicPromptIndicator();
-
-    if (data.issue_count > 0) {
-      btn.innerHTML = `${uiIcon("alert", "ui-ic-sm")}<span>发现 ${data.issue_count} 处可规范</span>`;
-      btn.className = "spring-btn inline-flex items-center gap-1 text-[12px] px-2 py-1 rounded-[6px] ui-btn text-[var(--status-warning)] border-[var(--status-warning)]";
-      listEl.innerHTML = data.issues
-        .map(
-          (iss, idx) => `
-          <div class="flex items-center justify-between gap-2 py-1 px-2 rounded-[6px] ui-subgroup">
-            <span class="truncate text-[var(--text-secondary)]">${escapeHtml(iss.message)}</span>
-            <button onclick="applySingleLintFix(${idx})" class="shrink-0 text-[12px] px-2 py-1 rounded-[6px] ui-btn">修复</button>
-          </div>
-        `
-        )
-        .join("");
-    } else {
-      btn.innerHTML = `${uiIcon("check", "ui-ic-sm")}<span>格式规范</span>`;
-      btn.className = "spring-btn inline-flex items-center gap-1 text-[12px] px-2 py-1 rounded-[6px] ui-btn text-[var(--status-success)]";
-      document.getElementById("lint-drawer")?.classList.add("hidden");
-    }
+    renderTagPillsBar(side);
+    if (side === "pos") updateDynamicPromptIndicator();
+    if (side === state.promptSide) updateLintDrawerForSide(side);
   } catch (e) {}
 }
 
 function toggleLintDrawer() {
   const dr = document.getElementById("lint-drawer");
   if (!dr) return;
-  if (state.lastLintResult && state.lastLintResult.issue_count > 0) {
+  const data = getSideLintResult(state.promptSide);
+  if (data && data.issue_count > 0) {
     dr.classList.toggle("hidden");
   } else {
     showToast("当前提示词完全符合 NovelAI 官方语法规范");
@@ -1089,34 +1148,40 @@ function toggleLintDrawer() {
 }
 
 function applyAllPromptFixes() {
-  if (!state.lastLintResult) return;
-  const ta = document.getElementById("prompt-input");
-  state.promptUndoStack.push(ta.value);
-  ta.value = state.lastLintResult.fixed_prompt;
+  const side = state.promptSide;
+  const data = getSideLintResult(side);
+  if (!data) return;
+  const { ta, undoStack } = getSideElements(side);
+  if (!ta) return;
+  undoStack.push(ta.value);
+  ta.value = data.fixed_prompt;
   document.getElementById("undo-lint-btn")?.classList.remove("hidden");
-  runPromptLinter();
+  runPromptLinter(side);
   showToast("已一键规范所有提示词语法");
 }
 
 function applySingleLintFix(idx) {
-  const issues = state.lastLintResult?.issues || [];
+  const side = state.promptSide;
+  const issues = getSideLintResult(side)?.issues || [];
   const iss = issues[idx];
   if (!iss) return;
-  const ta = document.getElementById("prompt-input");
-  state.promptUndoStack.push(ta.value);
+  const { ta, undoStack } = getSideElements(side);
+  if (!ta) return;
+  undoStack.push(ta.value);
   ta.value = ta.value.slice(0, iss.start) + iss.replacement + ta.value.slice(iss.end);
   document.getElementById("undo-lint-btn")?.classList.remove("hidden");
-  runPromptLinter();
+  runPromptLinter(side);
 }
 
 function undoPromptFix() {
-  if (!state.promptUndoStack.length) return;
-  const ta = document.getElementById("prompt-input");
-  ta.value = state.promptUndoStack.pop();
-  if (!state.promptUndoStack.length) {
+  const side = state.promptSide;
+  const { ta, undoStack } = getSideElements(side);
+  if (!ta || !undoStack.length) return;
+  ta.value = undoStack.pop();
+  if (!undoStack.length) {
     document.getElementById("undo-lint-btn")?.classList.add("hidden");
   }
-  runPromptLinter();
+  runPromptLinter(side);
 }
 
 function toggleWeightMode() {
@@ -1126,12 +1191,14 @@ function toggleWeightMode() {
     return;
   }
   state.weightMode = state.weightMode === "brackets" ? "numeric" : "brackets";
-  document.getElementById("weight-mode-btn").textContent =
-    state.weightMode === "numeric" ? "语法: 1.1::" : "语法: {}";
+  const label = state.weightMode === "numeric" ? "语法: 1.1::" : "语法: {}";
+  document.querySelectorAll(".weight-mode-label").forEach(btn => {
+    btn.textContent = label;
+  });
 }
 
-async function adjustSelectedWeight(delta) {
-  const ta = document.getElementById("prompt-input");
+async function adjustSelectedWeight(delta, side = state.promptSide) {
+  const { ta } = getSideElements(side);
   if (!ta) return;
   let start = ta.selectionStart;
   let end = ta.selectionEnd;
@@ -1167,17 +1234,17 @@ async function adjustSelectedWeight(delta) {
     ta.value = val.slice(0, start) + replacement + val.slice(end);
     ta.focus();
     ta.setSelectionRange(start + prefixSpace.length, start + replacement.length);
-    runPromptLinter();
+    runPromptLinter(side);
   } catch (e) {}
 }
 
-async function queryTagSuggestions(query) {
-  const menu = document.getElementById("tag-suggestions-menu");
-  if (!menu) return;
+async function queryTagSuggestions(query, side = "pos") {
+  const { searchMenu } = getSideElements(side);
+  if (!searchMenu) return;
   const q = (query || "").trim();
   if (!q) {
     if (_tagController) _tagController.abort();
-    menu.classList.add("hidden");
+    searchMenu.classList.add("hidden");
     return;
   }
   if (_tagController) _tagController.abort();
@@ -1189,13 +1256,13 @@ async function queryTagSuggestions(query) {
     const data = await res.json();
     const tags = data.tags || [];
     if (!tags.length) {
-      menu.classList.add("hidden");
+      searchMenu.classList.add("hidden");
       return;
     }
-    menu.innerHTML = tags
+    searchMenu.innerHTML = tags
       .map(
         t => `
-        <button type="button" onclick="insertTagFromSearch('${escapeHtml(t.tag)}')" class="ui-menu-item w-full flex items-center justify-between px-3 py-2 text-left text-[12.5px]">
+        <button type="button" onclick="insertTagFromSearch('${escapeHtml(t.tag)}', '${side}')" class="ui-menu-item w-full flex items-center justify-between px-3 py-2 text-left text-[12.5px]">
           <div>
             <span class="font-mono font-semibold text-[var(--text-primary)]">${escapeHtml(t.tag)}</span>
             <span class="ml-2 text-[12px] text-[var(--text-muted)]">${escapeHtml(t.cn || "")}</span>
@@ -1205,18 +1272,19 @@ async function queryTagSuggestions(query) {
       `
       )
       .join("");
-    menu.classList.remove("hidden");
+    searchMenu.classList.remove("hidden");
   } catch (e) {}
 }
 
-function insertTagFromSearch(tag) {
-  const ta = document.getElementById("prompt-input");
+function insertTagFromSearch(tag, side = "pos") {
+  const { ta, searchMenu, searchInput } = getSideElements(side);
+  if (!ta) return;
   const cur = ta.value.trim();
   ta.value = cur ? (cur.endsWith(",") ? `${cur} ${tag}` : `${cur}, ${tag}`) : tag;
-  document.getElementById("tag-suggestions-menu")?.classList.add("hidden");
-  document.getElementById("tag-search-input").value = "";
-  syncPromptImmediateVisuals();
-  runPromptLinter();
+  searchMenu?.classList.add("hidden");
+  if (searchInput) searchInput.value = "";
+  syncPromptImmediateVisuals(side);
+  runPromptLinter(side);
 }
 
 function renderSnippetsBar() {
@@ -1687,7 +1755,7 @@ function exportBinaryInpaintMask() {
 // ================= Real NovelAI Generation, Auto-Roll Queue & Director Tools =================
 function buildGeneratePayload() {
   const promptVal = getActiveEffectivePrompt();
-  const ucVal = document.getElementById("uc-input").value.trim();
+  const ucVal = getActiveEffectiveUc();
   const seedVal = parseInt(document.getElementById("seed-input").value || "0", 10);
   const spec = state.models[state.currentModel];
   return {
@@ -1735,10 +1803,51 @@ function setBatchCount(n) {
   });
 }
 
+let _genElapsedTimer = null;
+let _genStartMs = 0;
+
+function startGeneratingOverlay(statusLabel, metaLabel, subLabel) {
+  const overlay = document.getElementById("generating-overlay");
+  const statusEl = document.getElementById("generating-status-text");
+  const metaEl = document.getElementById("generating-meta-text");
+  const subEl = document.getElementById("generating-sub-text");
+  const elapsedEl = document.getElementById("generating-elapsed");
+  const cancelBtn = document.getElementById("cancel-generate-btn");
+
+  if (statusEl) statusEl.textContent = statusLabel || "正在渲染画面…";
+  if (metaEl) metaEl.textContent = metaLabel || `${state.models[state.currentModel]?.short_name || state.currentModel} · ${state.width}×${state.height} · ${state.steps} 步`;
+  if (subEl) subEl.textContent = subLabel || `${computeInstantCostBadge().badge} · 自动落盘至 D:\\NAI-Studio\\outputs`;
+  if (elapsedEl) elapsedEl.textContent = "0.0s";
+  if (cancelBtn) cancelBtn.disabled = false;
+
+  _genStartMs = performance.now();
+  clearInterval(_genElapsedTimer);
+  _genElapsedTimer = setInterval(() => {
+    const el = document.getElementById("generating-elapsed");
+    if (el) el.textContent = `${((performance.now() - _genStartMs) / 1000).toFixed(1)}s`;
+  }, 100);
+
+  overlay?.classList.remove("hidden");
+}
+
+function stopGeneratingOverlay() {
+  clearInterval(_genElapsedTimer);
+  _genElapsedTimer = null;
+  state.activeGenController = null;
+  document.getElementById("generating-overlay")?.classList.add("hidden");
+}
+
+function cancelActiveGeneration() {
+  if (state.activeGenController) {
+    state.activeGenController.abort();
+    const cancelBtn = document.getElementById("cancel-generate-btn");
+    if (cancelBtn) cancelBtn.disabled = true;
+    showToast("已取消当前生成请求");
+  }
+}
+
 async function triggerGenerate() {
   const btn = document.getElementById("generate-btn");
-  const overlay = document.getElementById("generating-overlay");
-  const statusText = document.getElementById("generating-status-text");
 
   if (state.action !== "generate" && !state.stageImageB64 && state.stageImageUrl) {
     state.stageImageB64 = await urlToBase64(state.stageImageUrl);
@@ -1767,12 +1876,21 @@ async function triggerGenerate() {
   }
 
   btn.disabled = true;
-  overlay.classList.remove("hidden");
-  statusText.textContent = `正在调用 ${state.models[state.currentModel]?.name || state.currentModel} 渲染图像...`;
+  if (state.activeGenController) state.activeGenController.abort();
+  state.activeGenController = new AbortController();
+
+  const spec = state.models[state.currentModel];
+  const cost = computeInstantCostBadge();
+  startGeneratingOverlay(
+    `正在渲染画面…`,
+    `${spec?.name || state.currentModel} · ${state.width}×${state.height} · Steps ${state.steps}`,
+    `${cost.badge} · 自动落盘至 D:\\NAI-Studio\\outputs`
+  );
 
   try {
     const res = await fetch("/api/generate", {
       method: "POST",
+      signal: state.activeGenController.signal,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
@@ -1800,10 +1918,12 @@ async function triggerGenerate() {
     renderFullGallery();
     showToast(`出图完成 (${data.item.generation_time}s) · 已保存至 D:\\NAI-Studio\\outputs`);
   } catch (err) {
-    showToast(err.message || "生成失败", 4200);
+    if (err?.name !== "AbortError") {
+      showToast(err.message || "生成失败", 4200);
+    }
   } finally {
     btn.disabled = false;
-    overlay.classList.add("hidden");
+    stopGeneratingOverlay();
   }
 }
 
@@ -1896,14 +2016,18 @@ async function runDirectorTool(reqType, extra = {}) {
     return;
   }
 
-  const overlay = document.getElementById("generating-overlay");
-  const statusText = document.getElementById("generating-status-text");
-  overlay.classList.remove("hidden");
-  statusText.textContent = `正在执行官方 Director 工具 (${reqType})...`;
+  if (state.activeGenController) state.activeGenController.abort();
+  state.activeGenController = new AbortController();
+  startGeneratingOverlay(
+    `正在执行 Director 处理…`,
+    `工具类型: ${reqType} · 保持原画布分辨率`,
+    `0 Anlas · Opus 免费处理通道`
+  );
 
   try {
     const res = await fetch("/api/augment", {
       method: "POST",
+      signal: state.activeGenController.signal,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         req_type: reqType,
@@ -1926,9 +2050,11 @@ async function runDirectorTool(reqType, extra = {}) {
     renderWorkbenchHistory();
     showToast(`Director (${reqType}) 处理完成 (0 Anlas)`);
   } catch (err) {
-    showToast(err.message || "Director 工具执行失败", 4000);
+    if (err?.name !== "AbortError") {
+      showToast(err.message || "Director 工具执行失败", 4000);
+    }
   } finally {
-    overlay.classList.add("hidden");
+    stopGeneratingOverlay();
   }
 }
 
@@ -1966,6 +2092,19 @@ function updateStageActionButtons() {
   if (downloadBtn) downloadBtn.disabled = !active;
   if (lightboxBtn) lightboxBtn.disabled = !active && state.gallery.length === 0;
   if (panWrap) panWrap.classList.toggle("can-pan", active && state.stageZoom > 1.0);
+}
+
+function handleStageImageError() {
+  const img = document.getElementById("stage-img");
+  if (img) {
+    img.removeAttribute("src");
+    img.classList.add("hidden");
+  }
+  state.stageImageUrl = "";
+  state.stageImageB64 = "";
+  state.stageItemId = null;
+  document.getElementById("stage-empty")?.classList.remove("hidden");
+  updateStageActionButtons();
 }
 
 function setStageLocalImage(dataUrl) {
@@ -2037,7 +2176,10 @@ function restoreRecipeToWorkbench(item) {
   renderResolutionButtons();
   renderCharacterSlots();
   renderActiveArtistMixBar();
-  runPromptLinter();
+  syncPromptImmediateVisuals("pos");
+  syncPromptImmediateVisuals("uc");
+  runPromptLinter("pos");
+  runPromptLinter("uc");
   updateStageInfoPill();
   updateCostEstimate();
   switchTab("workbench");
@@ -2058,7 +2200,7 @@ function renderWorkbenchHistory() {
       return `
       <div data-id="${item.id}" class="history-film-item rounded-[8px] p-2 space-y-1.5 ${isActive ? "is-active-stage" : ""}">
         <div class="flex gap-2.5 cursor-pointer" onclick="setStageFromGalleryItem(state.gallery.find(x=>x.id===${item.id}), false)">
-          <img src="${item.image_url}" alt="thumb" class="w-12 h-16 rounded-[5px] object-cover object-top shrink-0 border border-[var(--border-hairline)] bg-[var(--bg-canvas-well)]" />
+          <img src="${item.image_url}" alt="" onerror="this.onerror=null;this.style.opacity='0.28';" class="w-12 h-16 rounded-[5px] object-cover object-top shrink-0 border border-[var(--border-hairline)] bg-[var(--bg-canvas-well)]" />
           <div class="min-w-0 flex-1 flex flex-col justify-between py-0.5">
             <div class="flex items-center justify-between gap-1">
               <span class="text-[11px] px-1.5 py-0.5 rounded-[4px] ui-badge text-[var(--text-primary)] font-mono truncate">${escapeHtml(item.model_short)}</span>
@@ -2707,7 +2849,7 @@ async function renderFullGallery(reloadFromServer = false) {
       it => `
       <div class="rounded-[10px] ui-card overflow-hidden flex flex-col group">
         <div class="relative shrink-0 overflow-hidden bg-[var(--bg-canvas-well)] aspect-[4/5] flex items-center justify-center">
-          <img src="${it.image_url}" alt="artwork" class="w-full h-full object-contain transition-opacity duration-150 group-hover:opacity-95 cursor-pointer" onclick="setStageFromGalleryItem(state.gallery.find(x=>x.id===${it.id}), false);switchTab('workbench')" />
+          <img src="${it.image_url}" alt="" onerror="this.onerror=null;this.style.opacity='0.22';" class="w-full h-full object-contain transition-opacity duration-150 group-hover:opacity-95 cursor-pointer" onclick="setStageFromGalleryItem(state.gallery.find(x=>x.id===${it.id}), false);switchTab('workbench')" />
           <span class="absolute top-2 left-2 px-2 py-0.5 rounded-[5px] studio-hud text-[11.5px] font-mono text-[var(--text-primary)]">${escapeHtml(it.model_short)}</span>
           <button onclick="toggleGalleryFav(${it.id})" aria-label="收藏作品" class="spring-btn absolute top-2 right-2 w-7 h-7 rounded-[6px] studio-hud flex items-center justify-center ${it.favorite ? "text-[var(--status-warning)]" : "text-[var(--text-muted)]"}">
             ${uiIcon("star")}
@@ -2854,9 +2996,45 @@ async function runMcpTest(tool, args) {
   }
 }
 
-// ================= Custom Background Color & Water-Droplet Clarity =================
+// ================= Studio Appearance Studio (Coordinated Dark/Light Presets, Texture & Blur) =================
+const APPEARANCE_LOCAL_KEY = "nai_studio_appearance_v1";
+
+const APPEARANCE_PRESETS = {
+  dark: [
+    { id: "obsidian", name: "曜石暗房", base: "#0a0c10", well: "#06080b", panel: "#0e1117", alt: "#131720", dot: "rgba(255,255,255,0.055)", hex: "#080a0f" },
+    { id: "slate", name: "深海石板", base: "#091016", well: "#060b10", panel: "#0d151c", alt: "#121c25", dot: "rgba(226,236,245,0.06)", hex: "#091319" },
+    { id: "graphite", name: "中性石墨", base: "#101113", well: "#0b0c0e", panel: "#141619", alt: "#1a1c20", dot: "rgba(255,255,255,0.05)", hex: "#121417" },
+    { id: "midnight", name: "午夜靛蓝", base: "#0a0e18", well: "#060912", panel: "#0e1320", alt: "#141a2b", dot: "rgba(220,232,255,0.055)", hex: "#0c1724" },
+    { id: "jade", name: "墨玉青灰", base: "#091311", well: "#050d0b", panel: "#0d1815", alt: "#12201c", dot: "rgba(220,245,235,0.055)", hex: "#0e1d19" },
+    { id: "espresso", name: "暖岩炭棕", base: "#120f0d", well: "#0c0a08", panel: "#161311", alt: "#1e1a17", dot: "rgba(255,244,232,0.05)", hex: "#161311" },
+  ],
+  light: [
+    { id: "paper", name: "中性制图灰", base: "#eaedf2", well: "#e3e7ee", panel: "#f6f7f9", alt: "#edf0f5", dot: "rgba(15,23,42,0.085)", hex: "#e3e7ee" },
+    { id: "gallery", name: "纯白画廊", base: "#f0f2f5", well: "#eaedf2", panel: "#ffffff", alt: "#f4f6f8", dot: "rgba(15,23,42,0.075)", hex: "#eaedf2" },
+    { id: "cotton", name: "暖调棉纸", base: "#f2efe9", well: "#eae5dc", panel: "#faf8f4", alt: "#f0ece4", dot: "rgba(45,35,20,0.075)", hex: "#eae5dc" },
+    { id: "mist", name: "雾青灰调", base: "#eaf0f2", well: "#e1e9ec", panel: "#f5f8f9", alt: "#eaf0f3", dot: "rgba(15,40,50,0.08)", hex: "#e1e9ec" },
+    { id: "sand", name: "砂岩浅灰", base: "#eeece8", well: "#e5e2dc", panel: "#f7f6f3", alt: "#edeae4", dot: "rgba(35,32,26,0.08)", hex: "#e5e2dc" },
+    { id: "ice", name: "冷调冰蓝", base: "#eaf0f8", well: "#dfe7f2", panel: "#f5f8fc", alt: "#eaf0f7", dot: "rgba(15,35,65,0.08)", hex: "#dfe7f2" },
+  ],
+};
+
+function loadAppearanceLocal() {
+  try {
+    return JSON.parse(localStorage.getItem(APPEARANCE_LOCAL_KEY) || "{}");
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveAppearanceLocal(patch) {
+  try {
+    const cur = loadAppearanceLocal();
+    localStorage.setItem(APPEARANCE_LOCAL_KEY, JSON.stringify({ ...cur, ...patch }));
+  } catch (e) {}
+}
+
 function hexToHsl(hex) {
-  const clean = (hex || "#0b262c").replace("#", "");
+  const clean = (hex || "#091319").replace("#", "");
   let r = parseInt(clean.slice(0, 2), 16) / 255;
   let g = parseInt(clean.slice(2, 4), 16) / 255;
   let b = parseInt(clean.slice(4, 6), 16) / 255;
@@ -2879,15 +3057,121 @@ function hexToHsl(hex) {
 function toggleBgMenu(force) {
   const m = document.getElementById("bg-menu");
   if (!m) return;
-  m.classList.toggle("hidden", typeof force === "boolean" ? !force : !m.classList.contains("hidden"));
+  const nextHidden = typeof force === "boolean" ? !force : !m.classList.contains("hidden");
+  m.classList.toggle("hidden", nextHidden);
+  if (!nextHidden) renderAppearanceMenu();
 }
 
 let _bgConfigTimer = null;
 let _clarityConfigTimer = null;
 
+function clearCustomSurfaceVars() {
+  const root = document.documentElement.style;
+  ["--bg-base", "--bg-canvas-well", "--surface-panel", "--surface-panel-alt", "--canvas-dot-color"].forEach(v =>
+    root.removeProperty(v)
+  );
+}
+
+function renderAppearanceMenu() {
+  const isLight = document.documentElement.classList.contains("light");
+  const modeKey = isLight ? "light" : "dark";
+  const darkBtn = document.getElementById("appearance-mode-dark");
+  const lightBtn = document.getElementById("appearance-mode-light");
+  if (darkBtn) {
+    darkBtn.className = !isLight
+      ? "appearance-mode-btn spring-btn px-2.5 py-1 rounded-[5px] font-medium bg-[var(--cta-bg)] text-[var(--cta-fg)]"
+      : "appearance-mode-btn spring-btn px-2.5 py-1 rounded-[5px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)]";
+  }
+  if (lightBtn) {
+    lightBtn.className = isLight
+      ? "appearance-mode-btn spring-btn px-2.5 py-1 rounded-[5px] font-medium bg-[var(--cta-bg)] text-[var(--cta-fg)]"
+      : "appearance-mode-btn spring-btn px-2.5 py-1 rounded-[5px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)]";
+  }
+
+  const local = loadAppearanceLocal();
+  const activePresetId = isLight ? local.lightPresetId || "paper" : local.darkPresetId || "obsidian";
+  const presets = APPEARANCE_PRESETS[modeKey];
+  const activePreset = presets.find(p => p.id === activePresetId);
+  const labelEl = document.getElementById("appearance-preset-label");
+  if (labelEl) {
+    labelEl.textContent = activePreset ? activePreset.name : state.config.bg_preset_name || "自定义色";
+  }
+
+  const grid = document.getElementById("appearance-presets-grid");
+  if (grid) {
+    grid.innerHTML = presets
+      .map(p => {
+        const isAct = p.id === activePresetId && !local[`customHex_${modeKey}`];
+        return `
+        <button type="button" onclick="applyAppearancePreset('${p.id}')" class="spring-btn text-left rounded-[8px] p-1.5 border transition-colors ${
+          isAct
+            ? "border-[var(--cta-bg)] bg-[var(--accent-tint)]"
+            : "border-[var(--border-hairline)] hover:border-[var(--border-hover)] bg-[var(--surface-panel-alt)]"
+        }">
+          <div class="h-5 rounded-[5px] overflow-hidden flex border border-[var(--border-hairline)] mb-1">
+            <span class="w-1/2 h-full block" style="background:${p.panel}"></span>
+            <span class="w-1/2 h-full block" style="background:${p.well}"></span>
+          </div>
+          <div class="text-[11px] font-medium truncate text-[var(--text-primary)]">${escapeHtml(p.name)}</div>
+        </button>
+      `;
+      })
+      .join("");
+  }
+
+  document.querySelectorAll(".canvas-tex-btn").forEach(btn => {
+    const act = btn.dataset.tex === state.canvasTexture;
+    btn.className = act
+      ? "canvas-tex-btn spring-btn py-1 rounded-[5px] font-medium bg-[var(--cta-bg)] text-[var(--cta-fg)]"
+      : "canvas-tex-btn spring-btn py-1 rounded-[5px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)]";
+  });
+}
+
+function applyAppearancePreset(presetId, persist = true) {
+  const isLight = document.documentElement.classList.contains("light");
+  const modeKey = isLight ? "light" : "dark";
+  const presets = APPEARANCE_PRESETS[modeKey];
+  const preset = presets.find(p => p.id === presetId) || presets[0];
+
+  const root = document.documentElement.style;
+  root.setProperty("--bg-base", preset.base);
+  root.setProperty("--bg-canvas-well", preset.well);
+  root.setProperty("--surface-panel", preset.panel);
+  root.setProperty("--surface-panel-alt", preset.alt);
+  root.setProperty("--canvas-dot-color", preset.dot);
+
+  state.config.bg_hex = preset.hex;
+  state.config.bg_preset_name = preset.name;
+  const picker = document.getElementById("bg-color-picker");
+  const hexLbl = document.getElementById("bg-hex-label");
+  if (picker) picker.value = preset.well;
+  if (hexLbl) hexLbl.textContent = preset.well.toUpperCase();
+
+  saveAppearanceLocal({
+    [`${modeKey}PresetId`]: preset.id,
+    [`customHex_${modeKey}`]: "",
+  });
+
+  setGlassClarity(state.config.glass_clarity || 88, false);
+  renderAppearanceMenu();
+
+  if (persist) {
+    showToast(`已应用外观：${preset.name}`);
+    clearTimeout(_bgConfigTimer);
+    _bgConfigTimer = setTimeout(() => {
+      fetch("/api/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bg_hex: preset.hex, bg_preset_name: preset.name }),
+      });
+    }, 0);
+  }
+}
+
 function applyBgHex(hex, presetName = null, persist = true) {
-  const lower = (hex || "").toLowerCase();
-  const normalizedHex = !hex || lower === "#0b262c" || lower === "#0b0c0e" ? "#091319" : hex;
+  const normalizedHex = /^#[0-9a-f]{6}$/i.test(hex || "") ? hex : "#091319";
+  const isLight = document.documentElement.classList.contains("light");
+  const modeKey = isLight ? "light" : "dark";
   state.config.bg_hex = normalizedHex;
   const picker = document.getElementById("bg-color-picker");
   const label = document.getElementById("bg-hex-label");
@@ -2895,38 +3179,52 @@ function applyBgHex(hex, presetName = null, persist = true) {
   if (label) label.textContent = normalizedHex.toUpperCase();
 
   const [h, s, l] = hexToHsl(normalizedHex);
-  const isLight = document.documentElement.classList.contains("light");
   const root = document.documentElement.style;
-  const sat = Math.min(s, 36);
 
-  if (normalizedHex === "#091319" && !presetName) {
-    root.removeProperty("--bg-base");
-    root.removeProperty("--bg-canvas-well");
-  } else if (isLight) {
-    root.setProperty("--bg-base", `hsl(${h}, ${Math.min(sat, 22)}%, 94%)`);
-    root.setProperty("--bg-canvas-well", `hsl(${h}, ${Math.min(sat, 26)}%, 89%)`);
+  if (isLight) {
+    const sat = Math.min(s, 14);
+    root.setProperty("--bg-base", `hsl(${h}, ${sat}%, 92%)`);
+    root.setProperty("--bg-canvas-well", `hsl(${h}, ${Math.min(s, 18)}%, 88%)`);
+    root.setProperty("--surface-panel", `hsl(${h}, ${Math.min(sat, 10)}%, 97%)`);
+    root.setProperty("--surface-panel-alt", `hsl(${h}, ${Math.min(sat, 12)}%, 94%)`);
   } else {
-    const baseL = Math.min(Math.max(l, 4), 12);
+    const sat = Math.min(s, 22);
+    const baseL = Math.min(Math.max(l, 4), 11);
     root.setProperty("--bg-base", `hsl(${h}, ${sat}%, ${baseL}%)`);
     root.setProperty("--bg-canvas-well", `hsl(${h}, ${sat}%, ${Math.max(2, baseL - 3)}%)`);
+    root.setProperty("--surface-panel", `hsl(${h}, ${sat}%, ${baseL + 2}%)`);
+    root.setProperty("--surface-panel-alt", `hsl(${h}, ${sat}%, ${baseL + 5}%)`);
   }
 
+  saveAppearanceLocal({ [`customHex_${modeKey}`]: normalizedHex });
   setGlassClarity(state.config.glass_clarity || 88, false);
-  if (presetName) showToast(`已切换背景色：${presetName}`);
+  renderAppearanceMenu();
+
   if (persist) {
     clearTimeout(_bgConfigTimer);
     _bgConfigTimer = setTimeout(() => {
       fetch("/api/config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bg_hex: normalizedHex, bg_preset_name: presetName || "" }),
+        body: JSON.stringify({ bg_hex: normalizedHex, bg_preset_name: presetName || "自定义色" }),
       });
-    }, presetName ? 0 : 180);
+    }, 180);
   }
 }
 
+function setCanvasTexture(tex = "dots", persist = true) {
+  const valid = ["dots", "grid", "frame", "solid"].includes(tex) ? tex : "dots";
+  state.canvasTexture = valid;
+  document.querySelectorAll(".studio-canvas-grid").forEach(el => {
+    el.classList.remove("tex-grid", "tex-frame", "tex-solid");
+    if (valid !== "dots") el.classList.add(`tex-${valid}`);
+  });
+  if (persist) saveAppearanceLocal({ canvasTexture: valid });
+  renderAppearanceMenu();
+}
+
 function setGlassClarity(val, persist = true) {
-  const clarity = Number(val);
+  const clarity = Math.max(50, Math.min(96, Number(val) || 88));
   state.config.glass_clarity = clarity;
   const valEl = document.getElementById("glass-clarity-val");
   const slider = document.getElementById("glass-clarity-slider");
@@ -2934,7 +3232,7 @@ function setGlassClarity(val, persist = true) {
   if (slider) slider.value = String(clarity);
 
   const isLight = document.documentElement.classList.contains("light");
-  const alpha = Math.max(0.56, Math.min(0.96, clarity / 100));
+  const alpha = Math.max(0.5, Math.min(0.96, clarity / 100));
   const root = document.documentElement.style;
   const rgbaVal = isLight ? `rgba(255, 255, 255, ${alpha.toFixed(2)})` : `rgba(16, 20, 28, ${alpha.toFixed(2)})`;
   root.setProperty("--surface-glass", rgbaVal);
@@ -2952,13 +3250,80 @@ function setGlassClarity(val, persist = true) {
   }
 }
 
+function setGlassBlur(val, persist = true) {
+  const px = Math.max(0, Math.min(24, Number(val)));
+  state.glassBlur = px;
+  document.documentElement.style.setProperty("--hud-blur", `${px}px`);
+  const valEl = document.getElementById("glass-blur-val");
+  const slider = document.getElementById("glass-blur-slider");
+  if (valEl) valEl.textContent = `${px}px`;
+  if (slider) slider.value = String(px);
+  if (persist) saveAppearanceLocal({ glassBlur: px });
+}
+
+function applySavedThemeSurface(isLight) {
+  const local = loadAppearanceLocal();
+  const modeKey = isLight ? "light" : "dark";
+  const customHex = local[`customHex_${modeKey}`];
+  if (customHex) {
+    applyBgHex(customHex, "自定义微调", false);
+  } else {
+    const presetId = local[`${modeKey}PresetId`] || (isLight ? "paper" : "obsidian");
+    applyAppearancePreset(presetId, false);
+  }
+}
+
+function initAppearanceSettings(cfg = {}) {
+  const rootEl = document.documentElement;
+  const isLight = cfg.theme === "light";
+  rootEl.classList.toggle("light", isLight);
+  document.getElementById("theme-label").textContent = isLight ? "深色模式" : "浅色模式";
+  document.getElementById("theme-icon-use")?.setAttribute("href", isLight ? "#ic-moon" : "#ic-sun");
+
+  const local = loadAppearanceLocal();
+  // Map legacy saved dark preset hex if user hasn't picked a per-theme preset yet
+  if (cfg.bg_hex && !local.darkPresetId) {
+    const matchDark = APPEARANCE_PRESETS.dark.find(p => p.hex.toLowerCase() === cfg.bg_hex.toLowerCase());
+    if (matchDark) saveAppearanceLocal({ darkPresetId: matchDark.id });
+  }
+  applySavedThemeSurface(isLight);
+  setCanvasTexture(local.canvasTexture || "dots", false);
+  setGlassClarity(cfg.glass_clarity || 88, false);
+  setGlassBlur(local.glassBlur !== undefined ? local.glassBlur : 18, false);
+}
+
+function setThemeMode(mode) {
+  const wantLight = mode === "light";
+  const isCurrentlyLight = document.documentElement.classList.contains("light");
+  if (wantLight === isCurrentlyLight) return;
+  toggleTheme();
+}
+
+function resetAppearanceDefaults() {
+  const isLight = document.documentElement.classList.contains("light");
+  const modeKey = isLight ? "light" : "dark";
+  const defaultId = isLight ? "paper" : "obsidian";
+  saveAppearanceLocal({
+    [`${modeKey}PresetId`]: defaultId,
+    [`customHex_${modeKey}`]: "",
+    canvasTexture: "dots",
+    glassBlur: 18,
+  });
+  clearCustomSurfaceVars();
+  applyAppearancePreset(defaultId, true);
+  setCanvasTexture("dots", true);
+  setGlassClarity(88, true);
+  setGlassBlur(18, true);
+  showToast("已恢复当前主题默认外观");
+}
+
 function toggleTheme() {
   const rootEl = document.documentElement;
   rootEl.classList.add("theme-sync");
   const isLight = rootEl.classList.toggle("light");
   document.getElementById("theme-label").textContent = isLight ? "深色模式" : "浅色模式";
   document.getElementById("theme-icon-use")?.setAttribute("href", isLight ? "#ic-moon" : "#ic-sun");
-  applyBgHex(state.config.bg_hex || "#091319", null, false);
+  applySavedThemeSurface(isLight);
   void rootEl.offsetHeight;
   requestAnimationFrame(() => rootEl.classList.remove("theme-sync"));
   fetch("/api/config", {
@@ -2968,12 +3333,16 @@ function toggleTheme() {
   });
 }
 
-// ================= V2.1 Interactive Tag Pills & Dynamic Wildcard Preview =================
+// ================= V2.1 Interactive Tag Pills (Pos + UC Unified) & Dynamic Wildcard Preview =================
 const QUICK_CN_HINTS = {
   "1girl": "单人女孩", "1boy": "单人男孩", "solo": "单人", "silver hair": "银发",
   "blue eyes": "蓝眼", "serafuku": "水手服", "sunset": "夕阳", "backlighting": "逆光",
   "wind": "微风", "detailed eyes": "精致瞳孔", "rooftop": "天台",
-  "transparent background": "透明底", "masterpiece": "杰作", "best quality": "最佳画质"
+  "transparent background": "透明底", "masterpiece": "杰作", "best quality": "最佳画质",
+  "lowres": "低分辨率", "bad anatomy": "人体崩坏", "bad hands": "手部崩坏",
+  "missing fingers": "缺指", "extra digit": "多指", "fewer digits": "少指",
+  "blurry": "模糊", "watermark": "水印", "worst quality": "最差画质",
+  "bad quality": "低质量", "jpeg artifacts": "压缩噪点", "extra arms": "多余手臂", "extra legs": "多余腿部"
 };
 
 function parsePromptSegments(text) {
@@ -3000,16 +3369,27 @@ function parsePromptSegments(text) {
   return parts;
 }
 
-function getActiveEffectivePrompt() {
-  const raw = document.getElementById("prompt-input")?.value || "";
-  if (!state.mutedTags || state.mutedTags.size === 0) return raw.trim();
-  const kept = parsePromptSegments(raw).filter(seg => !state.mutedTags.has(seg.toLowerCase()));
+function getActiveEffectiveSidePrompt(side = "pos") {
+  const { ta, mutedSet } = getSideElements(side);
+  const raw = ta?.value || "";
+  if (!mutedSet || mutedSet.size === 0) return raw.trim();
+  const kept = parsePromptSegments(raw).filter(seg => !mutedSet.has(seg.toLowerCase()));
   return kept.join(", ");
 }
 
+function getActiveEffectivePrompt() {
+  return getActiveEffectiveSidePrompt("pos");
+}
+
+function getActiveEffectiveUc() {
+  return getActiveEffectiveSidePrompt("uc");
+}
+
 let _dragTagIdx = null;
-function handleTagDragStart(idx, ev) {
+let _dragTagSide = "pos";
+function handleTagDragStart(idx, ev, side = "pos") {
   _dragTagIdx = idx;
+  _dragTagSide = side;
   if (ev.dataTransfer) {
     ev.dataTransfer.effectAllowed = "move";
     ev.dataTransfer.setData("text/plain", String(idx));
@@ -3022,61 +3402,67 @@ function handleTagDragOver(ev) {
 function handleTagDragLeave(ev) {
   ev.currentTarget?.classList.remove("drag-over");
 }
-function handleTagDrop(targetIdx, ev) {
+function handleTagDrop(targetIdx, ev, side = "pos") {
   ev.preventDefault();
   ev.currentTarget?.classList.remove("drag-over");
   const fromIdx = _dragTagIdx;
+  const fromSide = _dragTagSide;
   _dragTagIdx = null;
-  if (fromIdx === null || fromIdx === targetIdx) return;
-  const ta = document.getElementById("prompt-input");
+  if (fromIdx === null || fromIdx === targetIdx || fromSide !== side) return;
+  const { ta } = getSideElements(side);
   if (!ta) return;
   const segs = parsePromptSegments(ta.value);
   if (fromIdx < 0 || fromIdx >= segs.length || targetIdx < 0 || targetIdx >= segs.length) return;
   const [moved] = segs.splice(fromIdx, 1);
   segs.splice(targetIdx, 0, moved);
   ta.value = segs.join(", ");
-  syncPromptImmediateVisuals();
-  runPromptLinter();
+  syncPromptImmediateVisuals(side);
+  runPromptLinter(side);
 }
 
-function renderTagPillsBar() {
-  const bar = document.getElementById("tag-pills-bar");
-  const cnt = document.getElementById("prompt-token-count");
-  const ta = document.getElementById("prompt-input");
+function renderTagPillsBar(side = "pos") {
+  const { ta, pillsBar: bar, countEl: cnt, mutedSet } = getSideElements(side);
   if (!bar || !ta) return;
 
   const segments = parsePromptSegments(ta.value);
-  if (cnt) cnt.textContent = `${segments.length} tags` + (state.mutedTags.size ? ` (${state.mutedTags.size} 静音)` : "");
+  if (cnt) cnt.textContent = `${segments.length} tags` + (mutedSet.size ? ` (${mutedSet.size} 静音)` : "");
   if (!segments.length) {
-    bar.innerHTML = `<span class="text-[12px] text-[var(--muted-foreground)]">输入提示词后自动生成可拖拽排序的 Tag 胶囊...</span>`;
+    bar.innerHTML = `<span class="text-[12px] text-[var(--muted-foreground)]">${
+      side === "uc" ? "输入负面词后自动生成可调权重的 Tag 胶囊..." : "输入提示词后自动生成可拖拽排序的 Tag 胶囊..."
+    }</span>`;
     return;
   }
 
   bar.innerHTML = segments
     .map((seg, idx) => {
-      const isMuted = state.mutedTags.has(seg.toLowerCase());
+      const isMuted = mutedSet.has(seg.toLowerCase());
       const isWildcard = /\{[^}]*\|[^}]*\}|__[a-zA-Z0-9_\-]+__/.test(seg);
       const hasWeight = /^(\{+|\[+|-?\d+(?:\.\d+)?::)/.test(seg);
       const cleanKey = seg.replace(/^\{+|\[+|\}+|\]+$/g, "").replace(/^-?\d+(?:\.\d+)?::|::$/g, "").trim().toLowerCase();
       const cn = QUICK_CN_HINTS[cleanKey] || "";
       const cls = `tag-pill ${isMuted ? "muted" : ""} ${isWildcard ? "wildcard" : hasWeight ? "weighted" : ""}`;
       return `
-        <span class="${cls}" draggable="true" ondragstart="handleTagDragStart(${idx}, event)" ondragover="handleTagDragOver(event)" ondragleave="handleTagDragLeave(event)" ondrop="handleTagDrop(${idx}, event)" onclick="toggleMuteTagPill('${escapeHtml(seg)}')" title="单击静音/恢复，拖拽调整词序，右侧 +/- 调权重">
+        <span class="${cls}" draggable="true" ondragstart="handleTagDragStart(${idx}, event, '${side}')" ondragover="handleTagDragOver(event)" ondragleave="handleTagDragLeave(event)" ondrop="handleTagDrop(${idx}, event, '${side}')" onclick="toggleMuteTagPill(${idx}, '${side}')" title="单击静音/恢复，拖拽调整词序，右侧 +/- 调权重">
           <span class="font-mono">${escapeHtml(seg)}</span>
           ${cn ? `<span class="tag-pill-cn">${escapeHtml(cn)}</span>` : ""}
-          <button type="button" onclick="event.stopPropagation();adjustTagPillWeight(${idx}, 1)" class="px-1 rounded-[6px] hover:bg-[var(--accent-tint)] text-[12px] font-bold" title="增加权重">+</button>
-          <button type="button" onclick="event.stopPropagation();adjustTagPillWeight(${idx}, -1)" class="px-1 rounded-[6px] hover:bg-[var(--accent-tint)] text-[12px] font-bold" title="降低权重">−</button>
+          <button type="button" onclick="event.stopPropagation();adjustTagPillWeight(${idx}, 1, '${side}')" class="px-1 rounded-[6px] hover:bg-[var(--accent-tint)] text-[12px] font-bold" title="增加权重">+</button>
+          <button type="button" onclick="event.stopPropagation();adjustTagPillWeight(${idx}, -1, '${side}')" class="px-1 rounded-[6px] hover:bg-[var(--accent-tint)] text-[12px] font-bold" title="降低权重">−</button>
         </span>
       `;
     })
     .join("");
 }
 
-function toggleMuteTagPill(seg) {
+function toggleMuteTagPill(idx, side = "pos") {
+  const { ta, mutedSet } = getSideElements(side);
+  if (!ta) return;
+  const segs = parsePromptSegments(ta.value);
+  const seg = segs[idx];
+  if (!seg) return;
   const key = seg.toLowerCase();
-  if (state.mutedTags.has(key)) state.mutedTags.delete(key);
-  else state.mutedTags.add(key);
-  renderTagPillsBar();
+  if (mutedSet.has(key)) mutedSet.delete(key);
+  else mutedSet.add(key);
+  renderTagPillsBar(side);
 }
 
 function clientAdjustTokenWeight(tok, delta) {
@@ -3100,15 +3486,15 @@ function clientAdjustTokenWeight(tok, delta) {
   return clean;
 }
 
-function adjustTagPillWeight(idx, delta) {
-  const ta = document.getElementById("prompt-input");
+function adjustTagPillWeight(idx, delta, side = "pos") {
+  const { ta } = getSideElements(side);
   if (!ta) return;
   const segs = parsePromptSegments(ta.value);
   if (idx < 0 || idx >= segs.length) return;
   segs[idx] = clientAdjustTokenWeight(segs[idx], delta);
   ta.value = segs.join(", ");
-  syncPromptImmediateVisuals();
-  runPromptLinter();
+  syncPromptImmediateVisuals(side);
+  runPromptLinter(side);
 }
 
 function updateDynamicPromptIndicator() {
@@ -3265,8 +3651,13 @@ function acceptInlineSuggestion(idx) {
   el.setSelectionRange(caret, caret);
   menu?.classList.add("hidden");
   state.inlineMatches = [];
-  if (el.id === "prompt-input") runPromptLinter();
-  else if (el.classList.contains("char-prompt-ta")) el.dispatchEvent(new Event("input"));
+  if (el.id === "prompt-input") {
+    syncPromptImmediateVisuals("pos");
+    runPromptLinter("pos");
+  } else if (el.id === "uc-input") {
+    syncPromptImmediateVisuals("uc");
+    runPromptLinter("uc");
+  } else if (el.classList.contains("char-prompt-ta")) el.dispatchEvent(new Event("input"));
 }
 
 // ================= V2.1 Stage Zoom/Pan, Clipboard, Lightbox & Draggable Char Dots =================
@@ -3524,13 +3915,15 @@ function setupGlobalHotkeys() {
       if (e.key === "ArrowRight") navigateLightbox(1);
       return;
     }
-    if ((e.ctrlKey || e.metaKey) && document.activeElement?.id === "prompt-input") {
+    const activePromptId = document.activeElement?.id;
+    if ((e.ctrlKey || e.metaKey) && (activePromptId === "prompt-input" || activePromptId === "uc-input")) {
+      const targetSide = activePromptId === "uc-input" ? "uc" : "pos";
       if (e.key === "ArrowUp") {
         e.preventDefault();
-        adjustSelectedWeight(1);
+        adjustSelectedWeight(1, targetSide);
       } else if (e.key === "ArrowDown") {
         e.preventDefault();
-        adjustSelectedWeight(-1);
+        adjustSelectedWeight(-1, targetSide);
       }
     }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && state.action === "infill") {
@@ -3785,7 +4178,10 @@ function injectOcIntoPrompt(id) {
   if (!card) return;
   document.getElementById("prompt-input").value = card.prompt;
   if (card.uc) document.getElementById("uc-input").value = card.uc;
-  runPromptLinter();
+  syncPromptImmediateVisuals("pos");
+  syncPromptImmediateVisuals("uc");
+  runPromptLinter("pos");
+  runPromptLinter("uc");
   toggleOcModal(false);
   showToast(`已载入 OC「${card.name}」为主提示词`);
 }

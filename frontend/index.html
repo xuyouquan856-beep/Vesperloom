@@ -6,7 +6,7 @@
   <title>NAI Studio — 个人创作工作台</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23111318'/%3E%3Cpath d='M20 44V20l24 24V20' stroke='%23ffffff' stroke-width='6' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E" />
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="/static/styles.css?v=p2-8" />
+  <link rel="stylesheet" href="/static/styles.css?v=p2-9" />
 </head>
 <body class="lg:h-screen min-h-screen flex flex-col lg:overflow-hidden overflow-y-auto">
 
@@ -126,40 +126,73 @@
       </div>
 
       <!-- 外观定制浮层 -->
-      <div id="bg-menu" class="hidden absolute right-0 top-9 w-72 liquid-popover rounded-[12px] p-4 space-y-4 z-50">
-        <div class="flex items-center justify-between">
-          <span class="ui-section">暗房背景与浮层通透</span>
-          <button onclick="toggleBgMenu(false)" aria-label="关闭" class="w-6 h-6 rounded-[6px] ui-btn flex items-center justify-center text-[var(--text-secondary)]">
-            <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-close"/></svg>
-          </button>
-        </div>
-
-        <div class="space-y-2">
-          <div class="text-[12px] text-[var(--text-muted)]">画布暗房底色</div>
-          <div class="grid grid-cols-6 gap-2">
-            <button onclick="applyBgHex('#091319', '深海石板')" title="深海石板" class="w-9 h-7 rounded-[6px] border border-[var(--border-control)] spring-btn" style="background:#091319"></button>
-            <button onclick="applyBgHex('#080a0f', '曜石暗房')" title="曜石暗房" class="w-9 h-7 rounded-[6px] border border-[var(--border-control)] spring-btn" style="background:#080a0f"></button>
-            <button onclick="applyBgHex('#0c1724', '深夜蓝灰')" title="深夜蓝灰" class="w-9 h-7 rounded-[6px] border border-[var(--border-control)] spring-btn" style="background:#0c1724"></button>
-            <button onclick="applyBgHex('#121417', '中性石墨')" title="中性石墨" class="w-9 h-7 rounded-[6px] border border-[var(--border-control)] spring-btn" style="background:#121417"></button>
-            <button onclick="applyBgHex('#0e1d19', '雾林青灰')" title="雾林青灰" class="w-9 h-7 rounded-[6px] border border-[var(--border-control)] spring-btn" style="background:#0e1d19"></button>
-            <button onclick="applyBgHex('#0b0c0e', '纯暗炭黑')" title="纯暗炭黑" class="w-9 h-7 rounded-[6px] border border-[var(--border-control)] spring-btn" style="background:#0b0c0e"></button>
-          </div>
-        </div>
-
-        <div class="flex items-center justify-between gap-2 pt-1">
-          <span class="text-[12px] text-[var(--text-muted)]">自定义底色</span>
+      <div id="bg-menu" class="hidden absolute right-0 top-9 w-[328px] max-w-[calc(100vw-24px)] liquid-popover rounded-[12px] p-4 space-y-3.5 z-50">
+        <div class="flex items-center justify-between gap-2 pb-2.5 border-b border-[var(--border-hairline)]">
           <div class="flex items-center gap-2">
-            <input id="bg-color-picker" type="color" value="#091319" oninput="applyBgHex(this.value, '自定义色')" class="w-7 h-7 rounded-[6px] cursor-pointer bg-transparent border border-[var(--border-control)] p-0" />
-            <span id="bg-hex-label" class="font-mono text-[12px] px-2 py-1 rounded-[6px] ui-badge">#091319</span>
+            <span class="ui-section">工作台外观定制</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button type="button" onclick="resetAppearanceDefaults()" class="spring-btn text-[11.5px] px-2 py-0.5 rounded-[5px] ui-btn text-[var(--text-secondary)]" title="恢复当前主题的默认配色与质感">恢复默认</button>
+            <button type="button" onclick="toggleBgMenu(false)" aria-label="关闭" class="spring-btn w-6 h-6 rounded-[6px] ui-btn flex items-center justify-center text-[var(--text-secondary)]">
+              <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-close"/></svg>
+            </button>
           </div>
         </div>
 
-        <div class="space-y-2 pt-3 border-t border-[var(--border-hairline)]">
-          <div class="flex justify-between text-[12px] text-[var(--text-muted)]">
-            <span>浮层不透明度</span>
-            <span id="glass-clarity-val" class="font-mono text-[var(--text-primary)]">88%</span>
+        <!-- 1. 主题极性 -->
+        <div class="flex items-center justify-between gap-2">
+          <span class="text-[12px] text-[var(--text-muted)]">界面极性</span>
+          <div class="ui-segmented rounded-[7px] p-0.5 inline-flex items-center gap-0.5 text-[12px]">
+            <button type="button" id="appearance-mode-dark" onclick="setThemeMode('dark')" class="appearance-mode-btn spring-btn px-2.5 py-1 rounded-[5px] font-medium">深色暗房</button>
+            <button type="button" id="appearance-mode-light" onclick="setThemeMode('light')" class="appearance-mode-btn spring-btn px-2.5 py-1 rounded-[5px] font-medium">浅色制图</button>
           </div>
-          <input id="glass-clarity-slider" type="range" min="45" max="94" value="88" oninput="setGlassClarity(this.value)" class="w-full" />
+        </div>
+
+        <!-- 2. 双色协调工作室预设 -->
+        <div class="space-y-1.5">
+          <div class="flex items-center justify-between text-[12px] text-[var(--text-muted)]">
+            <span>工作室预设配色</span>
+            <span id="appearance-preset-label" class="text-[11.5px] font-mono text-[var(--text-secondary)]">曜石暗房</span>
+          </div>
+          <div id="appearance-presets-grid" class="grid grid-cols-3 gap-1.5"></div>
+        </div>
+
+        <!-- 3. 画布底纹 -->
+        <div class="space-y-1.5 pt-2.5 border-t border-[var(--border-hairline)]">
+          <div class="text-[12px] text-[var(--text-muted)]">画布底纹样式</div>
+          <div class="grid grid-cols-4 gap-1 ui-segmented rounded-[7px] p-0.5 text-[11.5px]">
+            <button type="button" data-tex="dots" onclick="setCanvasTexture('dots')" class="canvas-tex-btn py-1 rounded-[5px] font-medium">点阵</button>
+            <button type="button" data-tex="grid" onclick="setCanvasTexture('grid')" class="canvas-tex-btn py-1 rounded-[5px] font-medium">网格</button>
+            <button type="button" data-tex="frame" onclick="setCanvasTexture('frame')" class="canvas-tex-btn py-1 rounded-[5px] font-medium">聚光</button>
+            <button type="button" data-tex="solid" onclick="setCanvasTexture('solid')" class="canvas-tex-btn py-1 rounded-[5px] font-medium">纯净</button>
+          </div>
+        </div>
+
+        <!-- 4. 浮层不透明度与模糊 -->
+        <div class="space-y-2.5 pt-2.5 border-t border-[var(--border-hairline)]">
+          <div class="space-y-1">
+            <div class="flex justify-between text-[12px] text-[var(--text-muted)]">
+              <span>浮层不透明度</span>
+              <span id="glass-clarity-val" class="font-mono text-[var(--text-primary)]">88%</span>
+            </div>
+            <input id="glass-clarity-slider" type="range" min="50" max="96" value="88" oninput="setGlassClarity(this.value)" class="w-full" />
+          </div>
+          <div class="space-y-1">
+            <div class="flex justify-between text-[12px] text-[var(--text-muted)]">
+              <span>毛玻璃模糊度</span>
+              <span id="glass-blur-val" class="font-mono text-[var(--text-primary)]">18px</span>
+            </div>
+            <input id="glass-blur-slider" type="range" min="0" max="24" value="18" oninput="setGlassBlur(this.value)" class="w-full" />
+          </div>
+        </div>
+
+        <!-- 5. 自定义画布取色 -->
+        <div class="flex items-center justify-between gap-2 pt-2.5 border-t border-[var(--border-hairline)]">
+          <span class="text-[12px] text-[var(--text-muted)]">自定义画布色</span>
+          <div class="flex items-center gap-2">
+            <input id="bg-color-picker" type="color" value="#091319" oninput="applyBgHex(this.value, '自定义微调')" class="w-7 h-7 rounded-[6px] cursor-pointer bg-transparent border border-[var(--border-control)] p-0" />
+            <span id="bg-hex-label" class="font-mono text-[11.5px] px-2 py-1 rounded-[6px] ui-badge">#091319</span>
+          </div>
         </div>
       </div>
     </div>
@@ -216,8 +249,9 @@
                 <span>正向</span>
                 <span id="prompt-token-count" class="text-[11px] font-mono opacity-80">0 tags</span>
               </button>
-              <button type="button" data-prompt-side="uc" onclick="switchPromptSide('uc')" class="prompt-side-btn px-2.5 py-1 rounded-[5px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors inline-flex items-center gap-1">
+              <button type="button" data-prompt-side="uc" onclick="switchPromptSide('uc')" class="prompt-side-btn px-2.5 py-1 rounded-[5px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors inline-flex items-center gap-1.5">
                 <span>负面 (UC)</span>
+                <span id="uc-token-count" class="text-[11px] font-mono opacity-75">0 tags</span>
               </button>
             </div>
             <button id="lint-status-btn" onclick="toggleLintDrawer()" class="spring-btn inline-flex items-center gap-1 text-[11.5px] px-2 py-0.5 rounded-[6px] ui-btn text-[var(--status-success)] shrink-0">
@@ -226,15 +260,26 @@
             </button>
           </div>
 
+          <div id="lint-drawer" class="hidden rounded-[8px] ui-subgroup p-2.5 space-y-2 border-[var(--status-warning)]">
+            <div class="flex items-center justify-between gap-2">
+              <span id="lint-summary" class="text-[12px] font-medium text-[var(--status-warning)]">发现可规范语法</span>
+              <div class="flex items-center gap-1">
+                <button id="undo-lint-btn" onclick="undoPromptFix()" class="hidden text-[11.5px] px-2 py-0.5 rounded-[6px] ui-btn">撤销</button>
+                <button onclick="applyAllPromptFixes()" class="ui-btn-accent text-[11.5px] px-2 py-0.5 rounded-[6px] font-medium">一键规范</button>
+              </div>
+            </div>
+            <div id="lint-issues-list" class="space-y-1 max-h-24 overflow-y-auto custom-scroll text-[12px]"></div>
+          </div>
+
           <!-- 子面板 1：正向提示词（大空间文本编辑） -->
           <div id="prompt-side-pos" class="space-y-2.5">
             <!-- 工具条 -->
             <div class="flex items-center gap-1 text-[12px] flex-wrap">
-              <button id="weight-mode-btn" onclick="toggleWeightMode()" class="spring-btn px-2 py-1 rounded-[6px] ui-btn font-mono" title="切换括号 {} 或数字 1.1::tag:: 权重语法（V3 仅支持 {}）">
+              <button id="weight-mode-btn" onclick="toggleWeightMode()" class="weight-mode-label spring-btn px-2 py-1 rounded-[6px] ui-btn font-mono" title="切换括号 {} 或数字 1.1::tag:: 权重语法（V3 仅支持 {}）">
                 语法: {}
               </button>
-              <button onclick="adjustSelectedWeight(1)" class="spring-btn px-2 py-1 rounded-[6px] ui-btn" title="增大选中词条权重 (Ctrl+Up)">+权</button>
-              <button onclick="adjustSelectedWeight(-1)" class="spring-btn px-2 py-1 rounded-[6px] ui-btn" title="降低选中词条权重 (Ctrl+Down)">-权</button>
+              <button onclick="adjustSelectedWeight(1, 'pos')" class="spring-btn px-2 py-1 rounded-[6px] ui-btn" title="增大选中词条权重 (Ctrl+Up)">+权</button>
+              <button onclick="adjustSelectedWeight(-1, 'pos')" class="spring-btn px-2 py-1 rounded-[6px] ui-btn" title="降低选中词条权重 (Ctrl+Down)">-权</button>
               <button onclick="openWildcardModal()" class="spring-btn inline-flex items-center gap-1 px-2 py-1 rounded-[6px] ui-btn" title="在线管理与测试 __通配符__ 词库文件">
                 <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-book"/></svg>
                 <span>通配符</span>
@@ -243,17 +288,6 @@
                 <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-history"/></svg>
                 <span>草稿</span>
               </button>
-            </div>
-
-            <div id="lint-drawer" class="hidden rounded-[8px] ui-subgroup p-2.5 space-y-2 border-[var(--status-warning)]">
-              <div class="flex items-center justify-between gap-2">
-                <span id="lint-summary" class="text-[12px] font-medium text-[var(--status-warning)]">发现可规范语法</span>
-                <div class="flex items-center gap-1">
-                  <button id="undo-lint-btn" onclick="undoPromptFix()" class="hidden text-[11.5px] px-2 py-0.5 rounded-[6px] ui-btn">撤销</button>
-                  <button onclick="applyAllPromptFixes()" class="ui-btn-accent text-[11.5px] px-2 py-0.5 rounded-[6px] font-medium">一键规范</button>
-                </div>
-              </div>
-              <div id="lint-issues-list" class="space-y-1 max-h-24 overflow-y-auto custom-scroll text-[12px]"></div>
             </div>
 
             <!-- 搜索 Tag -->
@@ -313,12 +347,20 @@
             </div>
           </div>
 
-          <!-- 子面板 2：负面提示词 (UC)（大空间独立编辑区） -->
-          <div id="prompt-side-uc" class="hidden space-y-3">
-            <div class="flex items-center justify-between gap-2">
-              <span class="text-[12.5px] font-medium text-[var(--text-secondary)]">官方预设强度</span>
-              <div class="relative w-44" id="uc-select-wrap">
-                <button type="button" onclick="toggleGlassSelect('uc-select')" id="uc-select-trigger" class="glass-select-trigger !py-1 !px-2.5 !text-[12px]">
+          <!-- 子面板 2：负面提示词 (UC)（与正向对称统一的编辑区与标签权重） -->
+          <div id="prompt-side-uc" class="hidden space-y-2.5">
+            <!-- 统一工具条 -->
+            <div class="flex items-center justify-between gap-1 text-[12px] flex-wrap">
+              <div class="flex items-center gap-1 flex-wrap">
+                <button onclick="toggleWeightMode()" class="weight-mode-label spring-btn px-2 py-1 rounded-[6px] ui-btn font-mono" title="切换括号 {} 或数字 1.1::tag:: 权重语法（V3 仅支持 {}）">
+                  语法: {}
+                </button>
+                <button onclick="adjustSelectedWeight(1, 'uc')" class="spring-btn px-2 py-1 rounded-[6px] ui-btn" title="增大选中负面词权重 (Ctrl+Up)">+权</button>
+                <button onclick="adjustSelectedWeight(-1, 'uc')" class="spring-btn px-2 py-1 rounded-[6px] ui-btn" title="降低选中负面词权重 (Ctrl+Down)">-权</button>
+                <button type="button" onclick="clearUcPrompt()" class="spring-btn px-2 py-1 rounded-[6px] ui-btn text-[var(--text-secondary)] hover:text-[var(--status-danger)]" title="清空当前负面提示词">清空</button>
+              </div>
+              <div class="relative w-36" id="uc-select-wrap">
+                <button type="button" onclick="toggleGlassSelect('uc-select')" id="uc-select-trigger" class="glass-select-trigger !py-1 !px-2 !text-[11.5px]" title="应用 NovelAI 官方负面词预设">
                   <span id="uc-select-label" class="truncate">强力预设 (Heavy)</span>
                   <span class="glass-select-chevron">▾</span>
                 </button>
@@ -326,13 +368,30 @@
               </div>
             </div>
 
+            <!-- 负面词标签搜索 -->
             <div class="relative">
-              <textarea id="uc-input" rows="8" spellcheck="false" placeholder="不想出现在画面中的元素，支持英文标签与自动补全..." class="custom-scroll w-full ui-well rounded-[8px] p-3 text-[13px] font-mono leading-relaxed focus:outline-none text-[var(--text-primary)] caret-[var(--accent)] resize-y">lowres, bad anatomy, bad hands, missing fingers, extra digit, fewer digits, blurry, watermark</textarea>
+              <svg class="ui-ic-sm ui-ic text-[var(--text-muted)] absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" aria-hidden="true"><use href="#ic-search"/></svg>
+              <input id="uc-tag-search-input" type="text" autocomplete="off" placeholder="搜索负面标签追加（中/英文）" class="w-full ui-well rounded-[6px] pl-8 pr-3 py-1.5 text-[13px] placeholder:text-[var(--placeholder)]" />
+              <div id="uc-tag-suggestions-menu" class="hidden absolute left-0 right-0 top-9 z-50 liquid-popover rounded-[10px] p-1 space-y-1 max-h-60 overflow-y-auto custom-scroll"></div>
             </div>
 
-            <div class="flex items-center justify-between text-[12px] text-[var(--text-muted)]">
-              <span>支持与正向词相同的逗号分隔标签及自动补全</span>
-              <button type="button" onclick="document.getElementById('uc-input').value='';" class="text-[var(--text-secondary)] hover:text-[var(--status-danger)] shrink-0">清空负面词</button>
+            <!-- 负面 UC 镜像高亮编辑器 -->
+            <div class="relative rounded-[8px] ui-well" id="uc-editor-wrap">
+              <div id="uc-backdrop" aria-hidden="true" class="custom-scroll prompt-mirror-sync absolute inset-0 p-3 whitespace-pre-wrap break-words pointer-events-none text-transparent"></div>
+              <textarea id="uc-input" rows="6" spellcheck="false" placeholder="不想出现在画面中的元素，支持英文标签、权重语法与自动补全..." class="custom-scroll prompt-mirror-sync relative z-10 w-full block bg-transparent p-3 focus:outline-none text-[var(--text-primary)] caret-[var(--accent)] resize-y rounded-[8px]">lowres, bad anatomy, bad hands, missing fingers, extra digit, fewer digits, blurry, watermark</textarea>
+            </div>
+
+            <!-- 负面标签权重微调 -->
+            <div class="space-y-1.5">
+              <div class="flex items-center justify-between text-[12px] text-[var(--text-muted)]">
+                <div class="inline-flex items-center gap-1">
+                  <span>标签权重</span>
+                  <button type="button" class="ui-info-btn" title="单击标签临时静音/恢复，拖拽调整词序，+/- 调整权重" aria-label="负面标签权重说明">
+                    <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-info"/></svg>
+                  </button>
+                </div>
+              </div>
+              <div id="uc-tag-pills-bar" class="tag-pills-bar custom-scroll"></div>
             </div>
           </div>
 
@@ -622,7 +681,7 @@
       <div class="relative flex-1 min-h-0 flex items-center justify-center overflow-hidden px-4 pt-16 pb-[74px]" id="stage-dropzone" ondragover="event.preventDefault()" ondrop="handleStageDrop(event)">
         <div id="stage-pan-wrap" class="relative w-full h-full flex items-center justify-center overflow-hidden">
           <div id="artwork-stage" class="relative flex items-center justify-center max-w-full max-h-full transition-transform duration-75">
-            <img id="stage-img" src="" alt="Generated Artwork" ondblclick="openLightbox()" class="hidden max-h-[calc(100vh-204px)] max-w-full rounded-[8px] object-contain" />
+            <img id="stage-img" src="" alt="" onerror="handleStageImageError()" ondblclick="openLightbox()" class="hidden max-h-[calc(100vh-204px)] max-w-full rounded-[8px] object-contain" />
             <div id="stage-empty" class="text-center space-y-3 p-8">
               <div class="inline-flex items-center justify-center w-12 h-12 rounded-[12px] ui-badge text-[var(--text-secondary)]">
                 <svg class="ui-ic ui-ic-lg" aria-hidden="true"><use href="#ic-image"/></svg>
@@ -640,13 +699,27 @@
           </div>
         </div>
 
-        <!-- 生成中加载遮罩 -->
-        <div id="generating-overlay" class="hidden absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center gap-3 z-30">
-          <div class="w-12 h-12 rounded-[10px] generating-emblem flex items-center justify-center animate-pulse">
-            <svg class="ui-ic ui-ic-lg" aria-hidden="true"><use href="#ic-play"/></svg>
+        <!-- 生成中精致悬浮卡片（双环光圈 + 实时计时 + 取消控制） -->
+        <div id="generating-overlay" class="hidden absolute inset-0 flex items-center justify-center p-4 z-30">
+          <div class="w-full max-w-[356px] rounded-[14px] liquid-popover p-5 space-y-3.5 shadow-2xl">
+            <div class="flex items-center gap-3.5">
+              <div class="gen-aperture" aria-hidden="true"></div>
+              <div class="min-w-0 flex-1 space-y-0.5">
+                <div class="flex items-center justify-between gap-2">
+                  <span id="generating-status-text" class="ui-body font-semibold text-[var(--text-primary)] truncate">正在渲染画面…</span>
+                  <span id="generating-elapsed" class="px-1.5 py-0.5 rounded-[5px] ui-badge font-mono text-[11.5px] text-[var(--text-primary)] shrink-0">0.0s</span>
+                </div>
+                <div id="generating-meta-text" class="text-[12px] font-mono text-[var(--text-secondary)] truncate">V5 Full · 832×1216 · Steps 28</div>
+              </div>
+            </div>
+            <div class="gen-progress-track">
+              <div class="gen-progress-bar"></div>
+            </div>
+            <div class="flex items-center justify-between gap-2 text-[11.5px]">
+              <span id="generating-sub-text" class="text-[var(--text-muted)] font-mono truncate">0 Anlas · Opus 免费通道</span>
+              <button id="cancel-generate-btn" type="button" onclick="cancelActiveGeneration()" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px] text-[var(--text-secondary)] hover:text-[var(--status-danger)] shrink-0">取消</button>
+            </div>
           </div>
-          <div id="generating-status-text" class="ui-body font-semibold tracking-wide text-white">正在直连 NovelAI 渲染画面...</div>
-          <div id="generating-sub-text" class="text-[12.5px] text-[var(--text-secondary)] font-mono">0 Anlas · Opus 免费通道 · 自动落盘至 D:\NAI-Studio\outputs</div>
         </div>
       </div>
 
@@ -1259,6 +1332,6 @@
 
   <div id="studio-tooltip" role="tooltip" aria-hidden="true"></div>
 
-  <script src="/static/app.js?v=p2-8"></script>
+  <script src="/static/app.js?v=p2-9"></script>
 </body>
 </html>

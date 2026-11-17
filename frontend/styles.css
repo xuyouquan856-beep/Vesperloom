@@ -81,6 +81,7 @@
   --glass-border-strong: rgba(255, 255, 255, 0.36);
   --popover-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
   --hud-shadow: 0 12px 32px rgba(0, 0, 0, 0.48);
+  --hud-blur: 18px;
   --stage-art-shadow: 0 20px 56px rgba(0, 0, 0, 0.62);
   --foreground: #f4f4f6;
   --muted-foreground: #a1a9b8;
@@ -93,26 +94,26 @@
 }
 
 html.light {
-  --bg-base: #eef2f6;
-  --bg-canvas-well: #dfe5ee;
-  --canvas-dot-color: rgba(15, 23, 42, 0.065);
-  --sky-top: #eef2f6;
-  --sky-mid: #eef2f6;
-  --water-horizon: #eef2f6;
-  --water-deep: #eef2f6;
+  --bg-base: #eaedf2;
+  --bg-canvas-well: #e3e7ee;
+  --canvas-dot-color: rgba(15, 23, 42, 0.085);
+  --sky-top: #eaedf2;
+  --sky-mid: #eaedf2;
+  --water-horizon: #eaedf2;
+  --water-deep: #eaedf2;
 
-  --surface-panel: #f8fafc;
-  --surface-panel-alt: #f1f5f9;
-  --surface-group-hover: #edf2f7;
+  --surface-panel: #f6f7f9;
+  --surface-panel-alt: #edf0f5;
+  --surface-group-hover: #e5e9f0;
   --surface-well: #ffffff;
-  --surface-well-hover: #f1f5f9;
-  --surface-chrome: rgba(248, 250, 252, 0.92);
-  --surface-hud: rgba(255, 255, 255, 0.88);
+  --surface-well-hover: #f0f3f7;
+  --surface-chrome: rgba(246, 247, 249, 0.92);
+  --surface-hud: rgba(255, 255, 255, 0.90);
   --surface-popover: #ffffff;
   --surface-glass: rgba(255, 255, 255, 0.90);
 
-  --border-hairline: rgba(15, 23, 42, 0.09);
-  --border-control: rgba(15, 23, 42, 0.16);
+  --border-hairline: rgba(15, 23, 42, 0.11);
+  --border-control: rgba(15, 23, 42, 0.18);
   --border-hover: rgba(17, 19, 24, 0.36);
   --border-focus: #111318;
 
@@ -298,16 +299,16 @@ body {
 
 .studio-hud {
   background-color: var(--surface-hud);
-  backdrop-filter: blur(18px) saturate(140%);
-  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  backdrop-filter: blur(var(--hud-blur)) saturate(140%);
+  -webkit-backdrop-filter: blur(var(--hud-blur)) saturate(140%);
   border: 1px solid var(--border-control);
   box-shadow: var(--hud-shadow);
 }
 
 .liquid-glass {
   background-color: var(--surface-chrome);
-  backdrop-filter: blur(16px) saturate(140%);
-  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  backdrop-filter: blur(var(--hud-blur)) saturate(140%);
+  -webkit-backdrop-filter: blur(var(--hud-blur)) saturate(140%);
   border: 1px solid var(--border-control);
 }
 
@@ -323,11 +324,87 @@ body {
   box-shadow: var(--popover-shadow);
 }
 
-/* Darkroom Dot-Matrix Canvas Backdrop */
+/* Darkroom Canvas Backdrop & Selectable Surface Textures */
 .studio-canvas-grid {
   background-color: var(--bg-canvas-well);
   background-image: radial-gradient(var(--canvas-dot-color) 1px, transparent 1px);
   background-size: 20px 20px;
+}
+.studio-canvas-grid.tex-grid {
+  background-image:
+    linear-gradient(to right, var(--canvas-dot-color) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--canvas-dot-color) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+.studio-canvas-grid.tex-frame {
+  background-image: radial-gradient(circle at 50% 48%, rgba(255, 255, 255, 0.045) 0%, transparent 64%);
+  background-size: 100% 100%;
+}
+html.light .studio-canvas-grid.tex-frame {
+  background-image: radial-gradient(circle at 50% 48%, rgba(255, 255, 255, 0.55) 0%, rgba(15, 23, 42, 0.04) 78%);
+}
+.studio-canvas-grid.tex-solid {
+  background-image: none;
+}
+
+/* Generation Stage Aperture & Progress Sweep */
+#generating-overlay {
+  background-color: rgba(6, 8, 12, 0.42);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+html.light #generating-overlay {
+  background-color: rgba(15, 23, 42, 0.16);
+}
+.gen-aperture {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+}
+.gen-aperture::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid var(--border-control);
+  border-top-color: var(--cta-bg);
+  border-right-color: var(--cta-bg);
+  animation: genSpin 0.9s linear infinite;
+}
+.gen-aperture::after {
+  content: "";
+  position: absolute;
+  inset: 9px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-hairline);
+  border-bottom-color: var(--text-secondary);
+  animation: genSpinReverse 1.5s linear infinite;
+}
+@keyframes genSpin {
+  to { transform: rotate(360deg); }
+}
+@keyframes genSpinReverse {
+  to { transform: rotate(-360deg); }
+}
+.gen-progress-track {
+  height: 3px;
+  width: 100%;
+  border-radius: 999px;
+  background-color: var(--surface-well);
+  border: 1px solid var(--border-hairline);
+  overflow: hidden;
+}
+.gen-progress-bar {
+  height: 100%;
+  width: 38%;
+  border-radius: 999px;
+  background-color: var(--cta-bg);
+  animation: genSweep 1.35s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+@keyframes genSweep {
+  0% { transform: translateX(-110%); }
+  100% { transform: translateX(280%); }
 }
 
 #stage-img {
@@ -1179,7 +1256,10 @@ html.theme-sync * {
 /* Reduced Motion Respect */
 @media (prefers-reduced-motion: reduce) {
   .animate-pulse,
-  .animate-spin {
+  .animate-spin,
+  .gen-aperture::before,
+  .gen-aperture::after,
+  .gen-progress-bar {
     animation: none !important;
   }
   .ui-btn:active:not(:disabled),
