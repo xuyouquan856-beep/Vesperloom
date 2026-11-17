@@ -379,19 +379,19 @@ def add_gallery_item(item: Dict[str, Any]) -> Dict[str, Any]:
             (
                 item["filename"],
                 item["rel_path"],
-                item["model"],
-                item["model_short"],
+                item.get("model", "nai-diffusion-5-full"),
+                item.get("model_short", "V5 Full"),
                 item.get("action", "generate"),
-                item["prompt"],
+                item.get("prompt", ""),
                 item.get("uc", ""),
-                int(item["width"]),
-                int(item["height"]),
-                int(item["steps"]),
-                float(item["scale"]),
+                int(item.get("width", 832)),
+                int(item.get("height", 1216)),
+                int(item.get("steps", 28)),
+                float(item.get("scale", 5.0)),
                 float(item.get("cfg_rescale", 0.0)),
-                item["sampler"],
-                item["scheduler"],
-                int(item["seed"]),
+                item.get("sampler", "k_euler_ancestral"),
+                item.get("scheduler", "karras"),
+                int(item.get("seed", 0)),
                 json.dumps(item.get("characters", []), ensure_ascii=False),
                 json.dumps(item.get("artist_mix", []), ensure_ascii=False),
                 float(item.get("generation_time", 0.0)),
@@ -403,6 +403,26 @@ def add_gallery_item(item: Dict[str, Any]) -> Dict[str, Any]:
         conn.commit()
         new_id = cur.lastrowid
     return get_gallery_item(new_id)
+
+
+def _like_pattern(q: str) -> str:
+    escaped = q.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
+
+def _gallery_where_clause(search: str = "", model: str = "", favorite_only: bool = False) -> tuple[str, List[Any]]:
+    sql = " WHERE 1=1"
+    params: List[Any] = []
+    if search.strip():
+        sql += " AND (prompt LIKE ? ESCAPE '\\' OR uc LIKE ? ESCAPE '\\' OR notes LIKE ? ESCAPE '\\' OR model_short LIKE ? ESCAPE '\\' OR artist_mix_json LIKE ? ESCAPE '\\' OR CAST(seed AS TEXT) LIKE ? ESCAPE '\\')"
+        q = _like_pattern(search)
+        params.extend([q, q, q, q, q, q])
+    if model.strip() and model != "all":
+        sql += " AND model = ?"
+        params.append(model.strip())
+    if favorite_only:
+        sql += " AND favorite = 1"
+    return sql, params
 
 
 def _row_to_gallery(row: sqlite3.Row) -> Dict[str, Any]:
@@ -425,20 +445,19 @@ def count_gallery(
     model: str = "",
     favorite_only: bool = False,
 ) -> int:
-    sql = "SELECT COUNT(*) FROM gallery WHERE 1=1"
-    params: List[Any] = []
-    if search.strip():
-        sql += " AND (prompt LIKE ? OR notes LIKE ? OR CAST(seed AS TEXT) LIKE ?)"
-        q = f"%{search.strip()}%"
-        params.extend([q, q, q])
-    if model.strip() and model != "all":
-        sql += " AND model = ?"
-        params.append(model.strip())
-    if favorite_only:
-        sql += " AND favorite = 1"
+    where, params = _gallery_where_clause(search=search, model=model, favorite_only=favorite_only)
     with get_conn() as conn:
-        row = conn.execute(sql, params).fetchone()
+        row = conn.execute(f"SELECT COUNT(*) FROM gallery{where}", params).fetchone()
         return int(row[0] if row else 0)
+
+
+GALLERY_SORT_MAP = {
+    "newest": "id DESC",
+    "oldest": "id ASC",
+    "fav_first": "favorite DESC, id DESC",
+    "fastest": "generation_time ASC, id DESC",
+    "slowest": "generation_time DESC, id DESC",
+}
 
 
 def list_gallery(
@@ -447,19 +466,11 @@ def list_gallery(
     favorite_only: bool = False,
     limit: int = 100,
     offset: int = 0,
+    sort: str = "newest",
 ) -> List[Dict[str, Any]]:
-    sql = "SELECT * FROM gallery WHERE 1=1"
-    params: List[Any] = []
-    if search.strip():
-        sql += " AND (prompt LIKE ? OR notes LIKE ? OR CAST(seed AS TEXT) LIKE ?)"
-        q = f"%{search.strip()}%"
-        params.extend([q, q, q])
-    if model.strip() and model != "all":
-        sql += " AND model = ?"
-        params.append(model.strip())
-    if favorite_only:
-        sql += " AND favorite = 1"
-    sql += " ORDER BY id DESC LIMIT ? OFFSET ?"
+    where, params = _gallery_where_clause(search=search, model=model, favorite_only=favorite_only)
+    order_by = GALLERY_SORT_MAP.get(sort, "id DESC")
+    sql = f"SELECT * FROM gallery{where} ORDER BY {order_by} LIMIT ? OFFSET ?"
     params.extend([max(1, int(limit)), max(0, int(offset))])
     with get_conn() as conn:
         rows = conn.execute(sql, params).fetchall()
@@ -504,9 +515,20 @@ def delete_gallery_item(item_id: int, delete_file: bool = True) -> bool:
     return True
 
 
-def batch_delete_gallery(unfav_only: bool = True, delete_file: bool = True) -> int:
+def batch_delete_gallery(
+    unfav_only: bool = True,
+    delete_file: bool = True,
+    ids: Optional[List[int]] = None,
+) -> int:
     with get_conn() as conn:
-        if unfav_only:
+        if ids is not None:
+            clean_ids = [int(x) for x in ids if str(x).isdigit()]
+            if not clean_ids:
+                return 0
+            placeholders = ",".join("?" for _ in clean_ids)
+            rows = conn.execute(f"SELECT id, rel_path FROM gallery WHERE id IN ({placeholders})", clean_ids).fetchall()
+            conn.execute(f"DELETE FROM gallery WHERE id IN ({placeholders})", clean_ids)
+        elif unfav_only:
             rows = conn.execute("SELECT id, rel_path FROM gallery WHERE favorite = 0").fetchall()
             conn.execute("DELETE FROM gallery WHERE favorite = 0")
         else:
@@ -519,11 +541,44 @@ def batch_delete_gallery(unfav_only: bool = True, delete_file: bool = True) -> i
     return len(rows)
 
 
-def sync_outputs_folder(outputs_root: Optional[Path] = None) -> Dict[str, Any]:
+def batch_favorite_gallery(ids: List[int], favorite: bool = True) -> int:
+    clean_ids = [int(x) for x in ids if str(x).isdigit()]
+    if not clean_ids:
+        return 0
+    placeholders = ",".join("?" for _ in clean_ids)
+    with get_conn() as conn:
+        cur = conn.execute(
+            f"UPDATE gallery SET favorite = ? WHERE id IN ({placeholders})",
+            [1 if favorite else 0, *clean_ids],
+        )
+        conn.commit()
+        return int(cur.rowcount or 0)
+
+
+def sync_outputs_folder(outputs_root: Optional[Path] = None, prune_missing: bool = True) -> Dict[str, Any]:
     root = (outputs_root or OUTPUTS_DIR).resolve()
     root.mkdir(parents=True, exist_ok=True)
     with get_conn() as conn:
-        existing_paths = {r["rel_path"] for r in conn.execute("SELECT rel_path FROM gallery").fetchall()}
+        existing_rows = conn.execute("SELECT id, rel_path FROM gallery").fetchall()
+
+    existing_paths = {r["rel_path"] for r in existing_rows}
+    pruned_missing = 0
+    if prune_missing and existing_rows:
+        missing_ids: List[int] = []
+        for r in existing_rows:
+            rel = str(r["rel_path"] or "")
+            if not rel:
+                missing_ids.append(r["id"])
+                continue
+            target = (root / rel).resolve()
+            if not target.is_relative_to(root) or not target.is_file():
+                missing_ids.append(r["id"])
+        if missing_ids:
+            with get_conn() as conn:
+                placeholders = ",".join("?" for _ in missing_ids)
+                conn.execute(f"DELETE FROM gallery WHERE id IN ({placeholders})", missing_ids)
+                conn.commit()
+            pruned_missing = len(missing_ids)
 
     added_count = 0
     for png_path in sorted(root.rglob("*.png")):
@@ -556,15 +611,28 @@ def sync_outputs_folder(outputs_root: Optional[Path] = None) -> Dict[str, Any]:
             added_count += 1
         except Exception:
             continue
-    return {"scanned": True, "added_count": added_count}
+    return {
+        "scanned": True,
+        "added_count": added_count,
+        "imported": added_count,
+        "pruned_missing": pruned_missing,
+    }
+
+
+def _row_to_artist(row: sqlite3.Row) -> Dict[str, Any]:
+    d = dict(row)
+    d["favorite"] = bool(d["favorite"])
+    d["is_custom"] = bool(d["is_custom"])
+    d["palette"] = json.loads(d.pop("palette_json", '["#2563eb","#38bdf8"]'))
+    return d
 
 
 def list_artists(search: str = "", category: str = "", favorite_only: bool = False) -> List[Dict[str, Any]]:
     sql = "SELECT * FROM artists WHERE 1=1"
     params: List[Any] = []
     if search.strip():
-        q = f"%{search.strip()}%"
-        sql += " AND (name LIKE ? OR tag LIKE ? OR desc LIKE ? OR category LIKE ?)"
+        q = _like_pattern(search)
+        sql += " AND (name LIKE ? ESCAPE '\\' OR tag LIKE ? ESCAPE '\\' OR desc LIKE ? ESCAPE '\\' OR category LIKE ? ESCAPE '\\')"
         params.extend([q, q, q, q])
     if category.strip() and category != "all":
         sql += " AND category = ?"
@@ -574,14 +642,45 @@ def list_artists(search: str = "", category: str = "", favorite_only: bool = Fal
     sql += " ORDER BY favorite DESC, id ASC"
     with get_conn() as conn:
         rows = conn.execute(sql, params).fetchall()
-        result = []
-        for r in rows:
-            d = dict(r)
-            d["favorite"] = bool(d["favorite"])
-            d["is_custom"] = bool(d["is_custom"])
-            d["palette"] = json.loads(d.pop("palette_json", '["#2563eb","#38bdf8"]'))
-            result.append(d)
-        return result
+        return [_row_to_artist(r) for r in rows]
+
+
+def update_artist(
+    artist_id: int,
+    name: Optional[str] = None,
+    tag: Optional[str] = None,
+    category: Optional[str] = None,
+    desc: Optional[str] = None,
+    sample_tags: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM artists WHERE id = ?", (artist_id,)).fetchone()
+        if not row:
+            return None
+        new_name = (name if name is not None else row["name"]).strip() or row["name"]
+        new_tag = (tag if tag is not None else row["tag"]).strip() or row["tag"]
+        if not new_tag.startswith("artist:"):
+            new_tag = f"artist:{new_tag}"
+        new_cat = (category if category is not None else row["category"]).strip() or row["category"]
+        new_desc = (desc if desc is not None else row["desc"]).strip()
+        new_sample = (sample_tags if sample_tags is not None else row["sample_tags"]).strip()
+        conn.execute(
+            "UPDATE artists SET name = ?, tag = ?, category = ?, desc = ?, sample_tags = ? WHERE id = ?",
+            (new_name, new_tag, new_cat, new_desc, new_sample, artist_id),
+        )
+        conn.commit()
+        updated = conn.execute("SELECT * FROM artists WHERE id = ?", (artist_id,)).fetchone()
+        return _row_to_artist(updated) if updated else None
+
+
+def delete_artist(artist_id: int) -> bool:
+    with get_conn() as conn:
+        row = conn.execute("SELECT id, preview_url FROM artists WHERE id = ?", (artist_id,)).fetchone()
+        if not row:
+            return False
+        conn.execute("DELETE FROM artists WHERE id = ?", (artist_id,))
+        conn.commit()
+    return True
 
 
 def toggle_artist_favorite(artist_id: int) -> Optional[Dict[str, Any]]:

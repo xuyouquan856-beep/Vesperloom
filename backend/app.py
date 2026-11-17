@@ -15,7 +15,9 @@ from .database import (
     add_mix_preset,
     add_snippet,
     batch_delete_gallery,
+    batch_favorite_gallery,
     count_gallery,
+    delete_artist,
     delete_gallery_item,
     delete_mix_preset,
     delete_oc_card,
@@ -31,6 +33,7 @@ from .database import (
     sync_outputs_folder,
     toggle_artist_favorite,
     toggle_gallery_favorite,
+    update_artist,
     update_gallery_notes,
     update_oc_avatar,
     upsert_artist,
@@ -402,10 +405,11 @@ async def api_list_gallery(
     search: str = "",
     model: str = "",
     favorite_only: bool = False,
+    sort: str = "newest",
     limit: int = 24,
     offset: int = 0,
 ) -> Dict[str, Any]:
-    items = list_gallery(search=search, model=model, favorite_only=favorite_only, limit=limit, offset=offset)
+    items = list_gallery(search=search, model=model, favorite_only=favorite_only, sort=sort, limit=limit, offset=offset)
     total = count_gallery(search=search, model=model, favorite_only=favorite_only)
     return {
         "items": items,
@@ -427,7 +431,7 @@ async def api_fav_gallery(item_id: int) -> Dict[str, Any]:
 @app.delete("/api/gallery/{item_id}")
 async def api_del_gallery(item_id: int, delete_file: bool = True) -> Dict[str, Any]:
     ok = delete_gallery_item(item_id, delete_file=delete_file)
-    return {"ok": ok, "storage": _get_storage_stats()}
+    return {"ok": ok, "total": count_gallery(), "storage": _get_storage_stats()}
 
 
 @app.patch("/api/gallery/{item_id}")
@@ -441,7 +445,7 @@ async def api_patch_gallery(item_id: int, body: Dict[str, Any]) -> Dict[str, Any
 
 @app.post("/api/gallery/sync")
 async def api_sync_gallery() -> Dict[str, Any]:
-    res = sync_outputs_folder(OUTPUTS_DIR)
+    res = sync_outputs_folder(OUTPUTS_DIR, prune_missing=True)
     total = count_gallery()
     return {"ok": True, **res, "total": total, "storage": _get_storage_stats(), "items": list_gallery(limit=24, offset=0)}
 
@@ -449,10 +453,19 @@ async def api_sync_gallery() -> Dict[str, Any]:
 @app.post("/api/gallery/batch-delete")
 async def api_batch_del_gallery(body: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     b = body or {}
+    ids = b.get("ids") if isinstance(b.get("ids"), list) else None
     unfav_only = bool(b.get("unfav_only", True))
     delete_file = bool(b.get("delete_file", True))
-    removed = batch_delete_gallery(unfav_only=unfav_only, delete_file=delete_file)
-    return {"ok": True, "removed": removed, "storage": _get_storage_stats()}
+    removed = batch_delete_gallery(unfav_only=unfav_only, delete_file=delete_file, ids=ids)
+    return {"ok": True, "removed": removed, "total": count_gallery(), "storage": _get_storage_stats()}
+
+
+@app.post("/api/gallery/batch-favorite")
+async def api_batch_fav_gallery(body: Dict[str, Any]) -> Dict[str, Any]:
+    ids = body.get("ids") if isinstance(body.get("ids"), list) else []
+    favorite = bool(body.get("favorite", True))
+    updated = batch_favorite_gallery(ids, favorite=favorite)
+    return {"ok": True, "updated": updated}
 
 
 @app.post("/api/queue/start")
@@ -521,6 +534,33 @@ async def api_fav_artist(artist_id: int) -> Dict[str, Any]:
     if not artist:
         raise HTTPException(status_code=404, detail="画师不存在")
     return {"ok": True, "artist": artist}
+
+
+@app.patch("/api/artists/{artist_id}")
+async def api_patch_artist(artist_id: int, body: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        updated = update_artist(
+            artist_id,
+            name=body.get("name"),
+            tag=body.get("tag"),
+            category=body.get("category"),
+            desc=body.get("desc"),
+            sample_tags=body.get("sample_tags"),
+        )
+    except Exception as exc:
+        msg = "该画师 Tag 已存在，请勿与现有画师重复" if "UNIQUE" in str(exc).upper() else str(exc)
+        raise HTTPException(status_code=400, detail=msg)
+    if not updated:
+        raise HTTPException(status_code=404, detail="画师不存在")
+    return {"ok": True, "artist": updated}
+
+
+@app.delete("/api/artists/{artist_id}")
+async def api_del_artist(artist_id: int) -> Dict[str, Any]:
+    ok = delete_artist(artist_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="画师不存在")
+    return {"ok": True}
 
 
 @app.post("/api/artists/{artist_id}/generate-preview")

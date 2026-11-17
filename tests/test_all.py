@@ -331,3 +331,131 @@ def test_v22_focus_inpaint_wildcards_pagination_avatar_xyz():
     delete_gallery_item(sheet_item["id"])
     import shutil
     shutil.rmtree(tmp_root, ignore_errors=True)
+
+
+def test_artists_gallery_overhaul_and_stress_regressions():
+    import re
+    import tempfile
+    import time
+    import backend.app as app_mod
+    import backend.database as db_mod
+
+    (BASE_DIR / "tmp").mkdir(parents=True, exist_ok=True)
+    orig_db = db_mod.DB_PATH
+    orig_out = db_mod.OUTPUTS_DIR
+    orig_app_out = app_mod.OUTPUTS_DIR
+
+    with tempfile.TemporaryDirectory(dir=str(BASE_DIR / "tmp")) as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        out_dir = tmp_path / "outputs"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        db_mod.DB_PATH = tmp_path / "test_stress.db"
+        db_mod.OUTPUTS_DIR = out_dir
+        app_mod.OUTPUTS_DIR = out_dir
+
+        try:
+            db_mod.init_db()
+            client = TestClient(app)
+
+            # 1. Wildcard escaping on '%' and '_' in both artists and gallery search
+            assert len(db_mod.list_artists(search="%")) == 0
+            assert len(db_mod.list_artists(search="_literal_never_exists")) == 0
+            pct_artist = db_mod.upsert_artist("50% Artist_Special", "artist:50%_special", "私人收藏", "100% contrast")
+            matched_pct = db_mod.list_artists(search="50%")
+            assert len(matched_pct) == 1 and matched_pct[0]["id"] == pct_artist["id"]
+
+            # 2. Artist PATCH / DELETE + duplicate tag collision guard (HTTP 400, not 500)
+            r_patch = client.patch(
+                f"/api/artists/{pct_artist['id']}",
+                json={"name": "Edited Name", "category": "厚涂光影", "desc": "updated"},
+            )
+            assert r_patch.status_code == 200
+            assert r_patch.json()["artist"]["name"] == "Edited Name"
+            assert r_patch.json()["artist"]["category"] == "厚涂光影"
+
+            r_dup = client.patch(f"/api/artists/{pct_artist['id']}", json={"tag": "artist:rella"})
+            assert r_dup.status_code == 400
+
+            r_del_art = client.delete(f"/api/artists/{pct_artist['id']}")
+            assert r_del_art.status_code == 200
+            assert client.delete(f"/api/artists/{pct_artist['id']}").status_code == 404
+
+            # 3. Filename sanitization parity for special artist tags
+            slug = re.sub(r'[<>:"/\\|?*()%]+', "_", "artist:foo_(bar)%baz?").strip("_")
+            assert all(ch not in slug for ch in '<>:"/\\|?*()%')
+
+            # 4. Seed 500 gallery items + disk PNGs to stress search, sort, selective batch ops, and sync pruning
+            t0 = time.perf_counter()
+            created_ids = []
+            for i in range(500):
+                fname = f"stress_{i:04d}.png"
+                (out_dir / fname).write_bytes(b"PNGDATA" + str(i).encode())
+                row = db_mod.add_gallery_item(
+                    {
+                        "filename": fname,
+                        "rel_path": fname,
+                        "model": "nai-diffusion-4-5-full" if i % 2 == 0 else "nai-diffusion-5-full",
+                        "model_short": "V4.5 Full" if i % 2 == 0 else "V5 Full",
+                        "prompt": f"1girl, stress_tag_{i}, {'sunlight' if i % 5 == 0 else 'moonlight'}",
+                        "uc": "lowres, ugly_watermark" if i == 42 else "lowres",
+                        "width": 832,
+                        "height": 1216,
+                        "steps": 28,
+                        "scale": 5.0,
+                        "sampler": "k_euler_ancestral",
+                        "scheduler": "karras",
+                        "seed": 100000 + i,
+                        "artist_mix": [{"tag": "artist:ask_(askzy)", "weight": 0.9}] if i == 7 else [],
+                        "generation_time": float((i % 20) + 1),
+                        "favorite": (i < 10),
+                        "notes": "50%_special_note" if i == 15 else "",
+                    }
+                )
+                created_ids.append(row["id"])
+            insert_elapsed = time.perf_counter() - t0
+            assert insert_elapsed < 10.0
+
+            # Multi-field gallery search + escaped wildcards
+            assert db_mod.count_gallery(search="V4.5") == 250
+            assert db_mod.count_gallery(search="ugly_watermark") == 1
+            assert db_mod.count_gallery(search="ask_(askzy)") == 1
+            # Only the 1 record whose notes literally contains '%' matches escaped '%'
+            assert db_mod.count_gallery(search="%") == 1
+            assert db_mod.count_gallery(search="50%_special_note") == 1
+            assert db_mod.count_gallery(search="%%never_exists") == 0
+
+            # Sort order checks via API
+            r_fast = client.get("/api/gallery?sort=fastest&limit=5")
+            r_slow = client.get("/api/gallery?sort=slowest&limit=5")
+            assert r_fast.status_code == 200 and r_slow.status_code == 200
+            assert r_fast.json()["items"][0]["generation_time"] <= r_fast.json()["items"][-1]["generation_time"]
+            assert r_slow.json()["items"][0]["generation_time"] >= r_slow.json()["items"][-1]["generation_time"]
+
+            # Selective batch favorite & selective batch delete (must NOT wipe other 497 items!)
+            target_ids = created_ids[10:15]
+            r_bfav = client.post("/api/gallery/batch-favorite", json={"ids": target_ids, "favorite": True})
+            assert r_bfav.status_code == 200 and r_bfav.json()["updated"] == 5
+
+            r_bdel = client.post("/api/gallery/batch-delete", json={"ids": target_ids[:3], "delete_file": True})
+            assert r_bdel.status_code == 200
+            assert r_bdel.json()["removed"] == 3
+            assert r_bdel.json()["total"] == 497
+            assert not (out_dir / "stress_0010.png").exists()
+            assert (out_dir / "stress_0013.png").exists()
+
+            # Sync outputs folder: delete 2 files on disk + add 1 unindexed real PNG
+            (out_dir / "stress_0020.png").unlink()
+            (out_dir / "stress_0021.png").unlink()
+            extra_png = Image.new("RGB", (64, 64), (120, 40, 200))
+            extra_png.save(out_dir / "unindexed_extra.png", format="PNG")
+            r_sync = client.post("/api/gallery/sync")
+            assert r_sync.status_code == 200
+            sdata = r_sync.json()
+            assert sdata["imported"] == 1
+            assert sdata["pruned_missing"] == 2
+            assert sdata["total"] == 496
+        finally:
+            db_mod.DB_PATH = orig_db
+            db_mod.OUTPUTS_DIR = orig_out
+            app_mod.OUTPUTS_DIR = orig_app_out
+

@@ -6,7 +6,7 @@
   <title>NAI Studio — 个人创作工作台</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23111318'/%3E%3Cpath d='M20 44V20l24 24V20' stroke='%23ffffff' stroke-width='6' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E" />
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="/static/styles.css?v=p2-10" />
+  <link rel="stylesheet" href="/static/styles.css?v=p2-11" />
 </head>
 <body class="lg:h-screen min-h-screen flex flex-col lg:overflow-hidden overflow-y-auto">
 
@@ -243,18 +243,18 @@
         <!-- 分栏 A：正/负向提示词互切工坊 + 偏好开关 -->
         <div id="inspector-pane-prompts" class="space-y-3">
           <!-- 正/负向互斥切换条 + 语法规范状态 -->
-          <div class="flex items-center justify-between gap-2">
-            <div class="ui-segmented rounded-[7px] p-0.5 inline-flex items-center gap-0.5 text-[12px]" role="tablist">
-              <button type="button" data-prompt-side="pos" onclick="switchPromptSide('pos')" class="prompt-side-btn px-2.5 py-1 rounded-[5px] font-medium bg-[var(--cta-bg)] text-[var(--cta-fg)] transition-colors inline-flex items-center gap-1.5">
+          <div class="flex items-center justify-between gap-1.5">
+            <div class="ui-segmented rounded-[7px] p-0.5 inline-flex items-center gap-0.5 text-[12px] min-w-0" role="tablist">
+              <button type="button" data-prompt-side="pos" onclick="switchPromptSide('pos')" class="prompt-side-btn px-2 py-1 rounded-[5px] font-medium bg-[var(--cta-bg)] text-[var(--cta-fg)] transition-colors inline-flex items-center gap-1 whitespace-nowrap">
                 <span>正向</span>
-                <span id="prompt-token-count" class="text-[11px] font-mono opacity-80">0 tags</span>
+                <span id="prompt-token-count" class="text-[11px] font-mono opacity-80">0</span>
               </button>
-              <button type="button" data-prompt-side="uc" onclick="switchPromptSide('uc')" class="prompt-side-btn px-2.5 py-1 rounded-[5px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors inline-flex items-center gap-1.5">
-                <span>负面 (UC)</span>
-                <span id="uc-token-count" class="text-[11px] font-mono opacity-75">0 tags</span>
+              <button type="button" data-prompt-side="uc" onclick="switchPromptSide('uc')" class="prompt-side-btn px-2 py-1 rounded-[5px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors inline-flex items-center gap-1 whitespace-nowrap">
+                <span>负面</span>
+                <span id="uc-token-count" class="text-[11px] font-mono opacity-75">0</span>
               </button>
             </div>
-            <button id="lint-status-btn" onclick="toggleLintDrawer()" class="spring-btn inline-flex items-center gap-1 text-[11.5px] px-2 py-0.5 rounded-[6px] ui-btn text-[var(--status-success)] shrink-0">
+            <button id="lint-status-btn" onclick="toggleLintDrawer()" class="spring-btn inline-flex items-center gap-1 text-[11.5px] px-2 py-0.5 rounded-[6px] ui-btn text-[var(--status-success)] shrink-0 whitespace-nowrap">
               <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-check"/></svg>
               <span>格式规范</span>
             </button>
@@ -299,8 +299,8 @@
 
             <!-- 正向 Prompt 镜像高亮编辑器 (rows=6 更大输入空间) -->
             <div class="relative rounded-[8px] ui-well" id="prompt-editor-wrap">
-              <div id="prompt-backdrop" aria-hidden="true" class="custom-scroll prompt-mirror-sync absolute inset-0 p-3 whitespace-pre-wrap break-words pointer-events-none text-transparent"></div>
               <textarea id="prompt-input" rows="6" spellcheck="false" class="custom-scroll prompt-mirror-sync relative z-10 w-full block bg-transparent p-3 focus:outline-none text-[var(--text-primary)] caret-[var(--accent)] resize-y rounded-[8px]">1girl, solo, silver hair, blue eyes, serafuku, sunset, backlighting, wind, detailed eyes, rooftop</textarea>
+              <div id="prompt-backdrop" aria-hidden="true" class="custom-scroll prompt-mirror-sync absolute inset-0 z-20 p-3 whitespace-pre-wrap break-words pointer-events-none text-transparent"></div>
               <div id="inline-autocomplete-menu" class="hidden absolute left-2 right-2 top-[calc(100%+4px)] z-50 liquid-popover rounded-[10px] p-1 space-y-1 max-h-52 overflow-y-auto custom-scroll"></div>
             </div>
 
@@ -377,8 +377,8 @@
 
             <!-- 负面 UC 镜像高亮编辑器 -->
             <div class="relative rounded-[8px] ui-well" id="uc-editor-wrap">
-              <div id="uc-backdrop" aria-hidden="true" class="custom-scroll prompt-mirror-sync absolute inset-0 p-3 whitespace-pre-wrap break-words pointer-events-none text-transparent"></div>
               <textarea id="uc-input" rows="6" spellcheck="false" placeholder="不想出现在画面中的元素，支持英文标签、权重语法与自动补全..." class="custom-scroll prompt-mirror-sync relative z-10 w-full block bg-transparent p-3 focus:outline-none text-[var(--text-primary)] caret-[var(--accent)] resize-y rounded-[8px]">lowres, bad anatomy, bad hands, missing fingers, extra digit, fewer digits, blurry, watermark</textarea>
+              <div id="uc-backdrop" aria-hidden="true" class="custom-scroll prompt-mirror-sync absolute inset-0 z-20 p-3 whitespace-pre-wrap break-words pointer-events-none text-transparent"></div>
             </div>
 
             <!-- 负面标签权重微调 -->
@@ -883,30 +883,28 @@
   <!-- ================= TAB 2: 画师图鉴 & 混搭调音台 ================= -->
   <main id="view-artists" class="hidden relative z-10 flex-1 min-h-0 flex flex-col lg:flex-row">
     <section class="flex-1 studio-canvas-grid flex flex-col min-h-0">
-      <div class="studio-panel px-4 py-3 border-b border-[var(--border-hairline)] flex flex-wrap items-center justify-between gap-3 shrink-0">
-        <div class="flex items-center gap-1.5 flex-wrap" id="artist-cat-pills">
-          <button onclick="filterArtistsByCat('all')" data-cat="all" class="artist-cat-btn spring-btn px-3 py-1 rounded-[6px] text-[12.5px] ui-btn is-active">全部画师</button>
-          <button onclick="filterArtistsByCat('fav')" data-cat="fav" class="artist-cat-btn spring-btn inline-flex items-center gap-1 px-3 py-1 rounded-[6px] text-[12.5px] ui-btn">
-            <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-star"/></svg>
-            <span>我的收藏</span>
-          </button>
-          <button onclick="filterArtistsByCat('厚涂光影')" data-cat="厚涂光影" class="artist-cat-btn spring-btn px-3 py-1 rounded-[6px] text-[12.5px] ui-btn">厚涂光影</button>
-          <button onclick="filterArtistsByCat('清透水彩')" data-cat="清透水彩" class="artist-cat-btn spring-btn px-3 py-1 rounded-[6px] text-[12.5px] ui-btn">清透水彩</button>
-          <button onclick="filterArtistsByCat('幻彩插画')" data-cat="幻彩插画" class="artist-cat-btn spring-btn px-3 py-1 rounded-[6px] text-[12.5px] ui-btn">幻彩插画</button>
-          <button onclick="filterArtistsByCat('日系轻小说')" data-cat="日系轻小说" class="artist-cat-btn spring-btn px-3 py-1 rounded-[6px] text-[12.5px] ui-btn">日系轻小说</button>
-          <button onclick="filterArtistsByCat('赛博冷调')" data-cat="赛博冷调" class="artist-cat-btn spring-btn px-3 py-1 rounded-[6px] text-[12.5px] ui-btn">赛博冷调</button>
-        </div>
+      <div class="studio-panel px-4 py-3 border-b border-[var(--border-hairline)] flex flex-wrap items-center justify-between gap-2.5 shrink-0">
+        <div class="flex items-center gap-1.5 flex-wrap" id="artist-cat-pills"></div>
         <div class="flex items-center gap-2 flex-wrap">
-          <button id="artist-backfill-btn" onclick="startArtistBackfillQueue()" class="spring-btn px-3 py-1 rounded-[6px] ui-btn text-[12.5px]" title="使用 Opus 0 点数静默生成缺失的画师预览图">补齐缺失预览</button>
-          <button id="artist-backfill-stop-btn" onclick="stopAutoRollQueue()" class="hidden spring-btn inline-flex items-center gap-1 px-3 py-1 rounded-[6px] ui-btn text-[var(--status-danger)] text-[12.5px]">
+          <select id="artist-sort-select" onchange="renderArtistsGrid()" class="ui-well rounded-[6px] px-2.5 py-1 text-[12.5px]">
+            <option value="fav_first">收藏置顶</option>
+            <option value="name_asc">名称 A–Z</option>
+            <option value="newest">最新添加</option>
+            <option value="missing_preview">仅看缺失预览</option>
+          </select>
+          <button id="artist-backfill-btn" onclick="startArtistBackfillQueue()" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12.5px]" title="使用 Opus 0 点数静默生成缺失的画师预览图">补齐缺失预览</button>
+          <button id="artist-backfill-stop-btn" onclick="stopAutoRollQueue()" class="hidden spring-btn inline-flex items-center gap-1 px-2.5 py-1 rounded-[6px] ui-btn text-[var(--status-danger)] text-[12.5px]">
             <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-stop"/></svg>
             <span>停止生成 (<span id="artist-backfill-progress">0/0</span>)</span>
           </button>
           <div class="relative">
             <svg class="ui-ic-sm ui-ic text-[var(--text-muted)] absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" aria-hidden="true"><use href="#ic-search"/></svg>
-            <input id="artist-search-input" type="text" oninput="renderArtistsGrid()" placeholder="搜画师名、Tag..." class="ui-well rounded-[6px] pl-8 pr-3 py-1 text-[13px] w-44 placeholder:text-[var(--placeholder)]" />
+            <input id="artist-search-input" type="text" oninput="renderArtistsGrid()" placeholder="搜画师名、Tag、分类..." class="ui-well rounded-[6px] pl-8 pr-7 py-1 text-[13px] w-48 placeholder:text-[var(--placeholder)]" />
+            <button type="button" onclick="clearArtistSearch()" id="artist-search-clear" class="hidden absolute right-1.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-[4px] hover:bg-[var(--surface-well-hover)] flex items-center justify-center text-[var(--text-muted)]" title="清空搜索">
+              <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-close"/></svg>
+            </button>
           </div>
-          <button onclick="toggleCustomArtistModal(true)" class="liquid-cta spring-btn px-3 py-1 rounded-[6px] text-[12.5px] font-semibold">+ 新增画师</button>
+          <button onclick="openArtistModal()" class="liquid-cta spring-btn px-3 py-1 rounded-[6px] text-[12.5px] font-semibold">+ 新增画师</button>
         </div>
       </div>
 
@@ -915,98 +913,110 @@
       </div>
     </section>
 
-    <aside class="lg:w-[360px] studio-panel border-t lg:border-t-0 lg:border-l border-[var(--border-hairline)] p-4 flex flex-col justify-between min-h-0 shrink-0">
-      <div class="space-y-3 overflow-y-auto custom-scroll pr-1">
-        <div class="flex items-center justify-between pb-3 border-b border-[var(--border-hairline)]">
-          <h3 class="ui-title">画风混合器</h3>
-          <button type="button" class="ui-info-btn" title="点击左侧画师「+ 混合」加入，拖动滑块调配画风权重（自动适配 w::artist:: 与 {} 语法）" aria-label="画风混合器说明">
-            <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-info"/></svg>
-          </button>
+    <aside class="lg:w-[372px] studio-panel border-t lg:border-t-0 lg:border-l border-[var(--border-hairline)] p-4 flex flex-col justify-between min-h-0 shrink-0 gap-3">
+      <div class="space-y-3 flex-1 min-h-0 overflow-y-auto custom-scroll pr-1">
+        <div class="flex items-center justify-between pb-2.5 border-b border-[var(--border-hairline)]">
+          <div class="inline-flex items-center gap-1.5">
+            <h3 class="ui-title">画风混合器</h3>
+            <button type="button" class="ui-info-btn" title="点击左侧画师「+ 混合」加入，可调整先后顺序与精确权重，自动适配 w::artist:: 与 {} 语法" aria-label="画风混合器说明">
+              <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-info"/></svg>
+            </button>
+          </div>
+          <button onclick="clearMixer()" class="spring-btn text-[12px] px-2 py-0.5 rounded-[5px] ui-btn text-[var(--text-secondary)]">清空</button>
         </div>
 
         <div id="mixer-slots" class="space-y-2"></div>
 
         <div class="space-y-2 pt-3 border-t border-[var(--border-hairline)]">
-          <div class="flex items-center justify-between">
+          <div class="flex items-center justify-between gap-2">
             <span class="ui-section">已保存混合方案</span>
-            <button onclick="saveCurrentMixPreset()" class="spring-btn text-[12px] px-2.5 py-1 rounded-[6px] ui-btn">+ 保存当前</button>
           </div>
-          <div id="mix-presets-list" class="space-y-2"></div>
+          <div class="flex items-center gap-1.5">
+            <input id="mix-preset-name-input" type="text" placeholder="方案名称（留空则自动命名）" class="flex-1 min-w-0 ui-well rounded-[6px] px-2.5 py-1 text-[12px] placeholder:text-[var(--placeholder)]" />
+            <button onclick="saveCurrentMixPreset()" class="spring-btn text-[12px] px-2.5 py-1 rounded-[6px] ui-btn shrink-0">+ 保存</button>
+          </div>
+          <div id="mix-presets-list" class="space-y-1.5"></div>
         </div>
       </div>
 
-      <div class="space-y-3 pt-3 border-t border-[var(--border-hairline)]">
-        <div class="text-[12px] text-[var(--text-muted)]">实时画师权重语法</div>
-        <div id="mixer-preview-output" class="selectable-text p-3 rounded-[8px] ui-well font-mono text-[12.5px] break-all min-h-[44px]">尚未添加混合画师</div>
+      <div class="space-y-2.5 pt-3 border-t border-[var(--border-hairline)] shrink-0">
+        <div class="flex items-center justify-between text-[12px] text-[var(--text-muted)]">
+          <span>实时画师权重语法</span>
+          <button type="button" onclick="copyMixerOutput()" class="spring-btn inline-flex items-center gap-1 px-2 py-0.5 rounded-[5px] ui-btn text-[11.5px]" title="复制混合画师词串">
+            <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-copy"/></svg>
+            <span>复制</span>
+          </button>
+        </div>
+        <div id="mixer-preview-output" class="selectable-text p-2.5 rounded-[8px] ui-well font-mono text-[12px] break-all min-h-[42px] max-h-24 overflow-y-auto custom-scroll">尚未添加混合画师</div>
         <div class="flex gap-2">
-          <button onclick="clearMixer()" class="spring-btn px-3 py-1.5 rounded-[6px] ui-btn text-[12.5px]">清空</button>
-          <button onclick="runArtistAbTest()" class="spring-btn px-3 py-1.5 rounded-[6px] ui-btn text-[12.5px]" title="使用相同基础提示词与固定 Seed 对当前画师依次生成对照图">A/B 对照</button>
-          <button onclick="applyMixerToWorkbench()" class="flex-1 liquid-cta spring-btn py-1.5 rounded-[6px] text-[13px] font-semibold">应用到工作台 →</button>
+          <button onclick="runArtistAbTest()" class="spring-btn px-3 py-1.5 rounded-[6px] ui-btn text-[12.5px] whitespace-nowrap" title="使用相同基础提示词与固定 Seed 对当前画师依次生成对照图">A/B 对照</button>
+          <button onclick="applyMixerToWorkbench()" class="flex-1 liquid-cta spring-btn py-1.5 rounded-[6px] text-[13px] font-semibold">写入工作台提示词 →</button>
         </div>
-      </div>
-
-      <!-- 4. 固定生成执行区（与画布编辑工具分离） -->
-      <div class="px-3.5 py-2.5 border-t border-[var(--border-hairline)] bg-[var(--surface-panel)] space-y-2 shrink-0">
-        <div class="flex items-center justify-between gap-2">
-          <span id="cost-estimate-badge" class="text-[11.5px] px-2 py-0.5 rounded-[5px] ui-badge text-[var(--status-success)] font-mono whitespace-nowrap">
-            0 Anlas
-          </span>
-          <div class="inline-flex items-center rounded-[6px] ui-segmented p-0.5 gap-0.5 text-[11.5px]" title="单次连续生成张数（Opus 免费）">
-            <button onclick="setBatchCount(1)" data-batch="1" class="batch-btn px-2 py-0.5 rounded-[5px] font-mono bg-[var(--accent-tint)] text-[var(--text-primary)] font-semibold">1张</button>
-            <button onclick="setBatchCount(3)" data-batch="3" class="batch-btn px-2 py-0.5 rounded-[5px] font-mono text-[var(--text-muted)]">3</button>
-            <button onclick="setBatchCount(5)" data-batch="5" class="batch-btn px-2 py-0.5 rounded-[5px] font-mono text-[var(--text-muted)]">5</button>
-            <button onclick="setBatchCount(0)" data-batch="0" class="batch-btn px-2 py-0.5 rounded-[5px] font-mono text-[var(--text-muted)]" title="持续生成（直至手动停止）">∞</button>
-          </div>
-        </div>
-        <button id="stop-queue-btn" onclick="stopAutoRollQueue()" class="hidden spring-btn w-full inline-flex items-center justify-center gap-1.5 py-2 rounded-[8px] ui-btn text-[var(--status-danger)] text-[13px] font-semibold whitespace-nowrap">
-          <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-stop"/></svg>
-          <span>停止队列 (<span id="queue-progress-text">0</span>)</span>
-        </button>
-        <button id="generate-btn" onclick="triggerGenerate()" class="liquid-cta w-full inline-flex items-center justify-center gap-2 py-2 rounded-[8px] text-[13.5px] font-semibold tracking-wide whitespace-nowrap" title="开始生成 (快捷键 Ctrl+Enter)">
-          <svg class="ui-ic" aria-hidden="true"><use href="#ic-play"/></svg>
-          <span id="generate-btn-label">生成图片</span>
-        </button>
       </div>
     </aside>
   </main>
 
   <!-- ================= TAB 3: 作品图库与生成参数归档 ================= -->
-  <main id="view-gallery" class="hidden relative z-10 flex-1 min-h-0 flex flex-col studio-canvas-grid">
-    <div class="studio-panel px-4 py-3 border-b border-[var(--border-hairline)] flex flex-wrap items-center justify-between gap-3 shrink-0">
-      <div class="flex items-center gap-3 flex-wrap">
+  <main id="view-gallery" class="hidden relative z-10 flex-1 min-h-0 flex flex-col studio-canvas-grid relative">
+    <div class="studio-panel px-4 py-3 border-b border-[var(--border-hairline)] flex flex-wrap items-center justify-between gap-2.5 shrink-0">
+      <div class="flex items-center gap-2.5 flex-wrap">
         <span class="ui-title">作品图库与参数归档</span>
         <span id="gallery-storage-badge" class="text-[12px] px-2 py-0.5 rounded-[6px] ui-badge text-[var(--status-success)] font-mono">存储于 D:\NAI-Studio\outputs · C盘 0 MB</span>
       </div>
-      <div class="flex items-center gap-2 flex-wrap">
-        <button onclick="syncGalleryFolder()" class="spring-btn inline-flex items-center gap-1 px-2.5 py-1 rounded-[6px] ui-btn text-[12.5px]" title="扫描 D:\NAI-Studio\outputs 同步磁盘 PNG 原图与参数">
-          <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-refresh"/></svg>
-          <span>同步磁盘文件</span>
-        </button>
-        <button onclick="batchCleanGallery()" class="spring-btn inline-flex items-center gap-1 px-2.5 py-1 rounded-[6px] ui-btn text-[12.5px] text-[var(--status-danger)]" title="仅删除未收藏的图片及磁盘 PNG">
-          <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-trash"/></svg>
-          <span>清理未收藏</span>
-        </button>
-        <button id="gallery-fav-filter-btn" onclick="toggleGalleryFavFilter()" class="spring-btn inline-flex items-center gap-1 px-2.5 py-1 rounded-[6px] ui-btn text-[12.5px]">
+      <div class="flex items-center gap-1.5 flex-wrap">
+        <button id="gallery-select-page-btn" onclick="toggleSelectAllGalleryPage()" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]" title="全选 / 取消全选当前已加载作品">全选本页</button>
+        <button id="gallery-fav-filter-btn" onclick="toggleGalleryFavFilter()" class="spring-btn inline-flex items-center gap-1 px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">
           <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-star"/></svg>
           <span>仅看收藏</span>
         </button>
-        <select id="gallery-model-filter" onchange="renderFullGallery(true)" class="ui-well rounded-[6px] px-2.5 py-1 text-[12.5px]">
+        <select id="gallery-model-filter" onchange="renderFullGallery(true)" class="ui-well rounded-[6px] px-2 py-1 text-[12px]">
           <option value="">全部模型</option>
-          <option value="nai-diffusion-v5-full">V5 Full</option>
+          <option value="nai-diffusion-5-full">V5 Full</option>
           <option value="nai-diffusion-4-5-full">V4.5 Full</option>
           <option value="nai-diffusion-4-5-curated">V4.5 Curated</option>
           <option value="nai-diffusion-4-full">V4 Full</option>
           <option value="nai-diffusion-3">V3</option>
         </select>
+        <select id="gallery-sort-select" onchange="renderFullGallery(true)" class="ui-well rounded-[6px] px-2 py-1 text-[12px]">
+          <option value="newest">最新出图</option>
+          <option value="oldest">最早出图</option>
+          <option value="fav_first">收藏优先</option>
+          <option value="fastest">生成最快</option>
+          <option value="slowest">生成最慢</option>
+        </select>
+        <button id="gallery-density-btn" onclick="toggleGalleryDensity()" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]" title="切换卡片详情 / 紧凑大图网格">紧凑网格</button>
         <div class="relative">
           <svg class="ui-ic-sm ui-ic text-[var(--text-muted)] absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" aria-hidden="true"><use href="#ic-search"/></svg>
-          <input id="gallery-search-input" type="text" oninput="debouncedGallerySearch()" placeholder="搜索提示词、画师、Seed..." class="ui-well rounded-[6px] pl-8 pr-3 py-1 text-[13px] w-48 placeholder:text-[var(--placeholder)]" />
+          <input id="gallery-search-input" type="text" oninput="debouncedGallerySearch()" placeholder="搜提示词、UC、备注、Seed..." class="ui-well rounded-[6px] pl-8 pr-7 py-1 text-[12.5px] w-48 placeholder:text-[var(--placeholder)]" />
+          <button type="button" onclick="clearGallerySearch()" id="gallery-search-clear" class="hidden absolute right-1.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-[4px] hover:bg-[var(--surface-well-hover)] flex items-center justify-center text-[var(--text-muted)]" title="清空搜索">
+            <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-close"/></svg>
+          </button>
         </div>
+        <button onclick="syncGalleryFolder()" class="spring-btn inline-flex items-center gap-1 px-2.5 py-1 rounded-[6px] ui-btn text-[12px]" title="扫描磁盘新 PNG 入库并清理已失效记录">
+          <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-refresh"/></svg>
+          <span>同步磁盘</span>
+        </button>
+        <button onclick="confirmBatchCleanUnfav()" class="spring-btn inline-flex items-center gap-1 px-2.5 py-1 rounded-[6px] ui-btn text-[12px] text-[var(--status-danger)]" title="仅删除未收藏的图片及磁盘 PNG">
+          <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-trash"/></svg>
+          <span>清理未收藏</span>
+        </button>
       </div>
     </div>
 
-    <div class="flex-1 min-h-0 overflow-y-auto custom-scroll p-4">
+    <div class="flex-1 min-h-0 overflow-y-auto custom-scroll p-4 pb-20">
       <div id="full-gallery-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 auto-rows-max items-start"></div>
+    </div>
+
+    <!-- 多选悬浮批量动作栏 (Eagle / Immich 风格) -->
+    <div id="gallery-batch-bar" class="hidden fixed bottom-14 left-1/2 -translate-x-1/2 z-40 studio-hud rounded-[12px] px-3.5 py-2 flex items-center gap-2 flex-wrap shadow-2xl">
+      <span id="gallery-selected-count" class="text-[12.5px] font-semibold font-mono text-[var(--text-primary)] px-1">已选 0 项</span>
+      <span class="h-4 w-px bg-[var(--border-hairline)]"></span>
+      <button id="gallery-batch-diff-btn" onclick="openSelectedGalleryDiff()" disabled class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]" title="选中 2 张作品可进行卷帘与参数对比">A/B 对比</button>
+      <button onclick="batchFavSelectedGallery(true)" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">批量收藏</button>
+      <button onclick="batchFavSelectedGallery(false)" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">取消收藏</button>
+      <button onclick="copySelectedGalleryPrompts()" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">复制提示词</button>
+      <button onclick="confirmDeleteSelectedGallery()" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px] text-[var(--status-danger)]">删除所选</button>
+      <button onclick="clearGallerySelection()" class="spring-btn px-2 py-1 rounded-[6px] ui-btn-ghost text-[12px]" title="取消全选 (Esc)">取消</button>
     </div>
 
     <div id="gallery-pagination-bar" class="studio-panel px-4 py-2.5 border-t border-[var(--border-hairline)] flex items-center justify-between text-[12.5px] shrink-0">
@@ -1105,31 +1115,125 @@
   <div id="custom-artist-modal" class="hidden fixed inset-0 z-50 bg-black/55 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="w-full max-w-md rounded-[14px] liquid-popover p-6 space-y-4 ui-body">
       <div class="flex items-center justify-between">
-        <h3 class="ui-title">新增画师并生成预览图 (0 Anlas)</h3>
+        <h3 id="artist-modal-title" class="ui-title">新增画师并生成预览图 (0 Anlas)</h3>
         <button onclick="toggleCustomArtistModal(false)" aria-label="关闭" class="w-6 h-6 rounded-[6px] ui-btn flex items-center justify-center text-[var(--text-secondary)]">
           <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-close"/></svg>
         </button>
       </div>
-      <p class="text-[12.5px] text-[var(--text-muted)] leading-relaxed">
-        使用统一基准提示词与固定 Seed (<code>39481022</code>) 调用 NovelAI V4.5 Full 免费生成该画师标准风格预览图，存入 <code>D:\NAI-Studio\artists</code>。
+      <p id="artist-modal-hint" class="text-[12px] text-[var(--text-muted)] leading-relaxed">
+        使用统一基准提示词与固定 Seed (<code>39481022</code>) 调用 NovelAI V4.5 Full 免费生成标准画风预览图，存入 <code>D:\NAI-Studio\artists</code>。
       </p>
       <div class="space-y-3">
-        <div>
-          <label class="block text-[12.5px] text-[var(--text-muted)] mb-1">画师显示名称</label>
-          <input id="new-artist-name" type="text" placeholder="例如：QuAn_ / 荻pote" class="w-full ui-well rounded-[6px] px-3 py-2 ui-body" />
+        <div class="grid grid-cols-2 gap-2.5">
+          <div>
+            <label class="block text-[12px] text-[var(--text-muted)] mb-1">画师显示名称</label>
+            <input id="new-artist-name" type="text" placeholder="例如：QuAn_ / 荻pote" class="w-full ui-well rounded-[6px] px-3 py-1.5 ui-body" />
+          </div>
+          <div>
+            <label class="block text-[12px] text-[var(--text-muted)] mb-1">风格分类</label>
+            <select id="new-artist-category" class="w-full ui-well rounded-[6px] px-2.5 py-1.5 text-[13px]">
+              <option value="私人收藏">私人收藏</option>
+              <option value="厚涂光影">厚涂光影</option>
+              <option value="清透水彩">清透水彩</option>
+              <option value="幻彩插画">幻彩插画</option>
+              <option value="日系轻小说">日系轻小说</option>
+              <option value="赛博冷调">赛博冷调</option>
+            </select>
+          </div>
         </div>
         <div>
-          <label class="block text-[12.5px] text-[var(--text-muted)] mb-1">画师 Tag（英文 Danbooru 名）</label>
-          <input id="new-artist-tag" type="text" placeholder="例如：artist:ogipote 或 ask_(askzy)" class="w-full ui-well rounded-[6px] px-3 py-2 font-mono ui-body" />
+          <label class="block text-[12px] text-[var(--text-muted)] mb-1">画师 Tag（英文 Danbooru 名）</label>
+          <input id="new-artist-tag" type="text" placeholder="例如：artist:ogipote 或 ask_(askzy)" class="w-full ui-well rounded-[6px] px-3 py-1.5 font-mono ui-body" />
         </div>
         <div>
-          <label class="block text-[12.5px] text-[var(--text-muted)] mb-1">画风分类与备注</label>
-          <input id="new-artist-desc" type="text" placeholder="例如：强逆光色彩、戏剧化构图" class="w-full ui-well rounded-[6px] px-3 py-2 ui-body" />
+          <label class="block text-[12px] text-[var(--text-muted)] mb-1">画风描述与备注</label>
+          <input id="new-artist-desc" type="text" placeholder="例如：强逆光色彩、戏剧化构图" class="w-full ui-well rounded-[6px] px-3 py-1.5 ui-body" />
+        </div>
+        <div>
+          <label class="block text-[12px] text-[var(--text-muted)] mb-1">预览卡基准提示词（可选）</label>
+          <input id="new-artist-sample" type="text" placeholder="留空使用默认：1girl, solo, silver hair, blue eyes, sunset..." class="w-full ui-well rounded-[6px] px-3 py-1.5 font-mono text-[12px]" />
         </div>
       </div>
+      <div class="flex items-center justify-between gap-2 pt-2">
+        <button id="delete-artist-modal-btn" type="button" onclick="deleteEditingArtist()" class="hidden spring-btn px-3 py-1 rounded-[6px] ui-btn text-[var(--status-danger)] text-[12.5px]">删除画师</button>
+        <div class="flex items-center gap-2 ml-auto">
+          <button onclick="toggleCustomArtistModal(false)" class="spring-btn px-3 py-1 rounded-[6px] ui-btn">取消</button>
+          <button id="create-artist-submit-btn" onclick="submitArtistModal()" class="liquid-cta px-4 py-1 rounded-[6px] font-semibold">生成预览并添加 (0点数)</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 作品详情检查器弹窗 (Eagle / Immich Inspector) -->
+  <div id="gallery-detail-modal" class="hidden fixed inset-0 z-50 bg-black/65 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="w-full max-w-4xl max-h-[90vh] flex flex-col md:flex-row rounded-[14px] liquid-popover overflow-hidden ui-body">
+      <div class="md:w-1/2 bg-[var(--bg-canvas-well)] p-4 flex flex-col items-center justify-center relative min-h-[280px]">
+        <img id="gd-img" src="" alt="" class="max-h-[68vh] max-w-full rounded-[8px] object-contain" />
+        <div class="mt-3 flex items-center gap-2">
+          <button id="gd-prev-btn" type="button" onclick="navigateGalleryDetail(-1)" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">← 上一张</button>
+          <button id="gd-fav-btn" type="button" onclick="toggleDetailGalleryFav()" class="spring-btn inline-flex items-center gap-1 px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">
+            <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-star"/></svg>
+            <span id="gd-fav-label">收藏</span>
+          </button>
+          <button id="gd-next-btn" type="button" onclick="navigateGalleryDetail(1)" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">下一张 →</button>
+        </div>
+      </div>
+      <div class="md:w-1/2 p-5 flex flex-col min-h-0 overflow-y-auto custom-scroll space-y-3.5 border-t md:border-t-0 md:border-l border-[var(--border-hairline)]">
+        <div class="flex items-center justify-between gap-2 pb-2 border-b border-[var(--border-hairline)]">
+          <div class="min-w-0">
+            <h3 id="gd-title" class="ui-title truncate">作品详情</h3>
+            <div id="gd-meta" class="text-[12px] font-mono text-[var(--text-muted)] truncate"></div>
+          </div>
+          <button onclick="closeGalleryDetailModal()" aria-label="关闭" class="spring-btn w-7 h-7 rounded-[6px] ui-btn flex items-center justify-center text-[var(--text-secondary)] shrink-0">
+            <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-close"/></svg>
+          </button>
+        </div>
+
+        <div class="space-y-1">
+          <div class="flex items-center justify-between text-[12px] text-[var(--text-muted)]">
+            <span>备注标签</span>
+            <button type="button" onclick="saveGalleryDetailNotes()" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn text-[11.5px]">保存备注</button>
+          </div>
+          <input id="gd-notes-input" type="text" placeholder="添加备注，便于搜索（回车保存）..." onkeydown="if(event.key==='Enter'){saveGalleryDetailNotes();}" class="w-full ui-well rounded-[6px] px-2.5 py-1.5 text-[12.5px]" />
+        </div>
+
+        <div class="space-y-1">
+          <div class="flex items-center justify-between text-[12px] text-[var(--text-muted)]">
+            <span>正向提示词 (Prompt)</span>
+            <button type="button" onclick="copyDetailField('prompt')" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn text-[11.5px]">复制</button>
+          </div>
+          <pre id="gd-prompt" class="selectable-text p-2.5 rounded-[8px] ui-well font-mono text-[12px] whitespace-pre-wrap break-words max-h-32 overflow-y-auto custom-scroll"></pre>
+        </div>
+
+        <div class="space-y-1">
+          <div class="flex items-center justify-between text-[12px] text-[var(--text-muted)]">
+            <span>负面提示词 (UC)</span>
+            <button type="button" onclick="copyDetailField('uc')" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn text-[11.5px]">复制</button>
+          </div>
+          <pre id="gd-uc" class="selectable-text p-2.5 rounded-[8px] ui-well font-mono text-[12px] whitespace-pre-wrap break-words max-h-24 overflow-y-auto custom-scroll"></pre>
+        </div>
+
+        <div id="gd-specs" class="grid grid-cols-2 gap-1.5 text-[12px] font-mono p-2.5 rounded-[8px] ui-subgroup"></div>
+
+        <div class="flex flex-wrap gap-2 pt-2 mt-auto border-t border-[var(--border-hairline)]">
+          <button type="button" onclick="applyGalleryDetail('all')" class="liquid-cta spring-btn px-3 py-1.5 rounded-[6px] text-[12.5px] font-semibold">全参数载入工作台</button>
+          <button type="button" onclick="applyGalleryDetail('prompt')" class="spring-btn px-2.5 py-1.5 rounded-[6px] ui-btn text-[12.5px]">仅用提示词</button>
+          <button type="button" onclick="applyGalleryDetail('i2i')" class="spring-btn px-2.5 py-1.5 rounded-[6px] ui-btn text-[12.5px]">送入图生图</button>
+          <a id="gd-download-link" href="#" download class="spring-btn px-2.5 py-1.5 rounded-[6px] ui-btn text-[12.5px]">下载原图</a>
+          <button type="button" onclick="deleteDetailGalleryItem()" class="spring-btn px-2.5 py-1.5 rounded-[6px] ui-btn text-[12.5px] text-[var(--status-danger)] ml-auto">删除</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 统一二次确认弹窗（替代阻塞式 window.confirm） -->
+  <div id="studio-confirm-modal" class="hidden fixed inset-0 z-[60] bg-black/55 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="w-full max-w-sm rounded-[12px] liquid-popover p-5 space-y-3 ui-body">
+      <h3 id="confirm-modal-title" class="ui-title">确认操作</h3>
+      <p id="confirm-modal-msg" class="text-[13px] text-[var(--text-secondary)] leading-relaxed"></p>
       <div class="flex justify-end gap-2 pt-2">
-        <button onclick="toggleCustomArtistModal(false)" class="spring-btn px-3 py-1 rounded-[6px] ui-btn">取消</button>
-        <button id="create-artist-submit-btn" onclick="submitNewArtist()" class="liquid-cta px-4 py-1 rounded-[6px] font-semibold">生成预览并添加 (0点数)</button>
+        <button type="button" onclick="resolveStudioConfirm(false)" class="spring-btn px-3 py-1 rounded-[6px] ui-btn text-[12.5px]">取消</button>
+        <button id="confirm-modal-ok-btn" type="button" onclick="resolveStudioConfirm(true)" class="spring-btn px-3.5 py-1 rounded-[6px] ui-btn text-[var(--status-danger)] font-semibold text-[12.5px]">确认</button>
       </div>
     </div>
   </div>
@@ -1361,6 +1465,6 @@
 
   <div id="studio-tooltip" role="tooltip" aria-hidden="true"></div>
 
-  <script src="/static/app.js?v=p2-10"></script>
+  <script src="/static/app.js?v=p2-11"></script>
 </body>
 </html>

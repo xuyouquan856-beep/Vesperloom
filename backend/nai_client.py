@@ -889,15 +889,14 @@ async def generate_artist_preview_card(artist_id: int, tag: str, sample_tags: st
         },
     }
 
+    import re as _re
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json", "Accept": "*/*"}
-    async with httpx.AsyncClient(timeout=75.0) as client:
-        r = await client.post(f"{base_url}/ai/generate-image", headers=headers, json=payload)
-        if r.status_code != 200:
-            raise ValueError(f"画师预览卡生成失败 ({r.status_code}): {r.text[:200]}")
-        zf = zipfile.ZipFile(io.BytesIO(r.content))
-        png_bytes = zf.read(zf.namelist()[0])
+    client = _get_client()
+    r = await _post_nai_with_retry(client, f"{base_url}/ai/generate-image", headers, payload, "画师预览卡生成")
+    zf = zipfile.ZipFile(io.BytesIO(r.content))
+    png_bytes = zf.read(zf.namelist()[0])
 
-    slug = clean_tag.replace("artist:", "").replace("(", "").replace(")", "").replace("/", "_").replace(":", "_")
+    slug = _re.sub(r'[<>:"/\\|?*()%]+', "_", clean_tag.replace("artist:", "")).strip("_") or f"artist_{artist_id}"
     ARTISTS_DIR.mkdir(parents=True, exist_ok=True)
     file_path = ARTISTS_DIR / f"{slug}.png"
     file_path.write_bytes(png_bytes)
