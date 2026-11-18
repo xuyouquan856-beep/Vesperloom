@@ -51,6 +51,7 @@ from .nai_client import (
     suggest_tags_hybrid,
 )
 from .png_metadata import extract_nai_metadata
+from .prompt_agent import fetch_llm_models, run_prompt_agent, test_llm_connection
 from .prompt_engine import (
     adjust_tag_weight,
     delete_wildcard_file,
@@ -91,11 +92,21 @@ def _get_storage_stats() -> Dict[str, Any]:
     }
 
 
+def _sanitize_config_for_client(cfg: Dict[str, Any]) -> Dict[str, Any]:
+    out = dict(cfg)
+    out["api_token_masked"] = mask_token(cfg.get("api_token", ""))
+    out["llm_api_key_masked"] = mask_token(cfg.get("llm_api_key", ""))
+    # Never echo raw secret keys to frontend state
+    out.pop("api_token", None)
+    out.pop("llm_api_key", None)
+    return out
+
+
 @app.get("/api/bootstrap")
 async def api_bootstrap(fast: bool = False) -> Dict[str, Any]:
     cfg = load_config()
     account = {"connected": False, "checking": True} if fast else await fetch_account_status(cfg)
-    safe_cfg = {**cfg, "api_token_masked": mask_token(cfg.get("api_token", ""))}
+    safe_cfg = _sanitize_config_for_client(cfg)
     return {
         "config": safe_cfg,
         "models": MODELS_CATALOG,
@@ -128,6 +139,7 @@ async def api_account() -> Dict[str, Any]:
 @app.post("/api/config")
 async def api_update_config(body: Dict[str, Any]) -> Dict[str, Any]:
     cfg = load_config()
+    account_check_needed = False
     for k in (
         "api_token",
         "base_url",
@@ -140,18 +152,65 @@ async def api_update_config(body: Dict[str, Any]) -> Dict[str, Any]:
         "bg_hex",
         "bg_preset_name",
         "glass_clarity",
+        "prompt_workspace_mode",
+        "llm_base_url",
+        "llm_api_key",
+        "llm_model",
+        "llm_use_knowledge_agent",
     ):
         if k in body and body[k] is not None:
-            if k == "api_token" and "..." in str(body[k]):
+            if k in ("api_token", "llm_api_key") and "..." in str(body[k]):
                 continue
+            if k in ("api_token", "output_dir"):
+                account_check_needed = True
             cfg[k] = body[k]
     saved = save_config(cfg)
-    account = await fetch_account_status(saved)
-    return {
-        "config": {**saved, "api_token_masked": mask_token(saved.get("api_token", ""))},
-        "account": account,
+    account = await fetch_account_status(saved) if account_check_needed and not body.get("skip_account_check") else None
+    resp: Dict[str, Any] = {
+        "config": _sanitize_config_for_client(saved),
         "storage": _get_storage_stats(),
     }
+    if account is not None:
+        resp["account"] = account
+    return resp
+
+
+@app.post("/api/llm/models")
+async def api_llm_models(body: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    b = body or {}
+    try:
+        return await fetch_llm_models(
+            base_url=b.get("llm_base_url"),
+            api_key=b.get("llm_api_key"),
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/api/llm/test")
+async def api_llm_test(body: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    b = body or {}
+    try:
+        return await test_llm_connection(
+            base_url=b.get("llm_base_url"),
+            api_key=b.get("llm_api_key"),
+            model=b.get("llm_model"),
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/api/prompt/agent")
+async def api_prompt_agent(body: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        return await run_prompt_agent(
+            instruction=str(body.get("instruction") or ""),
+            model_id=str(body.get("model") or "nai-diffusion-5-full"),
+            scope=str(body.get("scope") or "all"),
+            existing_blocks=body.get("existing_blocks") if isinstance(body.get("existing_blocks"), dict) else None,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @app.post("/api/prompt/lint")

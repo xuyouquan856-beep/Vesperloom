@@ -74,6 +74,14 @@ const state = {
   selectedGalleryIds: new Set(),
   lastSelectedGalleryId: null,
   galleryDetailId: null,
+  // Toolbar Glass Select states + Dual Prompt Mode + LLM Agent
+  artistSort: "fav_first",
+  artistModalCategory: "私人收藏",
+  galleryModelFilter: "",
+  gallerySort: "newest",
+  promptWorkspaceMode: "classic",
+  llmModels: ["qwen4-max", "qwen3.8-max", "deepseek-v4-pro", "kimi-k3.1-pro", "glm-5.3-prime"],
+  llmAgentBusy: false,
 
   // Linter & V2.1/V2.2/V2.3 Interactive State
   promptSide: "pos",
@@ -143,13 +151,39 @@ function toggleGlassSelect(id, force) {
   document.querySelectorAll(".glass-select-trigger").forEach(b => b.classList.remove("open"));
 
   if (nextOpen) {
-    menu.classList.remove("hidden", "drop-up");
+    menu.classList.remove("hidden", "drop-up", "glass-select-menu-end");
     const rect = trigger.getBoundingClientRect();
     if (rect.bottom + 270 > window.innerHeight && rect.top > 240) {
       menu.classList.add("drop-up");
     }
+    if (menu.classList.contains("glass-select-menu-auto")) {
+      const mRect = menu.getBoundingClientRect();
+      if (mRect.right > window.innerWidth - 12) {
+        menu.classList.add("glass-select-menu-end");
+      }
+    }
     trigger.classList.add("open");
   }
+}
+
+function renderSimpleGlassSelect(id, options, selectedVal, handlerName) {
+  const labelEl = document.getElementById(`${id}-label`);
+  const menuEl = document.getElementById(`${id}-menu`);
+  const current = options.find(o => String(o.value) === String(selectedVal)) || options[0];
+  if (labelEl && current) labelEl.textContent = current.label;
+  if (!menuEl) return;
+  menuEl.innerHTML = options
+    .map(opt => {
+      const act = String(opt.value) === String(current?.value) ? "active" : "";
+      const safeVal = escapeHtml(String(opt.value));
+      return `
+        <button type="button" onclick="${handlerName}('${safeVal}')" class="glass-select-option ${act}">
+          <span class="truncate">${escapeHtml(opt.label)}</span>
+          ${act ? '<span class="text-[11px] font-mono opacity-85 shrink-0">✓</span>' : ""}
+        </button>
+      `;
+    })
+    .join("");
 }
 
 document.addEventListener("click", e => {
@@ -222,6 +256,7 @@ async function bootstrapApp() {
     selectModel(state.currentModel, false);
 
     renderWorkbenchHistory();
+    initToolbarGlassSelects();
     renderArtistCatPills();
     renderArtistsGrid();
     renderMixer();
@@ -229,6 +264,7 @@ async function bootstrapApp() {
     renderFullGallery(false);
     populateSettingsForm();
     renderOcCardsList();
+    setPromptWorkspaceMode(state.config.prompt_workspace_mode || "classic", false);
 
     // Load latest gallery image onto stage if available
     if (state.gallery.length > 0) {
@@ -749,6 +785,7 @@ function selectUcPreset(key) {
   renderUcSelectMenu(spec);
   syncPromptImmediateVisuals("uc");
   runPromptLinter("uc");
+  if (state.promptWorkspaceMode === "structured") syncClassicToStructured();
 }
 
 function clearUcPrompt() {
@@ -758,6 +795,7 @@ function clearUcPrompt() {
   ta.value = "";
   syncPromptImmediateVisuals("uc");
   runPromptLinter("uc");
+  if (state.promptWorkspaceMode === "structured") syncClassicToStructured();
 }
 
 function renderSamplerSelectMenu(spec) {
@@ -2292,6 +2330,7 @@ function restoreRecipeToWorkbench(item) {
   document.getElementById("steps-val").textContent = String(state.steps);
   document.getElementById("scale-val").textContent = Number(state.scale).toFixed(1);
   document.getElementById("seed-input").value = String(item.seed || 0);
+  if (state.promptWorkspaceMode === "structured") syncClassicToStructured();
 
   renderResolutionButtons();
   renderCharacterSlots();
@@ -2607,12 +2646,33 @@ function clearArtistSearch() {
   renderArtistsGrid();
 }
 
+function selectArtistSort(val) {
+  state.artistSort = val || "fav_first";
+  toggleGlassSelect("artist-sort-select", false);
+  renderArtistSortSelect();
+  renderArtistsGrid();
+}
+
+function renderArtistSortSelect() {
+  renderSimpleGlassSelect(
+    "artist-sort-select",
+    [
+      { value: "fav_first", label: "收藏置顶" },
+      { value: "name_asc", label: "名称 A–Z" },
+      { value: "newest", label: "最新添加" },
+      { value: "missing_preview", label: "仅看缺失预览" },
+    ],
+    state.artistSort,
+    "selectArtistSort"
+  );
+}
+
 function resetArtistFilters() {
   state.artistCatFilter = "all";
   const inp = document.getElementById("artist-search-input");
   if (inp) inp.value = "";
-  const sortEl = document.getElementById("artist-sort-select");
-  if (sortEl) sortEl.value = "fav_first";
+  state.artistSort = "fav_first";
+  renderArtistSortSelect();
   renderArtistCatPills();
   renderArtistsGrid();
 }
@@ -2622,7 +2682,7 @@ function renderArtistsGrid() {
   if (!grid) return;
   const qRaw = (document.getElementById("artist-search-input")?.value || "").trim();
   const q = qRaw.toLowerCase();
-  const sortMode = document.getElementById("artist-sort-select")?.value || "fav_first";
+  const sortMode = state.artistSort || "fav_first";
   const clearBtn = document.getElementById("artist-search-clear");
   if (clearBtn) clearBtn.classList.toggle("hidden", !qRaw);
 
@@ -2814,6 +2874,7 @@ function injectArtistsIntoPrompt(items, toastLabel) {
   switchPromptSide("pos");
   syncPromptImmediateVisuals("pos");
   runPromptLinter("pos");
+  if (state.promptWorkspaceMode === "structured") syncClassicToStructured();
   const wrap = document.getElementById("prompt-editor-wrap");
   if (wrap) {
     wrap.style.borderColor = "var(--border-focus)";
@@ -3068,6 +3129,25 @@ function toggleCustomArtistModal(show) {
   document.getElementById("custom-artist-modal")?.classList.toggle("hidden", !show);
 }
 
+function selectArtistModalCat(val) {
+  state.artistModalCategory = val || "私人收藏";
+  toggleGlassSelect("artist-cat-select", false);
+  renderArtistModalCatSelect();
+}
+
+function renderArtistModalCatSelect() {
+  const baseCats = ["私人收藏", "厚涂光影", "清透水彩", "幻彩插画", "日系轻小说", "赛博冷调"];
+  if (state.artistModalCategory && !baseCats.includes(state.artistModalCategory)) {
+    baseCats.unshift(state.artistModalCategory);
+  }
+  renderSimpleGlassSelect(
+    "artist-cat-select",
+    baseCats.map(c => ({ value: c, label: c })),
+    state.artistModalCategory || "私人收藏",
+    "selectArtistModalCat"
+  );
+}
+
 function openArtistModal(artistId = null) {
   const isEdit = artistId !== null && artistId !== undefined;
   state.artistEditingId = isEdit ? artistId : null;
@@ -3079,7 +3159,6 @@ function openArtistModal(artistId = null) {
   const subBtn = document.getElementById("create-artist-submit-btn");
 
   const nameIn = document.getElementById("new-artist-name");
-  const catIn = document.getElementById("new-artist-category");
   const tagIn = document.getElementById("new-artist-tag");
   const descIn = document.getElementById("new-artist-desc");
   const sampleIn = document.getElementById("new-artist-sample");
@@ -3090,15 +3169,7 @@ function openArtistModal(artistId = null) {
     if (delBtn) delBtn.classList.remove("hidden");
     if (subBtn) subBtn.textContent = "保存修改";
     if (nameIn) nameIn.value = artist.name || "";
-    if (catIn) {
-      if (![...catIn.options].some(o => o.value === artist.category)) {
-        const opt = document.createElement("option");
-        opt.value = artist.category;
-        opt.textContent = artist.category;
-        catIn.appendChild(opt);
-      }
-      catIn.value = artist.category || "私人收藏";
-    }
+    state.artistModalCategory = artist.category || "私人收藏";
     if (tagIn) tagIn.value = artist.tag || "";
     if (descIn) descIn.value = artist.desc || "";
     if (sampleIn) sampleIn.value = artist.sample_tags || "";
@@ -3108,17 +3179,18 @@ function openArtistModal(artistId = null) {
     if (delBtn) delBtn.classList.add("hidden");
     if (subBtn) subBtn.textContent = "生成预览并添加 (0点数)";
     if (nameIn) nameIn.value = "";
-    if (catIn) catIn.value = "私人收藏";
+    state.artistModalCategory = "私人收藏";
     if (tagIn) tagIn.value = "";
     if (descIn) descIn.value = "";
     if (sampleIn) sampleIn.value = "";
   }
+  renderArtistModalCatSelect();
   toggleCustomArtistModal(true);
 }
 
 async function submitArtistModal() {
   const name = document.getElementById("new-artist-name").value.trim();
-  const category = document.getElementById("new-artist-category")?.value || "私人收藏";
+  const category = state.artistModalCategory || "私人收藏";
   const tag = document.getElementById("new-artist-tag").value.trim();
   const desc = document.getElementById("new-artist-desc").value.trim();
   const sample_tags = document.getElementById("new-artist-sample")?.value.trim() || "";
@@ -3231,15 +3303,60 @@ function clearGallerySearch() {
   renderFullGallery(true);
 }
 
+function selectGalleryModelFilter(val) {
+  state.galleryModelFilter = val || "";
+  toggleGlassSelect("gallery-model-select", false);
+  renderGalleryModelSelect();
+  renderFullGallery(true);
+}
+
+function renderGalleryModelSelect() {
+  renderSimpleGlassSelect(
+    "gallery-model-select",
+    [
+      { value: "", label: "全部模型" },
+      { value: "nai-diffusion-5-full", label: "V5 Full" },
+      { value: "nai-diffusion-4-5-full", label: "V4.5 Full" },
+      { value: "nai-diffusion-4-5-curated", label: "V4.5 Curated" },
+      { value: "nai-diffusion-4-full", label: "V4 Full" },
+      { value: "nai-diffusion-3", label: "V3" },
+    ],
+    state.galleryModelFilter,
+    "selectGalleryModelFilter"
+  );
+}
+
+function selectGallerySort(val) {
+  state.gallerySort = val || "newest";
+  toggleGlassSelect("gallery-sort-select", false);
+  renderGallerySortSelect();
+  renderFullGallery(true);
+}
+
+function renderGallerySortSelect() {
+  renderSimpleGlassSelect(
+    "gallery-sort-select",
+    [
+      { value: "newest", label: "最新出图" },
+      { value: "oldest", label: "最早出图" },
+      { value: "fav_first", label: "收藏优先" },
+      { value: "fastest", label: "生成最快" },
+      { value: "slowest", label: "生成最慢" },
+    ],
+    state.gallerySort,
+    "selectGallerySort"
+  );
+}
+
 function resetGalleryFilters() {
   const inp = document.getElementById("gallery-search-input");
   if (inp) inp.value = "";
   const clearBtn = document.getElementById("gallery-search-clear");
   if (clearBtn) clearBtn.classList.add("hidden");
-  const mod = document.getElementById("gallery-model-filter");
-  if (mod) mod.value = "";
-  const sortEl = document.getElementById("gallery-sort-select");
-  if (sortEl) sortEl.value = "newest";
+  state.galleryModelFilter = "";
+  state.gallerySort = "newest";
+  renderGalleryModelSelect();
+  renderGallerySortSelect();
   state.galleryFavOnly = false;
   const favBtn = document.getElementById("gallery-fav-filter-btn");
   if (favBtn) {
@@ -3272,8 +3389,8 @@ function toggleGalleryDensity() {
 
 async function fetchGalleryPage(offset = 0, append = false) {
   const q = (document.getElementById("gallery-search-input")?.value || "").trim();
-  const model = document.getElementById("gallery-model-filter")?.value || "";
-  const sort = document.getElementById("gallery-sort-select")?.value || "newest";
+  const model = state.galleryModelFilter || "";
+  const sort = state.gallerySort || "newest";
   const params = new URLSearchParams({
     limit: "24",
     offset: String(offset),
@@ -3416,7 +3533,7 @@ async function renderFullGallery(reloadFromServer = false) {
 
   const isCompact = state.galleryDensity === "compact";
   grid.className = isCompact
-    ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5 auto-rows-max items-start"
+    ? "grid grid-cols-3 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-9 gap-2 auto-rows-max items-start"
     : "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 auto-rows-max items-start";
 
   updateGalleryBatchBar();
@@ -3440,12 +3557,23 @@ async function renderFullGallery(reloadFromServer = false) {
     .map(it => {
       const selected = state.selectedGalleryIds.has(it.id);
       const ringCls = selected ? "ring-2 ring-[var(--text-primary)]" : "";
-      const footerHtml = isCompact
-        ? `<div class="px-2 py-1.5 flex items-center justify-between gap-1 text-[11px] font-mono text-[var(--text-muted)]">
-             <span class="truncate">#${it.seed}</span>
-             <button onclick="openGalleryDetailModal(${it.id})" class="spring-btn px-1.5 py-0.5 rounded-[4px] ui-btn text-[11px] shrink-0">详情</button>
-           </div>`
-        : `<div class="p-3 space-y-2">
+      if (isCompact) {
+        return `
+          <div class="rounded-[7px] ui-card overflow-hidden flex flex-col group ${ringCls}">
+            <div class="relative shrink-0 overflow-hidden bg-[var(--bg-canvas-well)] aspect-square flex items-center justify-center">
+              <img src="${it.image_url}" alt="" loading="lazy" onerror="this.onerror=null;this.style.opacity='0.22';" class="w-full h-full object-cover object-top transition-opacity duration-150 group-hover:opacity-90 cursor-pointer" onclick="openGalleryDetailModal(${it.id})" />
+              <button type="button" onclick="toggleSelectGalleryItem(${it.id}, event)" aria-label="选择作品" class="spring-btn absolute top-1.5 left-1.5 w-5 h-5 rounded-[4px] studio-hud flex items-center justify-center text-[10px] font-bold ${selected ? "bg-[var(--text-primary)] text-[var(--cta-fg)] opacity-100" : "opacity-0 group-hover:opacity-100"} transition-opacity">
+                ${selected ? "✓" : ""}
+              </button>
+              <button onclick="toggleGalleryFav(${it.id})" aria-label="收藏作品" class="spring-btn absolute top-1.5 right-1.5 w-5 h-5 rounded-[4px] studio-hud flex items-center justify-center ${it.favorite ? "text-[var(--status-warning)] opacity-100" : "text-[var(--text-muted)] opacity-0 group-hover:opacity-100"} transition-opacity">
+                ${uiIcon("star", "ui-ic-sm")}
+              </button>
+              <span class="absolute bottom-1 left-1 px-1.5 py-0.5 rounded-[4px] studio-hud text-[10px] font-mono text-[var(--text-primary)] pointer-events-none">#${it.seed}</span>
+            </div>
+          </div>
+        `;
+      }
+      const footerHtml = `<div class="p-3 space-y-2">
              <div class="flex items-center justify-between text-[12px] font-mono text-[var(--text-muted)]">
                <span>Seed #${it.seed}</span>
                <span>${it.width}×${it.height} · ${it.generation_time || 0}s</span>
@@ -3606,6 +3734,7 @@ function applyGalleryDetail(mode) {
     syncPromptImmediateVisuals("uc");
     runPromptLinter("pos");
     runPromptLinter("uc");
+    if (state.promptWorkspaceMode === "structured") syncClassicToStructured();
     switchTab("workbench");
     switchInspectorTab("prompts");
     showToast("已载入正负面提示词至工作台");
@@ -3791,12 +3920,325 @@ async function syncGalleryFolder() {
   showToast(`同步完成：新收录 ${imported} 张，清理失效记录 ${pruned} 条`);
 }
 
-// ================= Tab 4: Settings & MCP Agent Playground =================
+// ================= Tab 4: Settings, Dual Prompt Mode & LLM Agent =================
+function initToolbarGlassSelects() {
+  renderArtistSortSelect();
+  renderArtistModalCatSelect();
+  renderGalleryModelSelect();
+  renderGallerySortSelect();
+  renderLlmModelSelect();
+}
+
 function populateSettingsForm() {
   const tokIn = document.getElementById("settings-token-input");
   const outIn = document.getElementById("settings-output-dir");
   if (tokIn) tokIn.value = state.config.api_token_masked || "";
   if (outIn) outIn.value = state.config.output_dir || "D:\\NAI-Studio\\outputs";
+
+  const llmUrl = document.getElementById("settings-llm-url");
+  const llmKey = document.getElementById("settings-llm-key");
+  const llmCustom = document.getElementById("settings-llm-model-custom");
+  const llmAgentSw = document.getElementById("settings-llm-agent-switch");
+  if (llmUrl) llmUrl.value = state.config.llm_base_url || "https://maas.qianwenaiapi.com/compatible-mode/v1";
+  if (llmKey) llmKey.value = state.config.llm_api_key_masked || "";
+  if (llmCustom) llmCustom.value = state.config.llm_model || "qwen4-max";
+  if (llmAgentSw) {
+    const on = state.config.llm_use_knowledge_agent !== false;
+    llmAgentSw.classList.toggle("on", on);
+    llmAgentSw.setAttribute("aria-checked", String(on));
+  }
+  const badge = document.getElementById("structured-agent-model-badge");
+  if (badge) badge.textContent = state.config.llm_model || "qwen4-max";
+  const statusPill = document.getElementById("settings-llm-status-pill");
+  if (statusPill) {
+    statusPill.textContent = state.config.llm_api_key_masked ? `已配置 · ${state.config.llm_model || "qwen4-max"}` : "未配置 Key";
+  }
+  renderLlmModelSelect();
+  updatePromptWorkspaceModeButtons();
+}
+
+function selectLlmModel(val) {
+  state.config.llm_model = val || "qwen4-max";
+  const customIn = document.getElementById("settings-llm-model-custom");
+  if (customIn) customIn.value = state.config.llm_model;
+  const badge = document.getElementById("structured-agent-model-badge");
+  if (badge) badge.textContent = state.config.llm_model;
+  toggleGlassSelect("llm-model-select", false);
+  renderLlmModelSelect();
+}
+
+function renderLlmModelSelect() {
+  const cur = state.config.llm_model || "qwen4-max";
+  const list = [...new Set([cur, ...(state.llmModels || [])].filter(Boolean))];
+  renderSimpleGlassSelect(
+    "llm-model-select",
+    list.map(m => ({ value: m, label: m })),
+    cur,
+    "selectLlmModel"
+  );
+}
+
+function toggleLlmKnowledgeAgent() {
+  const next = state.config.llm_use_knowledge_agent === false;
+  state.config.llm_use_knowledge_agent = next;
+  const sw = document.getElementById("settings-llm-agent-switch");
+  if (sw) {
+    sw.classList.toggle("on", next);
+    sw.setAttribute("aria-checked", String(next));
+  }
+}
+
+async function refreshLlmModels() {
+  const url = document.getElementById("settings-llm-url")?.value.trim() || "";
+  const key = document.getElementById("settings-llm-key")?.value.trim() || "";
+  const pill = document.getElementById("settings-llm-status-pill");
+  if (pill) pill.textContent = "拉取模型列表中...";
+  try {
+    const res = await fetch("/api/llm/models", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ llm_base_url: url, llm_api_key: key }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "拉取模型失败");
+    state.llmModels = data.all_models?.length ? data.all_models : state.llmModels;
+    renderLlmModelSelect();
+    if (pill) pill.textContent = `可用 ${data.all_models?.length || 0} 个对话模型`;
+    showToast(`已拉取 ${(data.all_models || []).length} 个可用大模型`);
+  } catch (err) {
+    if (pill) pill.textContent = "拉取失败";
+    showToast(err.message || "拉取模型列表失败");
+  }
+}
+
+async function saveLlmSettings() {
+  const llm_base_url = document.getElementById("settings-llm-url")?.value.trim() || "";
+  const llm_api_key = document.getElementById("settings-llm-key")?.value.trim() || "";
+  const customModel = document.getElementById("settings-llm-model-custom")?.value.trim() || "";
+  const llm_model = customModel || state.config.llm_model || "qwen4-max";
+  const llm_use_knowledge_agent = state.config.llm_use_knowledge_agent !== false;
+  try {
+    const res = await fetch("/api/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        llm_base_url,
+        llm_api_key,
+        llm_model,
+        llm_use_knowledge_agent,
+        prompt_workspace_mode: state.promptWorkspaceMode,
+        skip_account_check: true,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "保存失败");
+    state.config = data.config || state.config;
+    populateSettingsForm();
+    showToast(`已保存 AI 配置 (${llm_model})`);
+  } catch (err) {
+    showToast(err.message || "保存 AI 配置失败");
+  }
+}
+
+async function testLlmConnection() {
+  const url = document.getElementById("settings-llm-url")?.value.trim() || "";
+  const key = document.getElementById("settings-llm-key")?.value.trim() || "";
+  const model = document.getElementById("settings-llm-model-custom")?.value.trim() || state.config.llm_model || "qwen4-max";
+  const pill = document.getElementById("settings-llm-status-pill");
+  if (pill) pill.textContent = `正在测试 ${model}...`;
+  try {
+    const res = await fetch("/api/llm/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ llm_base_url: url, llm_api_key: key, llm_model: model }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "连接失败");
+    if (pill) pill.textContent = `连通正常 · ${data.model} (${data.latency_ms}ms)`;
+    showToast(`LLM 连通成功：${data.model} (${data.latency_ms}ms)`);
+  } catch (err) {
+    if (pill) pill.textContent = "连通失败";
+    showToast(err.message || "LLM 测试失败");
+  }
+}
+
+function updatePromptWorkspaceModeButtons() {
+  const mode = state.promptWorkspaceMode === "structured" ? "structured" : "classic";
+  document.getElementById("mode-btn-classic")?.classList.toggle("is-active", mode === "classic");
+  document.getElementById("mode-btn-structured")?.classList.toggle("is-active", mode === "structured");
+}
+
+async function setPromptWorkspaceMode(mode, persist = true) {
+  const next = mode === "structured" ? "structured" : "classic";
+  state.promptWorkspaceMode = next;
+  state.config.prompt_workspace_mode = next;
+  document.getElementById("prompt-mode-classic")?.classList.toggle("hidden", next !== "classic");
+  document.getElementById("prompt-mode-structured")?.classList.toggle("hidden", next !== "structured");
+  updatePromptWorkspaceModeButtons();
+
+  if (next === "structured") {
+    syncClassicToStructured();
+  } else {
+    syncPromptImmediateVisuals("pos");
+    syncPromptImmediateVisuals("uc");
+  }
+  if (persist) {
+    try {
+      await fetch("/api/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt_workspace_mode: next, skip_account_check: true }),
+      });
+      showToast(next === "structured" ? "已切换至四区块 + AI 导演提示词窗口" : "已切换至经典官网提示词窗口");
+    } catch (e) {}
+  }
+}
+
+function _isLightingOrSceneSeg(cleanLower) {
+  return /\b(lighting|backlighting|rim lighting|cinematic|sunlight|sunset|sunrise|twilight|golden hour|moonlight|starry sky|cloudy sky|tyndall|sunbeam|lens flare|bokeh|depth of field|chromatic aberration|sparkles|floating petals|wind|water drop|rain|snow|rooftop|classroom|ocean|beach|underwater|cityscape|ruins|stained glass|background|cowboy shot|upper body|full body|portrait|close-up|from above|from below|from side|from behind|dynamic angle|dutch angle|atmosphere|masterpiece|best quality|very aesthetic|absurdres|high complexity|ultra complexity|low complexity)\b/.test(cleanLower);
+}
+
+function syncClassicToStructured() {
+  const rawPos = document.getElementById("prompt-input")?.value || "";
+  const rawUc = document.getElementById("uc-input")?.value || "";
+  const knownArtists = new Set((state.artists || []).map(a => String(a.tag || "").trim().toLowerCase()));
+  const artistSegs = [];
+  const charSegs = [];
+  const lightSegs = [];
+
+  parsePromptSegments(rawPos).forEach(seg => {
+    const clean = seg.replace(/^\{+|\[+|\}+|\]+$/g, "").replace(/^-?\d+(?:\.\d+)?::|::$/g, "").trim().toLowerCase();
+    if (clean.startsWith("artist:") || knownArtists.has(clean) || clean === "watercolor (medium)" || clean === "impasto") {
+      artistSegs.push(seg);
+    } else if (_isLightingOrSceneSeg(clean)) {
+      lightSegs.push(seg);
+    } else {
+      charSegs.push(seg);
+    }
+  });
+
+  const aEl = document.getElementById("block-artist-input");
+  const cEl = document.getElementById("block-character-input");
+  const lEl = document.getElementById("block-lighting-input");
+  const nEl = document.getElementById("block-negative-input");
+  if (aEl) aEl.value = artistSegs.join(", ");
+  if (cEl) cEl.value = charSegs.join(", ");
+  if (lEl) lEl.value = lightSegs.join(", ");
+  if (nEl) nEl.value = rawUc;
+  updateStructuredBlockCounts();
+}
+
+function updateStructuredBlockCounts() {
+  const map = [
+    ["block-artist-input", "block-artist-count"],
+    ["block-character-input", "block-character-count"],
+    ["block-lighting-input", "block-lighting-count"],
+    ["block-negative-input", "block-negative-count"],
+  ];
+  map.forEach(([inId, cntId]) => {
+    const val = document.getElementById(inId)?.value || "";
+    const el = document.getElementById(cntId);
+    if (el) el.textContent = String(parsePromptSegments(val).length);
+  });
+}
+
+function syncStructuredToClassic() {
+  const aVal = (document.getElementById("block-artist-input")?.value || "").trim();
+  const cVal = (document.getElementById("block-character-input")?.value || "").trim();
+  const lVal = (document.getElementById("block-lighting-input")?.value || "").trim();
+  const nVal = (document.getElementById("block-negative-input")?.value || "").trim();
+  const combinedPos = [aVal, cVal, lVal].filter(Boolean).join(", ");
+
+  const ta = document.getElementById("prompt-input");
+  const uc = document.getElementById("uc-input");
+  if (ta) ta.value = combinedPos;
+  if (uc) uc.value = nVal;
+  updateStructuredBlockCounts();
+  syncPromptImmediateVisuals("pos");
+  syncPromptImmediateVisuals("uc");
+  clearTimeout(state.lintTimer);
+  state.lintTimer = setTimeout(() => runPromptLinter("pos"), 320);
+}
+
+function toggleAiTracePanel(force) {
+  const box = document.getElementById("ai-agent-trace-box");
+  if (!box) return;
+  if (typeof force === "boolean") box.classList.toggle("hidden", !force);
+  else box.classList.toggle("hidden");
+}
+
+async function runPromptAgent(scope = "all") {
+  if (state.llmAgentBusy) return;
+  const instruction = document.getElementById("ai-prompt-instruction")?.value.trim() || "";
+  const existing_blocks = {
+    artist: document.getElementById("block-artist-input")?.value || "",
+    character: document.getElementById("block-character-input")?.value || "",
+    lighting: document.getElementById("block-lighting-input")?.value || "",
+    negative: document.getElementById("block-negative-input")?.value || "",
+  };
+  if (!instruction && scope === "all" && !existing_blocks.character && !existing_blocks.lighting) {
+    showToast("请先输入自然语言描述，例如：夕阳天台上的银发少女");
+    return;
+  }
+
+  state.llmAgentBusy = true;
+  const statusEl = document.getElementById("ai-agent-status");
+  const allBtn = document.getElementById("ai-gen-all-btn");
+  const scopeBtns = document.querySelectorAll("[data-agent-scope]");
+  if (allBtn) {
+    allBtn.disabled = true;
+    allBtn.textContent = scope === "all" ? "Agent 检索并生成中..." : "生成中...";
+  }
+  scopeBtns.forEach(b => (b.disabled = true));
+  if (statusEl) {
+    statusEl.classList.remove("hidden");
+    statusEl.textContent = `正在调用 ${state.config.llm_model || "qwen4-max"} 检索画师库与 NAI 知识规则...`;
+  }
+
+  try {
+    const res = await fetch("/api/prompt/agent", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        instruction,
+        model: state.currentModel || "nai-diffusion-5-full",
+        scope,
+        existing_blocks,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "AI Agent 生成失败");
+    const blk = data.blocks || {};
+    if (scope === "all" || scope === "artist") document.getElementById("block-artist-input").value = blk.artist || "";
+    if (scope === "all" || scope === "character") document.getElementById("block-character-input").value = blk.character || "";
+    if (scope === "all" || scope === "lighting") document.getElementById("block-lighting-input").value = blk.lighting || "";
+    if (scope === "all" || scope === "negative") document.getElementById("block-negative-input").value = blk.negative || "";
+
+    syncStructuredToClassic();
+
+    const traceBtn = document.getElementById("ai-trace-toggle-btn");
+    const expEl = document.getElementById("ai-agent-explanation");
+    const traceList = document.getElementById("ai-agent-trace-list");
+    if (traceBtn) traceBtn.classList.remove("hidden");
+    if (expEl) expEl.textContent = data.explanation || "已完成知识校验并生成结构化提示词。";
+    if (traceList) {
+      const items = Array.isArray(data.agent_trace) ? data.agent_trace : [];
+      traceList.innerHTML = items.map(t => `<span class="px-1.5 py-0.5 rounded-[4px] ui-badge">${escapeHtml(t.summary || t.tool)}</span>`).join("");
+    }
+    toggleAiTracePanel(true);
+    if (statusEl) statusEl.textContent = `已完成 (${data.model}) · 语法检查${data.lint?.is_clean ? "通过" : `含 ${data.lint?.issues_count || 0} 处提醒`}`;
+    showToast(scope === "all" ? "AI 已生成四区块专业提示词" : "AI 已更新所选提示词区块");
+  } catch (err) {
+    if (statusEl) statusEl.textContent = err.message || "生成失败";
+    showToast(err.message || "AI 生成失败", 4500);
+  } finally {
+    state.llmAgentBusy = false;
+    if (allBtn) {
+      allBtn.disabled = false;
+      allBtn.textContent = "AI 一键生成四区块";
+    }
+    scopeBtns.forEach(b => (b.disabled = false));
+  }
 }
 
 async function saveSettingsConfig() {

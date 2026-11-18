@@ -459,3 +459,58 @@ def test_artists_gallery_overhaul_and_stress_regressions():
             db_mod.OUTPUTS_DIR = orig_out
             app_mod.OUTPUTS_DIR = orig_app_out
 
+
+def test_prompt_agent_knowledge_tools_and_config_masking():
+    from backend.prompt_agent import (
+        _clean_tag_field,
+        _execute_agent_tool,
+        _extract_json_block,
+        _rank_models,
+        compose_blocks_prompt,
+    )
+
+    # 1. Model ranking places flagship text/reasoning models ahead of embedding/image models
+    ranked = _rank_models([
+        "qwen3.7-text-embedding",
+        "qwen-image-3.0",
+        "deepseek-v4-pro",
+        "qwen4-max",
+        "qwen2-7b-instruct",
+    ])
+    assert ranked[0] == "qwen4-max"
+    assert "qwen3.7-text-embedding" not in ranked
+    assert "qwen-image-3.0" not in ranked
+
+    # 2. Resilient JSON extraction (handles fenced markdown + truncated explanation)
+    partial = '```json\n{"artist": "0.9::artist:rella::", "character": "1girl, silver hair", "lighting": "sunset", "negative": "lowres", "explanation": "未闭合说明'
+    rec = _extract_json_block(partial)
+    assert rec["artist"] == "0.9::artist:rella::"
+    assert rec["character"] == "1girl, silver hair"
+
+    # 3. Clean composition & delimiter normalization
+    assert _clean_tag_field("1girl， solo；  `silver hair` ") == "1girl, solo, silver hair"
+    composed = compose_blocks_prompt({
+        "artist": "0.85::artist:rella::",
+        "character": "1girl, silver hair",
+        "lighting": "sunset, backlighting",
+    })
+    assert composed == "0.85::artist:rella::, 1girl, silver hair, sunset, backlighting"
+
+    # 4. Agent knowledge tools query real Studio DB & linter cleanly
+    art_json, _ = _execute_agent_tool("search_artist_catalog", {"query": "水彩"}, "nai-diffusion-5-full")
+    assert "rella" in art_json.lower()
+    tag_json, _ = _execute_agent_tool("search_danbooru_tags", {"query": "水手服 逆光"}, "nai-diffusion-5-full")
+    assert "serafuku" in tag_json and "backlighting" in tag_json
+    lint_json, _ = _execute_agent_tool("validate_and_lint_prompt", {"prompt": "1girl, (bad:1.2)", "model_id": "nai-diffusion-5-full"}, "nai-diffusion-5-full")
+    assert '"is_clean": false' in lint_json
+
+    # 5. Bootstrap masks raw LLM API key & exposes workspace mode
+    client = TestClient(app)
+    r_boot = client.get("/api/bootstrap?fast=1")
+    assert r_boot.status_code == 200
+    cfg = r_boot.json()["config"]
+    assert "llm_api_key" not in cfg
+    assert "llm_api_key_masked" in cfg
+    assert cfg["prompt_workspace_mode"] in ("classic", "structured")
+
+

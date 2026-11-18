@@ -773,6 +773,17 @@ html.light .ui-btn {
   color: var(--accent);
 }
 
+@keyframes glassDropIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .glass-select-menu {
   position: absolute;
   left: 0;
@@ -783,6 +794,17 @@ html.light .ui-btn {
   padding: 4px;
   max-height: 280px;
   overflow-y: auto;
+  animation: glassDropIn 0.11s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.glass-select-menu-auto {
+  right: auto;
+  min-width: max(100%, 168px);
+  width: max-content;
+  max-width: 260px;
+}
+.glass-select-menu-end {
+  left: auto;
+  right: 0;
 }
 .glass-select-menu.drop-up {
   top: auto;
@@ -1085,6 +1107,32 @@ html.light .prompt-muted-mark {
 }
 .custom-scroll::-webkit-scrollbar-thumb:hover {
   background: var(--border-hover);
+}
+
+/* High-Contrast Selection inside Mirrored & Structured Prompt Editors */
+#prompt-input::selection,
+#uc-input::selection {
+  background: rgba(241, 245, 249, 0.42);
+  color: transparent;
+}
+html.light #prompt-input::selection,
+html.light #uc-input::selection {
+  background: rgba(15, 23, 42, 0.26);
+  color: transparent;
+}
+.prompt-block-input {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+.prompt-block-input::selection {
+  background: #f1f5f9;
+  color: #090b0f;
+}
+html.light .prompt-block-input::selection {
+  background: #0f172a;
+  color: #ffffff;
 }
 
 /* Prompt Mirror Backdrop Parity (Pixel-Locked to #prompt-input & #prompt-backdrop) */

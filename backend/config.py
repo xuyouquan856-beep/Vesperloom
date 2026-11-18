@@ -36,6 +36,11 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "bg_preset_name": "暮色青黛",
     "glass_clarity": 88,
     "port": 8780,
+    "prompt_workspace_mode": "classic",
+    "llm_base_url": "https://maas.qianwenaiapi.com/compatible-mode/v1",
+    "llm_api_key": "",
+    "llm_model": "qwen4-max",
+    "llm_use_knowledge_agent": True,
 }
 
 
