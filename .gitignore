@@ -21,6 +21,7 @@ data/*.db-shm
 data/*.sqlite
 data/*.sqlite3
 data/oc_avatars/
+data/skills/
 
 # === Generated Artworks, Artist Previews & Large Media ===
 outputs/

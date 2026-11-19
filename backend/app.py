@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 import io
@@ -17,13 +17,17 @@ from .database import (
     batch_delete_gallery,
     batch_favorite_gallery,
     count_gallery,
+    create_agent_session,
+    delete_agent_session,
     delete_artist,
     delete_gallery_item,
     delete_mix_preset,
     delete_oc_card,
     delete_snippet,
+    get_agent_session,
     get_gallery_item,
     init_db,
+    list_agent_sessions,
     list_artists,
     list_gallery,
     list_mix_presets,
@@ -52,6 +56,8 @@ from .nai_client import (
 )
 from .png_metadata import extract_nai_metadata
 from .prompt_agent import fetch_llm_models, run_prompt_agent, test_llm_connection
+from .skills_manager import delete_skill, ensure_builtin_skills, get_skill, list_skills, save_skill
+from .studio_agent import stream_studio_agent
 from .prompt_engine import (
     adjust_tag_weight,
     delete_wildcard_file,
@@ -66,6 +72,7 @@ OC_AVATARS_DIR = DATA_DIR / "oc_avatars"
 OC_AVATARS_DIR.mkdir(parents=True, exist_ok=True)
 
 init_db()
+ensure_builtin_skills()
 
 app = FastAPI(title="NAI Studio — Liquid Glass Workbench API", version="2.3.0")
 
@@ -120,6 +127,8 @@ async def api_bootstrap(fast: bool = False) -> Dict[str, Any]:
         "snippets": list_snippets(),
         "oc_cards": list_oc_cards(),
         "wildcards": list_wildcards(),
+        "skills": list_skills(include_content=False),
+        "agent_sessions": list_agent_sessions(limit=16),
         "queue": get_queue_status(),
         "storage": _get_storage_stats(),
     }
@@ -210,6 +219,99 @@ async def api_prompt_agent(body: Dict[str, Any]) -> Dict[str, Any]:
             existing_blocks=body.get("existing_blocks") if isinstance(body.get("existing_blocks"), dict) else None,
         )
     except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+# ================= Studio Agent Sessions, Streaming & Skills =================
+@app.get("/api/agent/sessions")
+async def api_agent_sessions() -> Dict[str, Any]:
+    return {"sessions": list_agent_sessions(limit=24)}
+
+
+@app.post("/api/agent/sessions")
+async def api_create_agent_session(body: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    b = body or {}
+    sess = create_agent_session(
+        title=str(b.get("title") or "新创作对话"),
+        pinned_skills=b.get("pinned_skills") if isinstance(b.get("pinned_skills"), list) else [],
+    )
+    return {"ok": True, "session": sess}
+
+
+@app.get("/api/agent/sessions/{session_id}")
+async def api_get_agent_session(session_id: str) -> Dict[str, Any]:
+    sess = get_agent_session(session_id)
+    if not sess:
+        raise HTTPException(status_code=404, detail="对话会话不存在")
+    return {"ok": True, "session": sess}
+
+
+@app.delete("/api/agent/sessions/{session_id}")
+async def api_delete_agent_session(session_id: str) -> Dict[str, Any]:
+    ok = delete_agent_session(session_id)
+    return {"ok": ok}
+
+
+@app.post("/api/agent/chat/stream")
+async def api_agent_chat_stream(body: Dict[str, Any]) -> StreamingResponse:
+    msg = str(body.get("message") or "").strip()
+    if not msg:
+        raise HTTPException(status_code=400, detail="请输入对话内容")
+    session_id = str(body.get("session_id") or "").strip() or None
+    wb_state = body.get("workbench_state") if isinstance(body.get("workbench_state"), dict) else {}
+    pinned = body.get("pinned_skills") if isinstance(body.get("pinned_skills"), list) else None
+    return StreamingResponse(
+        stream_studio_agent(
+            user_message=msg,
+            session_id=session_id,
+            workbench_state=wb_state,
+            pinned_skills=pinned,
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.get("/api/agent/skills")
+async def api_list_agent_skills(include_content: bool = False) -> Dict[str, Any]:
+    return {"skills": list_skills(include_content=include_content)}
+
+
+@app.get("/api/agent/skills/{name}")
+async def api_get_agent_skill(name: str) -> Dict[str, Any]:
+    sk = get_skill(name)
+    if not sk:
+        raise HTTPException(status_code=404, detail=f"Skill '{name}' 不存在")
+    return {"ok": True, "skill": sk}
+
+
+@app.post("/api/agent/skills")
+async def api_save_agent_skill(body: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        sk = save_skill(
+            name=str(body.get("name") or ""),
+            title=str(body.get("title") or ""),
+            description=str(body.get("description") or ""),
+            content=str(body.get("content") or ""),
+            triggers=str(body.get("triggers") or ""),
+        )
+        return {"ok": True, "skill": sk}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.delete("/api/agent/skills/{name}")
+async def api_delete_agent_skill(name: str) -> Dict[str, Any]:
+    try:
+        ok = delete_skill(name)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Skill 不存在")
+        return {"ok": True}
+    except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
 

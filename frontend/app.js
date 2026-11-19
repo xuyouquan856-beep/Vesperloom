@@ -285,6 +285,7 @@ async function bootstrapApp() {
     updateLeftRefsBadge();
     renderTagPillsBar("pos");
     renderTagPillsBar("uc");
+    window.initStudioAgentWindow?.(data);
     if (data.queue?.running) {
       startQueuePolling();
     }
@@ -1245,6 +1246,19 @@ function updateLintDrawerForSide(side = state.promptSide) {
     btn.className = "spring-btn inline-flex items-center gap-1 text-[11.5px] px-2 py-0.5 rounded-[6px] ui-btn text-[var(--status-success)] shrink-0";
     document.getElementById("lint-drawer")?.classList.add("hidden");
   }
+  const structPill = document.getElementById("structured-lint-pill");
+  const structLbl = document.getElementById("structured-lint-label");
+  const posLint = state.lastLintResult;
+  if (structPill && structLbl && posLint) {
+    if (posLint.issue_count > 0) {
+      structPill.className = "spring-btn inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-[5px] ui-btn text-[var(--status-warning)] border-[var(--status-warning)]";
+      structLbl.textContent = `${posLint.issue_count} 处提醒`;
+    } else {
+      structPill.className = "spring-btn inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-[5px] ui-btn text-[var(--status-success)]";
+      structLbl.textContent = "规范";
+    }
+  }
+  window.refreshAgentLiveStrip?.();
 }
 
 async function runPromptLinter(side = "pos") {
@@ -4146,11 +4160,34 @@ function updateStructuredBlockCounts() {
     ["block-lighting-input", "block-lighting-count"],
     ["block-negative-input", "block-negative-count"],
   ];
-  map.forEach(([inId, cntId]) => {
+  let posTotal = 0;
+  map.forEach(([inId, cntId], idx) => {
     const val = document.getElementById(inId)?.value || "";
+    const count = parsePromptSegments(val).length;
+    if (idx < 3) posTotal += count;
     const el = document.getElementById(cntId);
-    if (el) el.textContent = String(parsePromptSegments(val).length);
+    if (el) el.textContent = String(count);
   });
+  const totEl = document.getElementById("structured-total-count");
+  if (totEl) totEl.textContent = `${posTotal} tags`;
+  window.refreshAgentLiveStrip?.();
+}
+
+function clearStructuredBlock(blockKey) {
+  const el = document.getElementById(`block-${blockKey}-input`);
+  if (!el) return;
+  el.value = "";
+  syncStructuredToClassic();
+}
+
+function openAgentForPromptReview() {
+  window.toggleAgentWindow?.(true);
+  const issues = state.lastLintResult?.issues || [];
+  if (issues.length > 0) {
+    window.quickSendAgent?.("请检查我当前四区块提示词里的语法或冲突问题，并直接帮我修复规范化。");
+  } else {
+    window.quickSendAgent?.("请审阅我当前的四区块提示词，看看画面表现力或权重配比有哪些可以进一步提升的地方。");
+  }
 }
 
 function syncStructuredToClassic() {
@@ -4169,89 +4206,6 @@ function syncStructuredToClassic() {
   syncPromptImmediateVisuals("uc");
   clearTimeout(state.lintTimer);
   state.lintTimer = setTimeout(() => runPromptLinter("pos"), 320);
-}
-
-function toggleAiTracePanel(force) {
-  const box = document.getElementById("ai-agent-trace-box");
-  const btn = document.getElementById("ai-trace-toggle-btn");
-  if (!box) return;
-  const open = typeof force === "boolean" ? force : box.classList.contains("hidden");
-  box.classList.toggle("hidden", !open);
-  if (btn) btn.textContent = open ? "收起依据 ▴" : "检索依据 ▾";
-}
-
-async function runPromptAgent(scope = "all") {
-  if (state.llmAgentBusy) return;
-  const instruction = document.getElementById("ai-prompt-instruction")?.value.trim() || "";
-  const existing_blocks = {
-    artist: document.getElementById("block-artist-input")?.value || "",
-    character: document.getElementById("block-character-input")?.value || "",
-    lighting: document.getElementById("block-lighting-input")?.value || "",
-    negative: document.getElementById("block-negative-input")?.value || "",
-  };
-  if (!instruction && scope === "all" && !existing_blocks.character && !existing_blocks.lighting) {
-    showToast("请先输入自然语言描述，例如：夕阳天台上的银发少女");
-    return;
-  }
-
-  state.llmAgentBusy = true;
-  const statusEl = document.getElementById("ai-agent-status");
-  const allBtn = document.getElementById("ai-gen-all-btn");
-  const scopeBtns = document.querySelectorAll("[data-agent-scope]");
-  if (allBtn) {
-    allBtn.disabled = true;
-    allBtn.textContent = scope === "all" ? "Agent 检索并生成中..." : "生成中...";
-  }
-  scopeBtns.forEach(b => (b.disabled = true));
-  if (statusEl) {
-    statusEl.classList.remove("hidden");
-    statusEl.textContent = `正在调用 ${state.config.llm_model || "qwen4-max"} 检索画师库与 NAI 知识规则...`;
-  }
-
-  try {
-    const res = await fetch("/api/prompt/agent", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        instruction,
-        model: state.currentModel || "nai-diffusion-5-full",
-        scope,
-        existing_blocks,
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || "AI Agent 生成失败");
-    const blk = data.blocks || {};
-    if (scope === "all" || scope === "artist") document.getElementById("block-artist-input").value = blk.artist || "";
-    if (scope === "all" || scope === "character") document.getElementById("block-character-input").value = blk.character || "";
-    if (scope === "all" || scope === "lighting") document.getElementById("block-lighting-input").value = blk.lighting || "";
-    if (scope === "all" || scope === "negative") document.getElementById("block-negative-input").value = blk.negative || "";
-
-    syncStructuredToClassic();
-
-    const traceBtn = document.getElementById("ai-trace-toggle-btn");
-    const expEl = document.getElementById("ai-agent-explanation");
-    const traceList = document.getElementById("ai-agent-trace-list");
-    const traceItems = Array.isArray(data.agent_trace) ? data.agent_trace : [];
-    if (traceBtn) traceBtn.classList.remove("hidden");
-    if (expEl) expEl.textContent = data.explanation || "已完成知识校验并生成结构化提示词。";
-    if (traceList) {
-      traceList.innerHTML = traceItems.map(t => `<span class="px-1.5 py-0.5 rounded-[4px] ui-badge">${escapeHtml(t.summary || t.tool)}</span>`).join("");
-    }
-    toggleAiTracePanel(false);
-    if (statusEl) statusEl.textContent = `✓ ${data.model} · 检索 ${traceItems.length} 项 · 语法${data.lint?.is_clean ? "通过" : `含 ${data.lint?.issues_count || 0} 处提醒`}`;
-    showToast(scope === "all" ? "AI 已生成四区块专业提示词" : "AI 已更新所选提示词区块");
-  } catch (err) {
-    if (statusEl) statusEl.textContent = err.message || "生成失败";
-    showToast(err.message || "AI 生成失败", 4500);
-  } finally {
-    state.llmAgentBusy = false;
-    if (allBtn) {
-      allBtn.disabled = false;
-      allBtn.textContent = "AI 一键生成四区块";
-    }
-    scopeBtns.forEach(b => (b.disabled = false));
-  }
 }
 
 async function saveSettingsConfig() {

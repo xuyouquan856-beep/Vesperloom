@@ -173,6 +173,17 @@ def search_builtin_tags(query: str, limit: int = 12) -> List[Dict[str, Any]]:
             scored.append((80, item))
         elif q in tag_l or q in cat_l:
             scored.append((65, item))
+    if not scored and len(q) >= 2:
+        cjk_seq = "".join(re.findall(r"[\u4e00-\u9fff]+", q))
+        cjk_bigrams = [cjk_seq[i : i + 2] for i in range(len(cjk_seq) - 1)] if len(cjk_seq) >= 2 else []
+        en_words = [w for w in re.findall(r"[a-z0-9_\-]+", q) if len(w) >= 3]
+        sub_terms = list(dict.fromkeys(cjk_bigrams + en_words))
+        if sub_terms:
+            for item in BUILTIN_TAGS:
+                hay = f"{item['tag'].lower()} {item['cn'].lower()} {item['cat'].lower()}"
+                hits = sum(1 for t in sub_terms if t in hay)
+                if hits > 0:
+                    scored.append((40 + hits * 10, item))
     scored.sort(key=lambda x: (-x[0], -x[1]["count"]))
     return [x[1] for x in scored[:limit]]
 

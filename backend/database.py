@@ -307,6 +307,31 @@ def init_db() -> None:
         )
         conn.execute("CREATE INDEX IF NOT EXISTS idx_gallery_model_fav ON gallery(model, favorite, id DESC)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_gallery_rel_path ON gallery(rel_path)")
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS agent_sessions (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                pinned_skills_json TEXT DEFAULT '[]',
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS agent_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT NOT NULL,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                tool_events_json TEXT DEFAULT '[]',
+                ui_actions_json TEXT DEFAULT '[]',
+                created_at INTEGER NOT NULL
+            )
+            """
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_agent_msg_session ON agent_messages(session_id, id ASC)")
 
         # Seed artists if empty
         cur = conn.execute("SELECT COUNT(*) as cnt FROM artists")
@@ -853,3 +878,119 @@ def delete_oc_card(card_id: int) -> bool:
         conn.execute("DELETE FROM oc_cards WHERE id = ?", (card_id,))
         conn.commit()
     return True
+
+
+def create_agent_session(title: str = "新创作对话", session_id: Optional[str] = None, pinned_skills: Optional[List[str]] = None) -> Dict[str, Any]:
+    import uuid
+    sid = (session_id or f"s_{uuid.uuid4().hex[:12]}").strip()
+    now = int(time.time())
+    skills = pinned_skills or []
+    with get_conn() as conn:
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO agent_sessions (id, title, pinned_skills_json, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (sid, (title or "新创作对话").strip()[:80], json.dumps(skills, ensure_ascii=False), now, now),
+        )
+        conn.commit()
+    return {"id": sid, "title": (title or "新创作对话").strip()[:80], "pinned_skills": skills, "created_at": now, "updated_at": now}
+
+
+def list_agent_sessions(limit: int = 20) -> List[Dict[str, Any]]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM agent_sessions ORDER BY updated_at DESC LIMIT ?",
+            (max(1, int(limit)),),
+        ).fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            try:
+                d["pinned_skills"] = json.loads(d.pop("pinned_skills_json", "[]") or "[]")
+            except Exception:
+                d["pinned_skills"] = []
+            out.append(d)
+        return out
+
+
+def get_agent_session(session_id: str) -> Optional[Dict[str, Any]]:
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM agent_sessions WHERE id = ?", (session_id,)).fetchone()
+        if not row:
+            return None
+        d = dict(row)
+        try:
+            d["pinned_skills"] = json.loads(d.pop("pinned_skills_json", "[]") or "[]")
+        except Exception:
+            d["pinned_skills"] = []
+        msgs = conn.execute(
+            "SELECT * FROM agent_messages WHERE session_id = ? ORDER BY id ASC",
+            (session_id,),
+        ).fetchall()
+        d["messages"] = []
+        for m in msgs:
+            md = dict(m)
+            try:
+                md["tool_events"] = json.loads(md.pop("tool_events_json", "[]") or "[]")
+            except Exception:
+                md["tool_events"] = []
+            try:
+                md["ui_actions"] = json.loads(md.pop("ui_actions_json", "[]") or "[]")
+            except Exception:
+                md["ui_actions"] = []
+            d["messages"].append(md)
+        return d
+
+
+def append_agent_message(
+    session_id: str,
+    role: str,
+    content: str,
+    tool_events: Optional[List[Dict[str, Any]]] = None,
+    ui_actions: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    now = int(time.time())
+    te = tool_events or []
+    ua = ui_actions or []
+    with get_conn() as conn:
+        cur = conn.execute(
+            """
+            INSERT INTO agent_messages (session_id, role, content, tool_events_json, ui_actions_json, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (session_id, role, content, json.dumps(te, ensure_ascii=False), json.dumps(ua, ensure_ascii=False), now),
+        )
+        conn.execute("UPDATE agent_sessions SET updated_at = ? WHERE id = ?", (now, session_id))
+        conn.commit()
+        return {
+            "id": cur.lastrowid,
+            "session_id": session_id,
+            "role": role,
+            "content": content,
+            "tool_events": te,
+            "ui_actions": ua,
+            "created_at": now,
+        }
+
+
+def update_agent_session_meta(session_id: str, title: Optional[str] = None, pinned_skills: Optional[List[str]] = None) -> None:
+    now = int(time.time())
+    with get_conn() as conn:
+        if title is not None:
+            conn.execute("UPDATE agent_sessions SET title = ?, updated_at = ? WHERE id = ?", (title.strip()[:80], now, session_id))
+        if pinned_skills is not None:
+            conn.execute(
+                "UPDATE agent_sessions SET pinned_skills_json = ?, updated_at = ? WHERE id = ?",
+                (json.dumps(pinned_skills, ensure_ascii=False), now, session_id),
+            )
+        conn.commit()
+
+
+def delete_agent_session(session_id: str) -> bool:
+    with get_conn() as conn:
+        conn.execute("DELETE FROM agent_messages WHERE session_id = ?", (session_id,))
+        cur = conn.execute("DELETE FROM agent_sessions WHERE id = ?", (session_id,))
+        conn.commit()
+        return bool(cur.rowcount)
+

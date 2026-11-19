@@ -514,3 +514,82 @@ def test_prompt_agent_knowledge_tools_and_config_masking():
     assert cfg["prompt_workspace_mode"] in ("classic", "structured")
 
 
+def test_studio_agent_skills_sessions_and_workbench_tools():
+    from backend.studio_agent import _execute_studio_tool, _extract_quick_replies, _merge_tag_strings
+
+    client = TestClient(app)
+
+    # 1. SKILL.md progressive disclosure CRUD API
+    r_sk = client.get("/api/agent/skills")
+    assert r_sk.status_code == 200
+    skills = r_sk.json()["skills"]
+    names = {s["name"] for s in skills}
+    assert {"nai-v5-prompt-craft", "colloquial-to-danbooru", "creative-interview", "artist-style-blending", "director-and-inpaint-workflow"}.issubset(names)
+
+    r_create = client.post(
+        "/api/agent/skills",
+        json={
+            "name": "test-temp-skill",
+            "title": "测试临时技能",
+            "description": "用于单元测试的临时 SKILL.md",
+            "triggers": "测试",
+            "content": "# 测试技能\n1. 规则一",
+        },
+    )
+    assert r_create.status_code == 200 and r_create.json()["skill"]["name"] == "test-temp-skill"
+    r_read = client.get("/api/agent/skills/test-temp-skill")
+    assert r_read.status_code == 200 and "规则一" in r_read.json()["skill"]["content"]
+    # Built-in skill cannot be deleted
+    assert client.delete("/api/agent/skills/nai-v5-prompt-craft").status_code == 400
+    assert client.delete("/api/agent/skills/test-temp-skill").status_code == 200
+
+    # 2. Persistent Agent Sessions CRUD
+    r_sess = client.post("/api/agent/sessions", json={"title": "单元测试会话", "pinned_skills": ["colloquial-to-danbooru"]})
+    assert r_sess.status_code == 200
+    sid = r_sess.json()["session"]["id"]
+    r_get_sess = client.get(f"/api/agent/sessions/{sid}")
+    assert r_get_sess.status_code == 200 and r_get_sess.json()["session"]["pinned_skills"] == ["colloquial-to-danbooru"]
+    assert client.delete(f"/api/agent/sessions/{sid}").status_code == 200
+
+    # 3. Tag merge & diff calculation + Studio Agent tool execution
+    merged, added, removed = _merge_tag_strings("1girl, silver hair, blue eyes", "1.2::blue eyes::, serafuku, wind", mode="merge")
+    assert "1.2::blue eyes::" in merged and "serafuku" in merged
+    assert "1.2::blue eyes::" in added and "serafuku" in added and removed == []
+
+    wb = {"model": "nai-diffusion-5-full", "stage_has_image": False}
+    live_blocks = {"artist": "artist:rella", "character": "1girl, silver hair", "lighting": "sunset", "negative": "lowres"}
+
+    # read_skill tool
+    sk_out, sk_sum, sk_act = _execute_studio_tool("read_skill", {"name": "colloquial-to-danbooru"}, wb, live_blocks)
+    assert "Colloquial Chinese" in sk_out and sk_act is None
+
+    # patch_prompt_blocks tool
+    p_out, p_sum, p_act = _execute_studio_tool(
+        "patch_prompt_blocks",
+        {"lighting": "1.15::backlighting::, bokeh", "mode": "merge", "reason": "追加逆光与散景"},
+        wb,
+        live_blocks,
+    )
+    assert p_act is not None and p_act["type"] == "patch_prompt_blocks"
+    assert "1.15::backlighting::" in live_blocks["lighting"] and "sunset" in live_blocks["lighting"]
+
+    # remove_prompt_tags tool
+    rm_out, _, rm_act = _execute_studio_tool("remove_prompt_tags", {"tags": ["sunset"], "side": "pos"}, wb, live_blocks)
+    assert rm_act is not None and "sunset" not in live_blocks["lighting"]
+
+    # set_workbench_params & run_director_tool guard
+    _, _, param_act = _execute_studio_tool("set_workbench_params", {"steps": 28, "scale": 5.5}, wb, live_blocks)
+    assert param_act is not None and param_act["payload"]["scale"] == 5.5
+
+    dir_err_out, _, dir_err_act = _execute_studio_tool("run_director_tool", {"req_type": "lineart"}, wb, live_blocks)
+    assert "暂无图片" in dir_err_out and dir_err_act is None
+    wb["stage_has_image"] = True
+    _, _, dir_ok_act = _execute_studio_tool("run_director_tool", {"req_type": "lineart"}, wb, live_blocks)
+    assert dir_ok_act is not None and dir_ok_act["payload"]["req_type"] == "lineart"
+
+    # Quick replies extraction
+    clean_txt, q_opts = _extract_quick_replies("这是三个方向。\n[QUICK_REPLIES: 方案一 | 方案二 | 直接出图]")
+    assert clean_txt == "这是三个方向。" and q_opts == ["方案一", "方案二", "直接出图"]
+
+
+
