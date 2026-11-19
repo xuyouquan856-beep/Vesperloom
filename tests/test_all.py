@@ -597,10 +597,16 @@ def test_agent_v2_skills_and_library_curation_tools(tmp_path, monkeypatch):
     from backend import skills_manager as sk_mod
     from backend.studio_agent import STUDIO_AGENT_TOOLS, _execute_studio_tool
 
-    # 1. Verify all 8 built-in v2 skills & deep NAI V4.5/V5 engineering knowledge
+    # 1. Verify all 8 built-in v3 skills & 19 Studio Agent tools (including batch curation, Danbooru & vision)
     tool_names = {t["function"]["name"] for t in STUDIO_AGENT_TOOLS}
-    assert {"manage_artist_catalog", "manage_mix_presets", "manage_gallery_items"}.issubset(tool_names)
-    assert len(STUDIO_AGENT_TOOLS) == 17
+    assert {
+        "manage_artist_catalog",
+        "manage_mix_presets",
+        "manage_gallery_items",
+        "lookup_danbooru_artists",
+        "inspect_artist_previews",
+    }.issubset(tool_names)
+    assert len(STUDIO_AGENT_TOOLS) == 19
 
     skills = sk_mod.list_skills()
     names = {s["name"] for s in skills}
@@ -705,6 +711,41 @@ def test_agent_v2_skills_and_library_curation_tools(tmp_path, monkeypatch):
     # Delete test artist
     out_del_a, _, act_del_a = _execute_studio_tool("manage_artist_catalog", {"action": "delete", "artist_id": aid}, wb, live_blocks)
     assert json.loads(out_del_a)["ok"] is True and act_del_a["payload"]["deleted_id"] == aid
+
+    # 3b. manage_artist_catalog batch_add & batch_update
+    out_badd, _, act_badd = _execute_studio_tool(
+        "manage_artist_catalog",
+        {
+            "action": "batch_add",
+            "artists": [
+                {"tag": "age fx", "category": "私人收藏"},
+                {"tag": "fuzichoco", "category": "幻彩插画"},
+                {"tag": "artist:yoneyama_mai", "category": "赛博冷调"},
+            ],
+            "generate_preview": True,
+            "model": "nai-diffusion-4-5-full",
+        },
+        wb,
+        live_blocks,
+    )
+    badd_data = json.loads(out_badd)
+    assert badd_data["ok"] is True and badd_data["added_count"] == 3
+    assert any(a["tag"] == "artist:age_fx" for a in badd_data["artists"])
+    assert act_badd["payload"]["backfill_missing"] is True and act_badd["payload"]["model"] == "nai-diffusion-4-5-full"
+
+    out_bupd, _, act_bupd = _execute_studio_tool(
+        "manage_artist_catalog",
+        {
+            "action": "batch_update",
+            "updates": [
+                {"tag": "fuzichoco", "desc": "华丽和风彩绘", "sample_tags": "colorful, sakura, detailed background"},
+                {"artist_id": badd_data["artists"][0]["id"], "category": "厚涂光影", "desc": "浓重质感笔触"},
+            ],
+        },
+        wb,
+        live_blocks,
+    )
+    assert json.loads(out_bupd)["updated_count"] == 2 and act_bupd["type"] == "refresh_artists"
 
     # 5. manage_gallery_items: favorite -> set_notes -> load_to_workbench -> sync_folder -> delete
     png_path = temp_out / "sample_agent.png"

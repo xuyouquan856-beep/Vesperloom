@@ -1,8 +1,15 @@
+import asyncio
+import base64
+from io import BytesIO
 import json
+from pathlib import Path
 import re
 from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 
-from .config import OUTPUTS_DIR, load_config
+import httpx
+from PIL import Image
+
+from .config import ARTISTS_DIR, OUTPUTS_DIR, load_config
 from .database import (
     add_mix_preset,
     append_agent_message,
@@ -258,20 +265,98 @@ STUDIO_AGENT_TOOLS: List[Dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "manage_artist_catalog",
-            "description": "Manage the local Artist Catalog: add a new custom artist, update metadata, toggle favorite, delete a specific artist, or trigger 0-Anlas preview card generation.",
+            "description": "Manage the local Artist Catalog: single or BATCH add/update artists, toggle favorite, delete by ID, or trigger 0-Anlas preview card generation (defaults to nai-diffusion-4-5-full). ALWAYS use action='batch_add' or 'batch_update' when handling 2+ artists at once!",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "action": {"type": "string", "enum": ["add", "update", "favorite", "delete", "generate_preview"]},
+                    "action": {
+                        "type": "string",
+                        "enum": ["add", "batch_add", "update", "batch_update", "favorite", "delete", "generate_preview"],
+                    },
                     "artist_id": {"type": "integer", "description": "Target artist id (for update/favorite/delete/generate_preview)."},
                     "name": {"type": "string", "description": "Display name."},
                     "tag": {"type": "string", "description": "Danbooru artist tag (e.g. artist:ogipote)."},
-                    "category": {"type": "string", "description": "Category (厚涂光影, 清透水彩, 幻彩插画, 日系轻小说, 赛博冷调, 私人收藏)."},
-                    "desc": {"type": "string", "description": "Short Chinese description of the artist style."},
-                    "sample_tags": {"type": "string", "description": "Optional benchmark tags for preview generation."},
-                    "generate_preview": {"type": "boolean", "default": False, "description": "If true on add, immediately trigger 0-Anlas preview generation."},
+                    "category": {"type": "string", "description": "Category (厚涂光影, 清透水彩, 幻彩插画, 日系轻小说, 赛博冷调, 私人收藏, etc.)."},
+                    "desc": {"type": "string", "description": "Short Chinese description of the artist style & traits."},
+                    "sample_tags": {"type": "string", "description": "Comma-separated style/visual tags for this artist."},
+                    "model": {
+                        "type": "string",
+                        "default": "nai-diffusion-4-5-full",
+                        "description": "Model ID for preview generation (e.g. nai-diffusion-4-5-full or nai-diffusion-5-full).",
+                    },
+                    "generate_preview": {
+                        "type": "boolean",
+                        "default": False,
+                        "description": "If true on add/batch_add, trigger 0-Anlas preview generation / backfill queue immediately.",
+                    },
+                    "artists": {
+                        "type": "array",
+                        "description": "For action='batch_add': list of artists to add in one single tool call (up to 100).",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "tag": {"type": "string"},
+                                "name": {"type": "string"},
+                                "category": {"type": "string"},
+                                "desc": {"type": "string"},
+                                "sample_tags": {"type": "string"},
+                            },
+                            "required": ["tag"],
+                        },
+                    },
+                    "updates": {
+                        "type": "array",
+                        "description": "For action='batch_update': list of artist metadata/tag updates in one single tool call.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "artist_id": {"type": "integer"},
+                                "tag": {"type": "string"},
+                                "name": {"type": "string"},
+                                "category": {"type": "string"},
+                                "desc": {"type": "string"},
+                                "sample_tags": {"type": "string"},
+                            },
+                        },
+                    },
                 },
                 "required": ["action"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "lookup_danbooru_artists",
+            "description": "Query Danbooru public API concurrently for up to 12 artist tags to retrieve canonical tag, post count, aliases, Pixiv/Twitter/X links, wiki excerpt, and top recurring visual tags.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "tags": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Up to 12 artist tags (with or without 'artist:' prefix, spaces or underscores accepted).",
+                    },
+                },
+                "required": ["tags"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "inspect_artist_previews",
+            "description": "Visually inspect generated local artist preview cards (up to 4 artist_ids per call) using multimodal vision to analyze brushwork, color palette, lighting, and recommend category/desc/tags.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "artist_ids": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "Up to 4 artist IDs that already have preview images generated.",
+                    },
+                },
+                "required": ["artist_ids"],
             },
         },
     },
@@ -449,6 +534,7 @@ def _build_agent_system_prompt(workbench_state: Dict[str, Any], pinned_skills: L
 3. **Direct Workbench, Artist Catalog & Gallery Management**:
    - You can control parameters (`set_workbench_params`), switch canvas modes (`set_workbench_mode` for `img2img`/`infill`/`outpaint`), load OC cards (`load_oc_character`), run Director post-processing (`run_director_tool`: `lineart`, `sketch`, `colorize`, `emotion`, `declutter`), and trigger generation (`trigger_generate_image`, only when asked to draw/generate now).
    - You can also manage the user's **Artist Catalog** (`manage_artist_catalog`, `manage_mix_presets`) and **Artwork Gallery** (`manage_gallery_items`: favorite/unfavorite, add searchable notes, load past artworks to workbench, sync disk folder, or delete explicitly requested item IDs).
+   - **Batch Artist Import & Research Discipline**: When the user gives you multiple artist tags (2–100+), ALWAYS use `manage_artist_catalog(action="batch_add", artists=[...], generate_preview=true, model="nai-diffusion-4-5-full")` in ONE single tool call instead of calling `add` one by one! Use `lookup_danbooru_artists(tags=[...])` (up to 12 tags per call) to gather real Danbooru post counts, Pixiv/X URLs, wiki info & top visual tags, use `inspect_artist_previews(artist_ids=[...])` to visually inspect generated preview cards, and use `manage_artist_catalog(action="batch_update", updates=[...])` to bulk-apply categories, descriptions & style tags cleanly. Keep reasoning concise on large lists so you never exhaust output tokens.
    - Never claim you changed the workbench or ran a tool unless you actually called the tool!
 4. **Progressive Skill Disclosure**:
    - Available skills are listed in `<available_skills>`. When a task clearly fits one, call `read_skill(name)` to load its full playbook before acting.
@@ -499,13 +585,17 @@ def _execute_studio_tool(
                 "tag": a["tag"],
                 "category": a["category"],
                 "favorite": a["favorite"],
-                "has_preview": bool(a.get("preview_image")),
+                "has_preview": bool(a.get("preview_url")),
                 "desc": a["desc"],
             }
-            for a in artists[:24]
+            for a in artists[:80]
         ]
+        missing_prev = sum(1 for a in artists if not a.get("preview_url"))
         return (
-            json.dumps({"total_matched": len(artists), "artists": trimmed}, ensure_ascii=False),
+            json.dumps(
+                {"total_matched": len(artists), "missing_preview_count": missing_prev, "artists": trimmed},
+                ensure_ascii=False,
+            ),
             f"检索画师库({q or cat or '全部'}) -> {len(trimmed)}/{len(artists)} 位",
             None,
         )
@@ -747,6 +837,7 @@ def _execute_studio_tool(
 
     if name == "manage_artist_catalog":
         act = str(args.get("action") or "").strip().lower()
+        target_model = str(args.get("model") or "nai-diffusion-4-5-full").strip()
         if act == "add":
             tag = str(args.get("tag") or "").strip()
             if not tag:
@@ -762,10 +853,92 @@ def _execute_studio_tool(
             gen_prev = bool(args.get("generate_preview", False))
             ui_action = {
                 "type": "refresh_artists",
-                "summary": f"新增画师「{art['name']}」({art['tag']})" + (" 并触发预览图生成" if gen_prev else ""),
-                "payload": {"artist": art, "generate_preview_artist_id": art["id"] if gen_prev else None},
+                "summary": f"新增画师「{art['name']}」({art['tag']})" + (f" 并触发预览图生成 ({target_model})" if gen_prev else ""),
+                "payload": {
+                    "artist": art,
+                    "generate_preview_artist_id": art["id"] if gen_prev else None,
+                    "model": target_model,
+                },
             }
             return json.dumps({"ok": True, "artist": art, "preview_queued": gen_prev}, ensure_ascii=False), f"新增画师「{art['name']}」", ui_action
+
+        if act == "batch_add":
+            raw_list = args.get("artists") if isinstance(args.get("artists"), list) else []
+            if not raw_list:
+                return json.dumps({"ok": False, "error": "batch_add 需要非空的 artists 列表"}, ensure_ascii=False), "批量录入列表为空", None
+            saved: List[Dict[str, Any]] = []
+            for entry in raw_list[:100]:
+                if isinstance(entry, str):
+                    entry = {"tag": entry}
+                if not isinstance(entry, dict):
+                    continue
+                raw_tag = str(entry.get("tag") or "").strip()
+                if not raw_tag:
+                    continue
+                norm_tag = re.sub(r"\s+", "_", raw_tag)
+                if not norm_tag.lower().startswith("artist:"):
+                    norm_tag = f"artist:{norm_tag}"
+                disp_name = str(entry.get("name") or "").strip() or raw_tag.replace("artist:", "").replace("_", " ").strip()
+                art = upsert_artist(
+                    name=disp_name,
+                    tag=norm_tag,
+                    category=str(entry.get("category") or args.get("category") or "私人收藏"),
+                    desc=str(entry.get("desc") or ""),
+                    sample_tags=str(entry.get("sample_tags") or ""),
+                    is_custom=True,
+                )
+                saved.append({"id": art["id"], "name": art["name"], "tag": art["tag"], "has_preview": bool(art.get("preview_url"))})
+            gen_prev = bool(args.get("generate_preview", False))
+            ui_action = {
+                "type": "refresh_artists",
+                "summary": f"批量录入 {len(saved)} 位画师" + (f" 并启动 {target_model} 预览图队列" if gen_prev else ""),
+                "payload": {"batch_count": len(saved), "backfill_missing": gen_prev, "model": target_model},
+            }
+            return (
+                json.dumps({"ok": True, "added_count": len(saved), "artists": saved, "preview_queued": gen_prev, "model": target_model}, ensure_ascii=False),
+                f"批量录入 {len(saved)} 位画师",
+                ui_action,
+            )
+
+        if act == "batch_update":
+            updates = args.get("updates") if isinstance(args.get("updates"), list) else []
+            if not updates:
+                return json.dumps({"ok": False, "error": "batch_update 需要非空的 updates 列表"}, ensure_ascii=False), "批量更新列表为空", None
+            all_by_tag = {a["tag"].lower(): a["id"] for a in list_artists()}
+            updated_ids: List[int] = []
+            for u in updates[:100]:
+                if not isinstance(u, dict):
+                    continue
+                aid = u.get("artist_id")
+                if not aid and u.get("tag"):
+                    t = re.sub(r"\s+", "_", str(u["tag"]).strip()).lower()
+                    if not t.startswith("artist:"):
+                        t = f"artist:{t}"
+                    aid = all_by_tag.get(t)
+                if not aid:
+                    continue
+                try:
+                    art = update_artist(
+                        int(aid),
+                        name=u.get("name"),
+                        category=u.get("category"),
+                        desc=u.get("desc"),
+                        sample_tags=u.get("sample_tags"),
+                    )
+                    if art:
+                        updated_ids.append(art["id"])
+                except Exception:
+                    continue
+            ui_action = {
+                "type": "refresh_artists",
+                "summary": f"批量更新 {len(updated_ids)} 位画师的分类与风格标签",
+                "payload": {"updated_ids": updated_ids},
+            }
+            return (
+                json.dumps({"ok": True, "updated_count": len(updated_ids), "updated_ids": updated_ids}, ensure_ascii=False),
+                f"批量更新 {len(updated_ids)} 位画师",
+                ui_action,
+            )
 
         if act == "update":
             aid = args.get("artist_id")
@@ -816,16 +989,16 @@ def _execute_studio_tool(
             if aid:
                 ui_action = {
                     "type": "refresh_artists",
-                    "summary": f"触发画师 #{int(aid)} 免费生成预览图",
-                    "payload": {"generate_preview_artist_id": int(aid)},
+                    "summary": f"触发画师 #{int(aid)} 免费生成预览图 ({target_model})",
+                    "payload": {"generate_preview_artist_id": int(aid), "model": target_model},
                 }
-                return json.dumps({"ok": True, "dispatched_artist_id": int(aid)}, ensure_ascii=False), f"生成画师 #{aid} 预览图", ui_action
+                return json.dumps({"ok": True, "dispatched_artist_id": int(aid), "model": target_model}, ensure_ascii=False), f"生成画师 #{aid} 预览图", ui_action
             ui_action = {
                 "type": "refresh_artists",
-                "summary": "启动后台队列补齐所有缺失画师预览图",
-                "payload": {"backfill_missing": True},
+                "summary": f"启动后台队列补齐所有缺失画师预览图 ({target_model})",
+                "payload": {"backfill_missing": True, "model": target_model},
             }
-            return json.dumps({"ok": True, "dispatched_backfill": True}, ensure_ascii=False), "补齐缺失画师预览", ui_action
+            return json.dumps({"ok": True, "dispatched_backfill": True, "model": target_model}, ensure_ascii=False), "补齐缺失画师预览", ui_action
 
         return json.dumps({"ok": False, "error": f"不支持的 action: {act}"}, ensure_ascii=False), "无效画师库操作", None
 
@@ -927,6 +1100,242 @@ def _execute_studio_tool(
     return json.dumps({"error": f"Unknown tool {name}"}, ensure_ascii=False), f"未知工具({name})", None
 
 
+_DANBOORU_GENERIC_IGNORE = {
+    "1girl", "solo", "highres", "absurdres", "commentary_request", "looking_at_viewer",
+    "long_hair", "short_hair", "blush", "smile", "open_mouth", "upper_body", "full_body",
+    "simple_background", "white_background", "multiple_girls", "1boy", "2girls", "translated",
+    "translation_request", "bad_id", "bad_pixiv_id", "check_artist", "artist_name", "signature",
+    "dated", "watermark", "web_address", "patreon_username", "twitter_username",
+    "breasts", "small_breasts", "medium_breasts", "large_breasts", "ass", "cleavage",
+    "blue_eyes", "red_eyes", "green_eyes", "yellow_eyes", "brown_eyes", "purple_eyes",
+    "black_hair", "white_hair", "blonde_hair", "brown_hair", "silver_hair", "blue_hair", "pink_hair",
+    "blunt_bangs", "bangs", "ahoge", "thighhighs", "bare_shoulders", "navel", "parted_lips",
+}
+
+
+async def _lookup_one_danbooru_artist(client: httpx.AsyncClient, raw_tag: str, sem: asyncio.Semaphore) -> Dict[str, Any]:
+    clean = re.sub(r"^artist:", "", str(raw_tag or "").strip(), flags=re.I).strip()
+    slug = re.sub(r"\s+", "_", clean).lower()
+    if not slug:
+        return {"query": raw_tag, "found": False}
+    async with sem:
+        info: Dict[str, Any] = {
+            "query": raw_tag,
+            "canonical_tag": f"artist:{slug}",
+            "found": False,
+            "post_count": 0,
+            "other_names": [],
+            "urls": [],
+            "wiki_excerpt": "",
+            "top_visual_tags": [],
+        }
+        try:
+            r_tag, r_art, r_wiki = await asyncio.gather(
+                client.get("https://danbooru.donmai.us/tags.json", params={"search[name]": slug, "limit": 1}),
+                client.get("https://danbooru.donmai.us/artists.json", params={"search[name]": slug, "limit": 1}),
+                client.get("https://danbooru.donmai.us/wiki_pages.json", params={"search[title]": slug, "limit": 1}),
+                return_exceptions=True,
+            )
+            danbooru_artist_id = None
+            if isinstance(r_tag, httpx.Response) and r_tag.status_code == 200:
+                arr = r_tag.json()
+                if isinstance(arr, list) and arr:
+                    info["found"] = True
+                    info["post_count"] = int(arr[0].get("post_count") or 0)
+                    info["canonical_tag"] = f"artist:{arr[0].get('name') or slug}"
+            if isinstance(r_art, httpx.Response) and r_art.status_code == 200:
+                arr = r_art.json()
+                if isinstance(arr, list) and arr:
+                    a0 = arr[0]
+                    info["found"] = True
+                    danbooru_artist_id = a0.get("id")
+                    info["other_names"] = list(a0.get("other_names") or [])[:5]
+            if isinstance(r_wiki, httpx.Response) and r_wiki.status_code == 200:
+                arr = r_wiki.json()
+                if isinstance(arr, list) and arr:
+                    body = str(arr[0].get("body") or "")
+                    body = re.sub(r"\[\[([^\]|]+)(?:\|[^\]]+)?\]\]", r"\1", body)
+                    body = re.sub(r"https?://\S+", "", body)
+                    body = re.sub(r"\s+", " ", body).strip()
+                    info["wiki_excerpt"] = body[:220]
+            follow_tasks = []
+            if danbooru_artist_id:
+                follow_tasks.append(
+                    client.get(
+                        "https://danbooru.donmai.us/artist_urls.json",
+                        params={"search[artist_id]": danbooru_artist_id, "search[is_active]": "true", "limit": 12},
+                    )
+                )
+            else:
+                follow_tasks.append(asyncio.sleep(0))
+            if info["found"]:
+                follow_tasks.append(
+                    client.get(
+                        "https://danbooru.donmai.us/posts.json",
+                        params={"tags": f"{slug} order:score", "limit": 6, "only": "tag_string_general"},
+                    )
+                )
+            else:
+                follow_tasks.append(asyncio.sleep(0))
+            r_urls, r_posts = await asyncio.gather(*follow_tasks, return_exceptions=True)
+            if isinstance(r_urls, httpx.Response) and r_urls.status_code == 200:
+                uarr = r_urls.json()
+                if isinstance(uarr, list):
+                    raw_urls = [u.get("url", "") for u in uarr if isinstance(u, dict) and u.get("url")]
+                    prioritized = [u for u in raw_urls if any(d in u.lower() for d in ("pixiv", "twitter", "x.com", "fanbox", "artstation"))]
+                    info["urls"] = (prioritized or raw_urls)[:4]
+            if isinstance(r_posts, httpx.Response) and r_posts.status_code == 200:
+                posts = r_posts.json()
+                if isinstance(posts, list) and posts:
+                    freq: Dict[str, int] = {}
+                    for p in posts:
+                        for t in str(p.get("tag_string_general") or "").split():
+                            if t and t not in _DANBOORU_GENERIC_IGNORE:
+                                freq[t] = freq.get(t, 0) + 1
+                    ranked = sorted(freq.items(), key=lambda kv: (-kv[1], kv[0]))
+                    info["top_visual_tags"] = [k.replace("_", " ") for k, _ in ranked[:10]]
+        except Exception as exc:
+            info["error"] = str(exc)[:120]
+        return info
+
+
+async def _lookup_danbooru_artists_async(tags: List[str]) -> Tuple[str, str, Optional[Dict[str, Any]]]:
+    clean_tags = [str(t).strip() for t in (tags or []) if str(t).strip()][:12]
+    if not clean_tags:
+        return json.dumps({"ok": False, "error": "请提供至少一个画师 Tag"}, ensure_ascii=False), "缺少画师 Tag", None
+    sem = asyncio.Semaphore(4)
+    try:
+        async with httpx.AsyncClient(
+            timeout=10.0,
+            headers={"User-Agent": "NAI-Studio-Agent/3.0"},
+            follow_redirects=True,
+        ) as dclient:
+            results = await asyncio.gather(*[_lookup_one_danbooru_artist(dclient, t, sem) for t in clean_tags])
+        found_cnt = sum(1 for r in results if r.get("found"))
+        return (
+            json.dumps({"ok": True, "queried": len(clean_tags), "found": found_cnt, "artists": results}, ensure_ascii=False),
+            f"Danbooru 画师情报({found_cnt}/{len(clean_tags)} 命中)",
+            None,
+        )
+    except Exception as exc:
+        return (
+            json.dumps({"ok": False, "error": f"Danbooru 查询失败: {exc}"}, ensure_ascii=False),
+            "Danbooru 网络不可达",
+            None,
+        )
+
+
+async def _inspect_artist_previews_async(
+    artist_ids: List[int],
+    llm_client: httpx.AsyncClient,
+    endpoint: str,
+    headers: Dict[str, str],
+    llm_model: str,
+) -> Tuple[str, str, Optional[Dict[str, Any]]]:
+    clean_ids = [int(x) for x in (artist_ids or []) if str(x).isdigit()][:4]
+    if not clean_ids:
+        return json.dumps({"ok": False, "error": "请提供 1~4 个已有预览图的 artist_id"}, ensure_ascii=False), "缺少画师 ID", None
+
+    by_id = {a["id"]: a for a in list_artists()}
+    content_parts: List[Dict[str, Any]] = [
+        {
+            "type": "text",
+            "text": (
+                "请逐一分析以下 NovelAI 画师预览图的视觉画风（笔触质感、色彩饱和度、光影特点、题材倾向），"
+                "并为每位画师输出紧凑 JSON 数组，每项包含：artist_id, category（从 厚涂光影 / 清透水彩 / 幻彩插画 / 日系轻小说 / 赛博冷调 / 写实复古 / 萌系赛璐璐 中择一）, "
+                "desc（25字以内中文风格点评）, sample_tags（4~6个英文画风特征标签，逗号分隔）。只输出 JSON。"
+            ),
+        }
+    ]
+    inspected: List[Dict[str, Any]] = []
+    missing: List[int] = []
+    for aid in clean_ids:
+        a = by_id.get(aid)
+        if not a or not a.get("preview_url"):
+            missing.append(aid)
+            continue
+        fname = Path(str(a["preview_url"]).split("?")[0]).name
+        fpath = ARTISTS_DIR / fname
+        if not fpath.exists():
+            missing.append(aid)
+            continue
+        try:
+            with Image.open(fpath) as im:
+                rgb = im.convert("RGB")
+                rgb.thumbnail((384, 384))
+                buf = BytesIO()
+                rgb.save(buf, format="JPEG", quality=78)
+                b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+            content_parts.append({"type": "text", "text": f"画师 artist_id={aid} | name={a['name']} | tag={a['tag']}"})
+            content_parts.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}})
+            inspected.append({"artist_id": aid, "name": a["name"], "tag": a["tag"]})
+        except Exception:
+            missing.append(aid)
+
+    if not inspected:
+        return (
+            json.dumps(
+                {
+                    "ok": False,
+                    "error": "指定画师尚未生成本地预览图，请先完成预览图生成队列后再进行视觉分析。",
+                    "missing_ids": missing,
+                },
+                ensure_ascii=False,
+            ),
+            "尚无预览图可分析",
+            None,
+        )
+
+    try:
+        r = await llm_client.post(
+            endpoint,
+            headers=headers,
+            json={
+                "model": llm_model,
+                "messages": [{"role": "user", "content": content_parts}],
+                "temperature": 0.3,
+                "max_tokens": 2400,
+            },
+            timeout=60.0,
+        )
+        if r.status_code != 200:
+            return (
+                json.dumps({"ok": False, "error": f"视觉分析请求失败 (HTTP {r.status_code}): {r.text[:180]}"}, ensure_ascii=False),
+                "视觉模型不支持或限流",
+                None,
+            )
+        msg = (r.json().get("choices") or [{}])[0].get("message") or {}
+        analysis = str(msg.get("content") or "").strip()
+        return (
+            json.dumps({"ok": True, "inspected": inspected, "missing_ids": missing, "vision_analysis": analysis}, ensure_ascii=False),
+            f"视觉分析 {len(inspected)} 张画师预览图",
+            None,
+        )
+    except Exception as exc:
+        return (
+            json.dumps({"ok": False, "error": f"预览图视觉分析异常: {exc}"}, ensure_ascii=False),
+            "视觉分析异常",
+            None,
+        )
+
+
+async def _execute_studio_tool_async(
+    name: str,
+    args: Dict[str, Any],
+    workbench_state: Dict[str, Any],
+    live_blocks: Dict[str, str],
+    llm_client: httpx.AsyncClient,
+    endpoint: str,
+    headers: Dict[str, str],
+    llm_model: str,
+) -> Tuple[str, str, Optional[Dict[str, Any]]]:
+    if name == "lookup_danbooru_artists":
+        return await _lookup_danbooru_artists_async(args.get("tags") or [])
+    if name == "inspect_artist_previews":
+        return await _inspect_artist_previews_async(args.get("artist_ids") or [], llm_client, endpoint, headers, llm_model)
+    return _execute_studio_tool(name, args, workbench_state, live_blocks)
+
+
 async def stream_studio_agent(
     user_message: str,
     session_id: Optional[str] = None,
@@ -1000,38 +1409,62 @@ async def stream_studio_agent(
     tool_events: List[Dict[str, Any]] = []
     ui_actions: List[Dict[str, Any]] = []
     final_reply = ""
+    empty_retries = 0
+    last_finish_reason = ""
 
     yield sse("status", {"text": f"{llm_model} 正在分析当前画布与需求..."})
 
     try:
-        for round_idx in range(6):
+        for round_idx in range(12):
             req_body: Dict[str, Any] = {
                 "model": llm_model,
                 "messages": messages,
                 "tools": STUDIO_AGENT_TOOLS,
-                "tool_choice": "auto" if round_idx < 5 else "none",
-                "temperature": 0.5,
-                "max_tokens": 2200,
+                "tool_choice": "auto" if round_idx < 10 else "none",
+                "temperature": 0.45,
+                "max_tokens": 8192,
             }
-            r = await client.post(endpoint, headers=headers, json=req_body, timeout=75.0)
+            r = await client.post(endpoint, headers=headers, json=req_body, timeout=120.0)
             if r.status_code == 400 and "tool" in r.text.lower():
                 # Graceful fallback if chosen model doesn't support OpenAI tools
                 req_body.pop("tools", None)
                 req_body.pop("tool_choice", None)
-                r = await client.post(endpoint, headers=headers, json=req_body, timeout=75.0)
+                r = await client.post(endpoint, headers=headers, json=req_body, timeout=120.0)
             if r.status_code != 200:
                 raise ValueError(f"LLM 请求失败 (HTTP {r.status_code}): {r.text[:240]}")
 
             data = r.json()
-            msg = (data.get("choices") or [{}])[0].get("message") or {}
-            tool_calls = msg.get("tool_calls") or []
-            messages.append(msg)
+            choice0 = (data.get("choices") or [{}])[0]
+            last_finish_reason = str(choice0.get("finish_reason") or "")
+            msg = dict(choice0.get("message") or {})
+            tool_calls = list(msg.get("tool_calls") or [])
 
             if not tool_calls:
-                final_reply = str(msg.get("content") or "").strip()
+                content_txt = str(msg.get("content") or "").strip()
+                if not content_txt and empty_retries < 2:
+                    empty_retries += 1
+                    yield sse("status", {"text": "模型思考过长触发截断，正在精简重试..."})
+                    messages.append(
+                        {
+                            "role": "user",
+                            "content": (
+                                "上一轮输出因推理过长被截断且正文为空。请立刻精简内部推理："
+                                "如需处理多位画师请用 manage_artist_catalog(action='batch_add'/'batch_update') 一次批量完成，"
+                                "或直接给出简洁清晰的中文答复。"
+                            ),
+                        }
+                    )
+                    continue
+                messages.append(msg)
+                final_reply = content_txt
                 break
 
-            for tc in tool_calls[:6]:
+            # Keep assistant message tool_calls strictly synchronized with executed tool_call_ids
+            exec_calls = tool_calls[:10]
+            msg["tool_calls"] = exec_calls
+            messages.append(msg)
+
+            for tc in exec_calls:
                 fn = tc.get("function") or {}
                 tname = str(fn.get("name") or "")
                 tc_id = str(tc.get("id") or f"call_{round_idx}_{tname}")
@@ -1041,7 +1474,9 @@ async def stream_studio_agent(
                     targs = {}
 
                 yield sse("tool_start", {"id": tc_id, "name": tname, "args": targs})
-                out_json, summary, ui_action = _execute_studio_tool(tname, targs, wb, live_blocks)
+                out_json, summary, ui_action = await _execute_studio_tool_async(
+                    tname, targs, wb, live_blocks, client, endpoint, headers, llm_model
+                )
 
                 ev = {"id": tc_id, "name": tname, "summary": summary, "ok": '"error"' not in out_json}
                 tool_events.append(ev)
@@ -1055,7 +1490,15 @@ async def stream_studio_agent(
 
             yield sse("status", {"text": "整合结果并组织回复..."})
 
-        clean_reply, quick_replies = _extract_quick_replies(final_reply or "已完成工作台操作。")
+        if not final_reply:
+            if ui_actions:
+                final_reply = "已执行以下工作台操作：\n" + "\n".join(f"- {a.get('summary') or a.get('type')}" for a in ui_actions)
+            elif last_finish_reason == "length":
+                final_reply = "⚠️ 本轮模型内部推理消耗了全部输出上限导致正文被截断，未执行实际修改。建议将大批量任务分批处理（例如每次 15~25 位画师）后重试。"
+            else:
+                final_reply = "⚠️ 模型未返回有效正文（未对工作台做出修改），请重试或稍微精简指令。"
+
+        clean_reply, quick_replies = _extract_quick_replies(final_reply)
         # Emit reply smoothly in readable chunks so UI renders live progressively
         chunk_size = 24
         for i in range(0, len(clean_reply), chunk_size):

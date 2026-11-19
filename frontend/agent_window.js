@@ -504,9 +504,9 @@ function applyAgentUiAction(action) {
           if (typeof renderArtistsGrid === "function") renderArtistsGrid();
         }
         if (p.generate_preview_artist_id && typeof generateArtistCard === "function") {
-          setTimeout(() => generateArtistCard(p.generate_preview_artist_id), 120);
+          setTimeout(() => generateArtistCard(p.generate_preview_artist_id, p.model || "nai-diffusion-4-5-full"), 120);
         } else if (p.backfill_missing && typeof startArtistBackfillQueue === "function") {
-          setTimeout(() => startArtistBackfillQueue(), 120);
+          setTimeout(() => startArtistBackfillQueue(p.model || "nai-diffusion-4-5-full"), 120);
         }
       })
       .catch(() => {});
@@ -775,7 +775,7 @@ function renderAgentMessages(forceScroll = false) {
         <div class="space-y-1.5">
           <div class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/[0.04] border border-[var(--border-hairline)] text-[10.5px] font-mono text-[var(--text-muted)]">
             <span class="w-1.5 h-1.5 rounded-full bg-[var(--status-success)]"></span>
-            NAI V5 · 17 Tools · 8 Skills
+            NAI V5 · 19 Tools · 8 Skills
           </div>
           <div class="font-semibold text-[15px] tracking-[-0.01em] text-[var(--text-primary)]">Studio Agent 创作副驾</div>
           <p class="text-[12.5px] text-[var(--text-muted)] leading-relaxed">

@@ -2848,19 +2848,19 @@ async function toggleArtistFav(artistId) {
   }
 }
 
-async function generateArtistCard(artistId) {
+async function generateArtistCard(artistId, modelId = "nai-diffusion-4-5-full") {
   const btn = document.getElementById(`gen-card-btn-${artistId}`);
   const hadPreview = Boolean(state.artists.find(x => x.id === artistId)?.preview_url);
   if (btn) {
     btn.disabled = true;
     btn.textContent = "生成中...";
   }
-  showToast("正在调用 NovelAI (0 Anlas) 生成该画师标准预览图...");
+  showToast(`正在调用 NovelAI (${modelId === "nai-diffusion-5-full" ? "V5" : "V4.5"} · 0 Anlas) 生成该画师标准预览图...`);
   try {
     const res = await fetch(`/api/artists/${artistId}/generate-preview`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: "nai-diffusion-4-5-full" }),
+      body: JSON.stringify({ model: modelId || "nai-diffusion-4-5-full" }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || "生成预览图失败");
@@ -5623,22 +5623,23 @@ function setupModalBackdropClose() {
   });
 }
 
-async function startArtistBackfillQueue() {
+async function startArtistBackfillQueue(modelId = "nai-diffusion-4-5-full") {
   const missing = state.artists.filter(a => !a.preview_url);
   if (!missing.length) {
     showToast("所有画师都已有预览图，无需补齐");
     return;
   }
+  const targetModel = modelId || "nai-diffusion-4-5-full";
   try {
     const res = await fetch("/api/queue/start", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ artist_backfill: true, model: "nai-diffusion-4-5-full" }),
+      body: JSON.stringify({ artist_backfill: true, model: targetModel }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || "启动画师补齐队列失败");
     startQueuePolling();
-    showToast(`已开启静默补齐队列：共 ${missing.length} 位缺失画师 (0 Anlas V4.5)`);
+    showToast(`已开启静默补齐队列：共 ${missing.length} 位缺失画师 (0 Anlas ${targetModel.includes("5") ? "V5" : "V4.5"})`);
   } catch (err) {
     showToast(err.message || "启动失败");
   }

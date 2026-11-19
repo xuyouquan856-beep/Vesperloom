@@ -7,7 +7,7 @@ from .config import DATA_DIR
 SKILLS_DIR = DATA_DIR / "skills"
 SKILLS_DIR.mkdir(parents=True, exist_ok=True)
 
-CURRENT_SKILL_VERSION = 2
+CURRENT_SKILL_VERSION = 3
 
 BUILTIN_SKILLS: List[Dict[str, str]] = [
     {
@@ -171,10 +171,11 @@ BUILTIN_SKILLS: List[Dict[str, str]] = [
         "triggers": "图库, 画师库, 新增画师, 删除画师, 收藏, 备注, 同步磁盘, 混搭方案, 预览图, 归档",
         "content": """# Gallery & Artist Library Curator Playbook
 
-## 1. 画师库管理（`manage_artist_catalog` & `manage_mix_presets`）
-- **新增画师**：用户报出画师名/Danbooru Tag 时，补全合理的分类（`厚涂光影` / `清透水彩` / `幻彩插画` / `日系轻小说` / `赛博冷调` / `私人收藏`）和一句中文画风描述，调用 `manage_artist_catalog(action="add", ...)`；如用户想要预览图，可设 `generate_preview=true`（Opus 0 点数免费生成）。
-- **编辑/收藏/补预览**：先用 `search_artist_catalog` 确认 `id`，再执行 `update` / `favorite` / `generate_preview`。
-- **保存画风混搭**：用户对当前画师权重满意时，调用 `manage_mix_presets(action="save", name=..., items=...)` 归档。
+## 1. 画师库管理（`manage_artist_catalog`、`lookup_danbooru_artists`、`inspect_artist_previews` & `manage_mix_presets`）
+- **大批量导入画师（关键规范）**：当用户一次性贴出多位（2~100位）画师 Tag 时，**严禁逐个调用 `add`**！必须立刻调用一次 `manage_artist_catalog(action="batch_add", artists=[...], generate_preview=true, model="nai-diffusion-4-5-full")` 将全部画师一次性录入本地库，并自动启动 0-Anlas 的 V4.5 Full 预览图后台补齐队列！
+- **Danbooru / Pixiv 画师情报采集**：调用 `lookup_danbooru_artists(tags=[...])`（每次最多 12 位，可按需分批），获取每位画师的权威 Danbooru Tag、作品数（反映 NAI 熟悉度）、Pixiv/X 主页链接、Wiki 简介与高频视觉特征标签。
+- **看预览图打风格标签**：待预览图生成后，调用 `inspect_artist_previews(artist_ids=[...])`（每次最多 4 位）让多模态视觉模型直接审阅画师预览图，再结合 Danbooru 情报调用 `manage_artist_catalog(action="batch_update", updates=[...])` 一次性批量写入精准的 `category`、`desc` 与 `sample_tags`。
+- **单画师新增/收藏/混搭**：单条录入可用 `action="add"`；满意的画师组合调用 `manage_mix_presets(action="save", name=..., items=...)` 归档。
 
 ## 2. 作品图库管理（`manage_gallery_items`）
 - **检索与复用**：先调用 `query_gallery` 找到目标作品 `id`，再用 `load_to_workbench` 一键把那张图和完整参数载回工作台。
