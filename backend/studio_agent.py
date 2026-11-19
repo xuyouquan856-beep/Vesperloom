@@ -2,16 +2,29 @@ import json
 import re
 from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 
-from .config import load_config
+from .config import OUTPUTS_DIR, load_config
 from .database import (
+    add_mix_preset,
     append_agent_message,
+    batch_delete_gallery,
+    batch_favorite_gallery,
+    count_gallery,
     create_agent_session,
+    delete_artist,
+    delete_mix_preset,
     get_agent_session,
+    get_gallery_item,
     list_artists,
     list_gallery,
+    list_mix_presets,
     list_oc_cards,
     list_snippets,
+    sync_outputs_folder,
+    toggle_artist_favorite,
     update_agent_session_meta,
+    update_artist,
+    update_gallery_notes,
+    upsert_artist,
 )
 from .models_spec import DIRECTOR_EMOTIONS, MODELS_CATALOG, get_model_spec
 from .prompt_agent import _clean_base_url, _clean_tag_field, _get_llm_client
@@ -241,6 +254,72 @@ STUDIO_AGENT_TOOLS: List[Dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "manage_artist_catalog",
+            "description": "Manage the local Artist Catalog: add a new custom artist, update metadata, toggle favorite, delete a specific artist, or trigger 0-Anlas preview card generation.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "enum": ["add", "update", "favorite", "delete", "generate_preview"]},
+                    "artist_id": {"type": "integer", "description": "Target artist id (for update/favorite/delete/generate_preview)."},
+                    "name": {"type": "string", "description": "Display name."},
+                    "tag": {"type": "string", "description": "Danbooru artist tag (e.g. artist:ogipote)."},
+                    "category": {"type": "string", "description": "Category (厚涂光影, 清透水彩, 幻彩插画, 日系轻小说, 赛博冷调, 私人收藏)."},
+                    "desc": {"type": "string", "description": "Short Chinese description of the artist style."},
+                    "sample_tags": {"type": "string", "description": "Optional benchmark tags for preview generation."},
+                    "generate_preview": {"type": "boolean", "default": False, "description": "If true on add, immediately trigger 0-Anlas preview generation."},
+                },
+                "required": ["action"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "manage_mix_presets",
+            "description": "List, save, apply (to workbench artist block), or delete saved artist mix presets.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "enum": ["list", "save", "apply", "delete"]},
+                    "preset_id": {"type": "integer"},
+                    "name": {"type": "string"},
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "tag": {"type": "string"},
+                                "name": {"type": "string"},
+                                "weight": {"type": "number"},
+                            },
+                            "required": ["tag", "weight"],
+                        },
+                    },
+                },
+                "required": ["action"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "manage_gallery_items",
+            "description": "Manage the local Artwork Gallery: favorite/unfavorite artworks, set searchable notes, load a past artwork & recipe to workbench, sync D:\\NAI-Studio\\outputs folder, or delete specific item IDs explicitly requested by the user.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "enum": ["favorite", "unfavorite", "set_notes", "load_to_workbench", "sync_folder", "delete"]},
+                    "item_id": {"type": "integer"},
+                    "ids": {"type": "array", "items": {"type": "integer"}},
+                    "notes": {"type": "string"},
+                },
+                "required": ["action"],
+            },
+        },
+    },
 ]
 
 
@@ -367,8 +446,9 @@ def _build_agent_system_prompt(workbench_state: Dict[str, Any], pinned_skills: L
    - Never output SD WebUI `(tag:1.2)` syntax, `BREAK`, or Chinese inside prompt tag fields. Respect V4.5/V5 `w::tag::` vs V3 `{{}}`/`[]`.
 2. **Interactive Creative Director (When User Has No Ideas)**:
    - If the user says they have no ideas / feel lazy / want inspiration, read skill `creative-interview` (`read_skill("creative-interview")`), propose 3 vivid, contrasting concepts or ask 2 lightweight questions, and let them pick before filling everything.
-3. **Direct Workbench Operations**:
+3. **Direct Workbench, Artist Catalog & Gallery Management**:
    - You can control parameters (`set_workbench_params`), switch canvas modes (`set_workbench_mode` for `img2img`/`infill`/`outpaint`), load OC cards (`load_oc_character`), run Director post-processing (`run_director_tool`: `lineart`, `sketch`, `colorize`, `emotion`, `declutter`), and trigger generation (`trigger_generate_image`, only when asked to draw/generate now).
+   - You can also manage the user's **Artist Catalog** (`manage_artist_catalog`, `manage_mix_presets`) and **Artwork Gallery** (`manage_gallery_items`: favorite/unfavorite, add searchable notes, load past artworks to workbench, sync disk folder, or delete explicitly requested item IDs).
    - Never claim you changed the workbench or ran a tool unless you actually called the tool!
 4. **Progressive Skill Disclosure**:
    - Available skills are listed in `<available_skills>`. When a task clearly fits one, call `read_skill(name)` to load its full playbook before acting.
@@ -413,10 +493,22 @@ def _execute_studio_tool(
         if not artists and q:
             artists = list_artists(favorite_only=True) or list_artists()
         trimmed = [
-            {"name": a["name"], "tag": a["tag"], "category": a["category"], "favorite": a["favorite"], "desc": a["desc"]}
-            for a in artists[:10]
+            {
+                "id": a["id"],
+                "name": a["name"],
+                "tag": a["tag"],
+                "category": a["category"],
+                "favorite": a["favorite"],
+                "has_preview": bool(a.get("preview_image")),
+                "desc": a["desc"],
+            }
+            for a in artists[:24]
         ]
-        return json.dumps({"artists": trimmed}, ensure_ascii=False), f"检索画师库({q or cat or '推荐'}) -> {len(trimmed)} 位", None
+        return (
+            json.dumps({"total_matched": len(artists), "artists": trimmed}, ensure_ascii=False),
+            f"检索画师库({q or cat or '全部'}) -> {len(trimmed)}/{len(artists)} 位",
+            None,
+        )
 
     if name == "search_danbooru_tags":
         q = str(args.get("query") or "").strip()
@@ -468,7 +560,8 @@ def _execute_studio_tool(
             }
             for r in rows
         ]
-        return json.dumps({"items": compact}, ensure_ascii=False), f"查询图库记录 -> {len(compact)} 张", None
+        total_matched = count_gallery(search=search, favorite_only=fav)
+        return json.dumps({"total_matched": total_matched, "items": compact}, ensure_ascii=False), f"查询图库记录 -> {len(compact)}/{total_matched} 张", None
 
     if name == "get_current_model_rules":
         mid = str(args.get("model_id") or model_id)
@@ -651,6 +744,185 @@ def _execute_studio_tool(
         reason = str(args.get("reason") or "触发工作台出图")
         ui_action = {"type": "trigger_generate_image", "summary": reason, "payload": {"reason": reason}}
         return json.dumps({"ok": True, "dispatched": True}, ensure_ascii=False), "触发工作台出图", ui_action
+
+    if name == "manage_artist_catalog":
+        act = str(args.get("action") or "").strip().lower()
+        if act == "add":
+            tag = str(args.get("tag") or "").strip()
+            if not tag:
+                return json.dumps({"ok": False, "error": "缺少画师 Tag"}, ensure_ascii=False), "新增画师缺少 Tag", None
+            art = upsert_artist(
+                name=str(args.get("name") or ""),
+                tag=tag,
+                category=str(args.get("category") or "私人收藏"),
+                desc=str(args.get("desc") or ""),
+                sample_tags=str(args.get("sample_tags") or ""),
+                is_custom=True,
+            )
+            gen_prev = bool(args.get("generate_preview", False))
+            ui_action = {
+                "type": "refresh_artists",
+                "summary": f"新增画师「{art['name']}」({art['tag']})" + (" 并触发预览图生成" if gen_prev else ""),
+                "payload": {"artist": art, "generate_preview_artist_id": art["id"] if gen_prev else None},
+            }
+            return json.dumps({"ok": True, "artist": art, "preview_queued": gen_prev}, ensure_ascii=False), f"新增画师「{art['name']}」", ui_action
+
+        if act == "update":
+            aid = args.get("artist_id")
+            if not aid:
+                return json.dumps({"ok": False, "error": "缺少 artist_id"}, ensure_ascii=False), "缺少画师 ID", None
+            try:
+                art = update_artist(
+                    int(aid),
+                    name=args.get("name"),
+                    tag=args.get("tag"),
+                    category=args.get("category"),
+                    desc=args.get("desc"),
+                    sample_tags=args.get("sample_tags"),
+                )
+            except Exception as exc:
+                return json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False), "更新画师冲突", None
+            if not art:
+                return json.dumps({"ok": False, "error": "画师不存在"}, ensure_ascii=False), "画师不存在", None
+            ui_action = {"type": "refresh_artists", "summary": f"更新画师「{art['name']}」信息", "payload": {"artist": art}}
+            return json.dumps({"ok": True, "artist": art}, ensure_ascii=False), f"更新画师「{art['name']}」", ui_action
+
+        if act == "favorite":
+            aid = args.get("artist_id")
+            if not aid and args.get("name"):
+                matches = list_artists(search=str(args.get("name")))
+                aid = matches[0]["id"] if matches else None
+            if not aid:
+                return json.dumps({"ok": False, "error": "未找到目标画师"}, ensure_ascii=False), "未找到画师", None
+            art = toggle_artist_favorite(int(aid))
+            if not art:
+                return json.dumps({"ok": False, "error": "画师不存在"}, ensure_ascii=False), "画师不存在", None
+            lbl = "已收藏" if art["favorite"] else "已取消收藏"
+            ui_action = {"type": "refresh_artists", "summary": f"{lbl}画师「{art['name']}」", "payload": {"artist": art}}
+            return json.dumps({"ok": True, "artist": art}, ensure_ascii=False), f"{lbl}「{art['name']}」", ui_action
+
+        if act == "delete":
+            aid = args.get("artist_id")
+            if not aid:
+                return json.dumps({"ok": False, "error": "删除画师必须明确提供 artist_id"}, ensure_ascii=False), "缺少 artist_id", None
+            ok = delete_artist(int(aid))
+            if not ok:
+                return json.dumps({"ok": False, "error": "画师不存在"}, ensure_ascii=False), "画师不存在", None
+            ui_action = {"type": "refresh_artists", "summary": f"已从画师库删除 ID #{aid}", "payload": {"deleted_id": int(aid)}}
+            return json.dumps({"ok": True, "deleted_id": int(aid)}, ensure_ascii=False), f"删除画师 #{aid}", ui_action
+
+        if act == "generate_preview":
+            aid = args.get("artist_id")
+            if aid:
+                ui_action = {
+                    "type": "refresh_artists",
+                    "summary": f"触发画师 #{int(aid)} 免费生成预览图",
+                    "payload": {"generate_preview_artist_id": int(aid)},
+                }
+                return json.dumps({"ok": True, "dispatched_artist_id": int(aid)}, ensure_ascii=False), f"生成画师 #{aid} 预览图", ui_action
+            ui_action = {
+                "type": "refresh_artists",
+                "summary": "启动后台队列补齐所有缺失画师预览图",
+                "payload": {"backfill_missing": True},
+            }
+            return json.dumps({"ok": True, "dispatched_backfill": True}, ensure_ascii=False), "补齐缺失画师预览", ui_action
+
+        return json.dumps({"ok": False, "error": f"不支持的 action: {act}"}, ensure_ascii=False), "无效画师库操作", None
+
+    if name == "manage_mix_presets":
+        act = str(args.get("action") or "list").strip().lower()
+        if act == "list":
+            presets = list_mix_presets()
+            return json.dumps({"ok": True, "presets": presets[:15]}, ensure_ascii=False), f"列出 {len(presets)} 套混搭方案", None
+        if act == "save":
+            pname = str(args.get("name") or "").strip()
+            items = args.get("items") if isinstance(args.get("items"), list) else []
+            if not pname or not items:
+                return json.dumps({"ok": False, "error": "保存混搭方案需要 name 和 items"}, ensure_ascii=False), "参数不足", None
+            preset = add_mix_preset(pname, items)
+            ui_action = {"type": "refresh_mix_presets", "summary": f"保存混搭方案「{preset['name']}」", "payload": {"preset": preset}}
+            return json.dumps({"ok": True, "preset": preset}, ensure_ascii=False), f"保存方案「{preset['name']}」", ui_action
+        if act == "apply":
+            pid = args.get("preset_id")
+            presets = list_mix_presets()
+            match = next((p for p in presets if pid is not None and p["id"] == int(pid)), None)
+            if not match and args.get("name"):
+                q = str(args["name"]).lower()
+                match = next((p for p in presets if q in p["name"].lower()), None)
+            if not match:
+                return json.dumps({"ok": False, "error": "未找到对应混搭方案"}, ensure_ascii=False), "未找到混搭方案", None
+            formatted = ", ".join(
+                f"{round(float(it.get('weight', 1.0)), 2)}::{it['tag']}::"
+                if abs(float(it.get("weight", 1.0)) - 1.0) >= 0.03
+                else str(it["tag"])
+                for it in (match.get("items") or [])
+                if it.get("tag")
+            )
+            live_blocks["artist"] = formatted
+            ui_action = {
+                "type": "patch_prompt_blocks",
+                "summary": f"应用混搭方案「{match['name']}」到画师串",
+                "payload": {"blocks": {"artist": formatted}, "mode": "replace", "added": [formatted], "removed": [], "reason": match["name"]},
+            }
+            return json.dumps({"ok": True, "applied": formatted}, ensure_ascii=False), f"应用方案「{match['name']}」", ui_action
+        if act == "delete":
+            pid = args.get("preset_id")
+            if not pid:
+                return json.dumps({"ok": False, "error": "缺少 preset_id"}, ensure_ascii=False), "缺少方案 ID", None
+            ok = delete_mix_preset(int(pid))
+            ui_action = {"type": "refresh_mix_presets", "summary": f"删除混搭方案 #{pid}", "payload": {"deleted_id": int(pid)}}
+            return json.dumps({"ok": ok}, ensure_ascii=False), f"删除方案 #{pid}", ui_action
+        return json.dumps({"ok": False, "error": f"未知操作 {act}"}, ensure_ascii=False), "无效方案操作", None
+
+    if name == "manage_gallery_items":
+        act = str(args.get("action") or "").strip().lower()
+        raw_ids = args.get("ids") if isinstance(args.get("ids"), list) else []
+        if args.get("item_id") is not None and int(args["item_id"]) not in raw_ids:
+            raw_ids = [int(args["item_id"]), *raw_ids]
+        clean_ids = [int(x) for x in raw_ids if str(x).isdigit()]
+
+        if act in ("favorite", "unfavorite"):
+            if not clean_ids:
+                return json.dumps({"ok": False, "error": "请提供至少一个作品 ID"}, ensure_ascii=False), "缺少作品 ID", None
+            fav_flag = act == "favorite"
+            cnt = batch_favorite_gallery(clean_ids, favorite=fav_flag)
+            lbl = "收藏" if fav_flag else "取消收藏"
+            ui_action = {"type": "refresh_gallery", "summary": f"图库批量{lbl} {cnt} 张作品", "payload": {"ids": clean_ids, "favorite": fav_flag}}
+            return json.dumps({"ok": True, "updated": cnt}, ensure_ascii=False), f"图库{lbl} {cnt} 张", ui_action
+
+        if act == "set_notes":
+            if not clean_ids:
+                return json.dumps({"ok": False, "error": "请提供目标作品 item_id"}, ensure_ascii=False), "缺少作品 ID", None
+            notes = str(args.get("notes") or "").strip()
+            item = update_gallery_notes(clean_ids[0], notes)
+            if not item:
+                return json.dumps({"ok": False, "error": "作品不存在"}, ensure_ascii=False), "作品不存在", None
+            ui_action = {"type": "refresh_gallery", "summary": f"为作品 #{clean_ids[0]} 设置备注「{notes}」", "payload": {"item": item}}
+            return json.dumps({"ok": True, "item": {"id": item["id"], "notes": item["notes"]}}, ensure_ascii=False), f"更新 #{clean_ids[0]} 备注", ui_action
+
+        if act == "load_to_workbench":
+            if not clean_ids:
+                return json.dumps({"ok": False, "error": "请提供目标作品 item_id"}, ensure_ascii=False), "缺少作品 ID", None
+            item = get_gallery_item(clean_ids[0])
+            if not item:
+                return json.dumps({"ok": False, "error": "作品不存在"}, ensure_ascii=False), "作品不存在", None
+            ui_action = {"type": "load_gallery_item", "summary": f"载入图库作品 #{item['id']} (Seed #{item['seed']}) 到工作台", "payload": {"item": item}}
+            return json.dumps({"ok": True, "loaded_id": item["id"], "seed": item["seed"]}, ensure_ascii=False), f"载入作品 #{item['id']}", ui_action
+
+        if act == "sync_folder":
+            res = sync_outputs_folder(OUTPUTS_DIR, prune_missing=True)
+            summary = f"同步磁盘：新收录 {res['imported']} 张，清理失效 {res['pruned_missing']} 条"
+            ui_action = {"type": "refresh_gallery", "summary": summary, "payload": res}
+            return json.dumps({"ok": True, **res}, ensure_ascii=False), summary, ui_action
+
+        if act == "delete":
+            if not clean_ids:
+                return json.dumps({"ok": False, "error": "安全保护：删除图库作品必须指定明确 ids"}, ensure_ascii=False), "拒绝空 ID 删除", None
+            removed = batch_delete_gallery(ids=clean_ids, delete_file=True)
+            ui_action = {"type": "refresh_gallery", "summary": f"已删除 {removed} 张指定作品及原图", "payload": {"deleted_ids": clean_ids}}
+            return json.dumps({"ok": True, "removed": removed}, ensure_ascii=False), f"删除 {removed} 张作品", ui_action
+
+        return json.dumps({"ok": False, "error": f"不支持的图库操作: {act}"}, ensure_ascii=False), "无效图库操作", None
 
     return json.dumps({"error": f"Unknown tool {name}"}, ensure_ascii=False), f"未知工具({name})", None
 

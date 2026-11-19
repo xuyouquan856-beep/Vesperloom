@@ -6,7 +6,7 @@
   <title>NAI Studio — 个人创作工作台</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23111318'/%3E%3Cpath d='M20 44V20l24 24V20' stroke='%23ffffff' stroke-width='6' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E" />
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="/static/styles.css?v=p2-14" />
+  <link rel="stylesheet" href="/static/styles.css?v=p2-15" />
 </head>
 <body class="lg:h-screen min-h-screen flex flex-col lg:overflow-hidden overflow-y-auto">
 
@@ -55,6 +55,10 @@
       <symbol id="ic-checkerboard" viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="11" height="11" rx="1.5"/><rect x="3.1" y="3.1" width="3.2" height="3.2" fill="currentColor" stroke="none"/><rect x="9.7" y="3.1" width="3.2" height="3.2" fill="currentColor" stroke="none"/><rect x="6.4" y="6.4" width="3.2" height="3.2" fill="currentColor" stroke="none"/><rect x="3.1" y="9.7" width="3.2" height="3.2" fill="currentColor" stroke="none"/><rect x="9.7" y="9.7" width="3.2" height="3.2" fill="currentColor" stroke="none"/></symbol>
       <symbol id="ic-import-img" viewBox="0 0 16 16"><path d="M13 8.5V12a1.5 1.5 0 0 1-1.5 1.5h-8A1.5 1.5 0 0 1 2 12V4a1.5 1.5 0 0 1 1.5-1.5H8"/><path d="m2.8 11.2 2.9-2.9 2.1 2.1 1.7-1.7 3 3"/><path d="M12.5 1.5v4.5M10.5 4l2 2 2-2"/></symbol>
       <symbol id="ic-agent" viewBox="0 0 16 16"><path d="M8 2.2 9.4 6.1 13.3 7.5 9.4 8.9 8 12.8 6.6 8.9 2.7 7.5 6.6 6.1 8 2.2Z"/><path d="M12.5 2.5v2M11.5 3.5h2"/></symbol>
+      <symbol id="ic-send" viewBox="0 0 16 16"><path d="M8 12.5V3.5M4.2 7.2 8 3.4l3.8 3.8"/></symbol>
+      <symbol id="ic-layers" viewBox="0 0 16 16"><path d="M8 2.3 13.5 5.4 8 8.5 2.5 5.4 8 2.3Z"/><path d="M2.5 8.5 8 11.6l5.5-3.1"/><path d="M2.5 11.2 8 14.3l5.5-3.1"/></symbol>
+      <symbol id="ic-chevron-right" viewBox="0 0 16 16"><path d="M6 4l4 4-4 4"/></symbol>
+      <symbol id="ic-back" viewBox="0 0 16 16"><path d="M9.8 3.8 5.6 8l4.2 4.2"/></symbol>
     </defs>
   </svg>
 
@@ -1607,27 +1611,29 @@
   </div>
 
   <!-- ================= 独立可移动/可调大小 Studio Agent 悬浮窗口 ================= -->
-  <section id="agent-window" class="hidden agent-float-window" style="right: 22px; bottom: 22px; width: 432px; height: 610px;" aria-label="Studio Agent 悬浮助手">
-    <!-- 顶部拖拽标题栏 -->
-    <div id="agent-titlebar" class="agent-titlebar px-3 py-2 flex items-center justify-between gap-2 shrink-0">
+  <section id="agent-window" class="hidden agent-float-window" style="right: 22px; bottom: 22px; width: 444px; height: 632px;" aria-label="Studio Agent 悬浮助手">
+    <!-- 顶部极简拖拽标题栏 (Cursor / Claude Desktop 质感) -->
+    <div id="agent-titlebar" class="agent-titlebar px-3.5 flex items-center justify-between gap-2 shrink-0">
       <div class="flex items-center gap-2 min-w-0">
         <span id="agent-live-dot" class="w-2 h-2 rounded-full bg-[var(--status-success)] shrink-0"></span>
-        <span class="font-semibold text-[13px] text-[var(--text-primary)] truncate">Studio Agent</span>
-        <span id="agent-model-pill" class="px-1.5 py-0.5 rounded-[4px] ui-badge font-mono text-[10.5px] text-[var(--text-secondary)] truncate max-w-[110px]">qwen4-max</span>
+        <span class="font-semibold text-[13px] tracking-[-0.01em] text-[var(--text-primary)] truncate">Studio Agent</span>
+        <span id="agent-model-pill" class="px-1.5 py-0.5 rounded-[5px] bg-white/[0.04] border border-[var(--border-hairline)] font-mono text-[10.5px] text-[var(--text-muted)] truncate max-w-[118px]">qwen4-max</span>
       </div>
-      <div class="flex items-center gap-1 shrink-0" onpointerdown="event.stopPropagation()">
-        <div class="ui-segmented rounded-[6px] p-0.5 inline-flex text-[11px]">
-          <button type="button" data-agent-tab="chat" onclick="switchAgentPane('chat')" class="agent-pane-btn px-2 py-0.5 rounded-[4px] bg-[var(--cta-bg)] text-[var(--cta-fg)] font-medium">对话</button>
-          <button type="button" data-agent-tab="sessions" onclick="switchAgentPane('sessions')" class="agent-pane-btn px-2 py-0.5 rounded-[4px] text-[var(--text-muted)] hover:text-[var(--text-primary)]">会话</button>
-          <button type="button" data-agent-tab="skills" onclick="switchAgentPane('skills')" class="agent-pane-btn px-2 py-0.5 rounded-[4px] text-[var(--text-muted)] hover:text-[var(--text-primary)]">Skills</button>
-        </div>
-        <button type="button" onclick="startNewAgentSession()" class="spring-btn w-6 h-6 rounded-[5px] ui-btn flex items-center justify-center text-[var(--text-secondary)]" title="新建对话">
+      <div class="flex items-center gap-0.5 shrink-0" onpointerdown="event.stopPropagation()">
+        <button type="button" onclick="startNewAgentSession()" class="agent-icon-btn" title="新建对话">
           <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-plus"/></svg>
         </button>
-        <button type="button" onclick="toggleMinimizeAgentWindow()" id="agent-min-btn" class="spring-btn w-6 h-6 rounded-[5px] ui-btn flex items-center justify-center text-[var(--text-secondary)]" title="最小化 / 展开">
+        <button type="button" data-agent-tab="sessions" onclick="toggleAgentSubPane('sessions')" class="agent-icon-btn" title="历史会话">
+          <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-history"/></svg>
+        </button>
+        <button type="button" data-agent-tab="skills" onclick="toggleAgentSubPane('skills')" class="agent-icon-btn" title="Skills 技能库">
+          <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-layers"/></svg>
+        </button>
+        <span class="h-3.5 w-px bg-[var(--border-hairline)] mx-1"></span>
+        <button type="button" onclick="toggleMinimizeAgentWindow()" id="agent-min-btn" class="agent-icon-btn" title="最小化 / 展开">
           <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-minus"/></svg>
         </button>
-        <button type="button" onclick="toggleAgentWindow(false)" class="spring-btn w-6 h-6 rounded-[5px] ui-btn flex items-center justify-center text-[var(--text-secondary)]" title="关闭 (Alt+A)">
+        <button type="button" onclick="toggleAgentWindow(false)" class="agent-icon-btn" title="关闭 (Alt+A)">
           <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-close"/></svg>
         </button>
       </div>
@@ -1635,53 +1641,81 @@
 
     <!-- 实时工作台状态与提示词健康感知条 -->
     <div id="agent-body-wrap" class="flex-1 min-h-0 flex flex-col">
-      <div id="agent-live-strip" class="px-3 py-1.5 border-b border-[var(--border-hairline)] bg-[var(--surface-panel-alt)] flex items-center justify-between gap-2 text-[11px] shrink-0">
-        <span id="agent-live-telemetry" class="font-mono text-[var(--text-secondary)] truncate">V5 Full · 画0 / 人0 / 光0 / 负0</span>
-        <button id="agent-live-audit-btn" type="button" onclick="quickSendAgent('请检查我当前的提示词和参数，指出可以优化或有冲突的地方并给出建议')" class="spring-btn px-2 py-0.5 rounded-[4px] ui-btn text-[11px] shrink-0 whitespace-nowrap">实时体检</button>
+      <div id="agent-live-strip" class="agent-telemetry-strip flex items-center justify-between gap-2 shrink-0">
+        <span id="agent-live-telemetry" class="font-mono text-[11px] text-[var(--text-muted)] truncate">V5 Full · 画0 / 人0 / 光0 / 负0</span>
+        <button id="agent-live-audit-btn" type="button" onclick="quickSendAgent('请检查我当前的提示词和参数，指出可以优化或有冲突的地方并给出建议')" class="spring-btn px-2 py-0.5 rounded-[5px] text-[11px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/[0.06] transition-colors shrink-0 whitespace-nowrap">体检</button>
       </div>
 
       <!-- 面板 1：对话与实时操作流 -->
       <div id="agent-pane-chat" class="flex-1 min-h-0 flex flex-col">
-        <div id="agent-messages" class="flex-1 min-h-0 overflow-y-auto custom-scroll p-3 flex flex-col gap-3"></div>
+        <div id="agent-messages" class="flex-1 min-h-0 overflow-y-auto custom-scroll px-4 py-3.5 flex flex-col gap-3.5"></div>
 
         <!-- 快捷回复建议条 -->
-        <div id="agent-quick-replies" class="hidden px-3 pb-1.5 flex flex-wrap gap-1.5 shrink-0"></div>
+        <div id="agent-quick-replies" class="hidden px-3.5 pb-1 flex flex-wrap gap-1.5 shrink-0"></div>
 
-        <!-- 固定启用 Skills 条 -->
-        <div id="agent-pinned-skills" class="hidden px-3 pb-1.5 flex flex-wrap items-center gap-1 text-[11px] shrink-0"></div>
+        <!-- 底部悬浮一体化 Composer 壳 (Cursor / assistant-ui 质感) -->
+        <div class="agent-composer-dock relative shrink-0">
+          <div id="agent-slash-menu" class="hidden absolute left-3 right-3 bottom-[calc(100%-2px)] max-h-52 overflow-y-auto custom-scroll liquid-popover rounded-[12px] p-1.5 space-y-0.5 z-30"></div>
+          <div class="agent-composer-shell p-2.5 flex flex-col gap-1.5">
+            <!-- 固定启用 Skills 胶囊栏（自然融入输入框顶部） -->
+            <div id="agent-pinned-skills" class="hidden flex flex-wrap items-center gap-1 text-[11px] pb-1 border-b border-[var(--border-hairline)]"></div>
 
-        <!-- 底部输入与 /Skill 斜杠补全区 -->
-        <div class="relative p-2.5 border-t border-[var(--border-hairline)] bg-[var(--surface-panel)] space-y-2 shrink-0">
-          <div id="agent-slash-menu" class="hidden absolute left-2.5 right-2.5 bottom-[calc(100%+4px)] max-h-48 overflow-y-auto custom-scroll liquid-popover rounded-[10px] p-1 space-y-0.5 z-30"></div>
-          <div id="agent-stream-status" class="hidden text-[11px] font-mono text-[var(--text-muted)] truncate"></div>
-          <div class="flex items-end gap-2">
-            <textarea id="agent-input" rows="2" oninput="handleAgentInputChange()" onkeydown="handleAgentInputKeydown(event)" placeholder="说大白话改提示词、聊灵感、控参数/Director，输入 / 调用 Skill..." class="custom-scroll flex-1 min-w-0 ui-well rounded-[8px] px-2.5 py-1.5 text-[12.5px] leading-snug resize-none focus:outline-none placeholder:text-[var(--placeholder)]"></textarea>
-            <button id="agent-send-btn" type="button" onclick="sendAgentMessage()" class="liquid-cta spring-btn px-3 py-2 rounded-[8px] text-[12px] font-semibold shrink-0 whitespace-nowrap">发送</button>
-            <button id="agent-stop-btn" type="button" onclick="abortAgentStream()" class="hidden spring-btn px-3 py-2 rounded-[8px] ui-btn text-[var(--status-danger)] text-[12px] font-semibold shrink-0 whitespace-nowrap">停止</button>
+            <textarea id="agent-input" rows="1" oninput="handleAgentInputChange()" onkeydown="handleAgentInputKeydown(event)" placeholder="说大白话改提示词、聊灵感、管画师/图库，输入 / 调用 Skill..." class="custom-scroll w-full bg-transparent px-1 py-0.5 text-[13px] leading-[1.5] text-[var(--text-primary)] resize-none focus:outline-none placeholder:text-[var(--placeholder)]" style="max-height: 120px;"></textarea>
+
+            <div class="flex items-center justify-between gap-2 pt-0.5">
+              <div class="flex items-center gap-1.5 min-w-0">
+                <button type="button" onclick="openAgentSlashQuick()" class="spring-btn inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] text-[11px] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-white/[0.06] transition-colors shrink-0" title="插入 / 调用专业 Skill">
+                  <span class="font-mono font-semibold">/</span>
+                  <span>Skills</span>
+                </button>
+                <div id="agent-stream-status" class="hidden inline-flex items-center gap-1.5 text-[11px] font-mono text-[var(--text-muted)] truncate">
+                  <span class="agent-thinking-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+                  <span id="agent-stream-status-text" class="truncate">思考中...</span>
+                </div>
+              </div>
+              <div class="flex items-center gap-1.5 shrink-0">
+                <button id="agent-send-btn" type="button" onclick="sendAgentMessage()" class="agent-send-circle" title="发送 (Enter)">
+                  <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-send"/></svg>
+                </button>
+                <button id="agent-stop-btn" type="button" onclick="abortAgentStream()" class="hidden agent-send-circle !bg-[var(--status-danger)] !text-white" title="停止生成">
+                  <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-stop"/></svg>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
       <!-- 面板 2：历史对话会话 -->
-      <div id="agent-pane-sessions" class="hidden flex-1 min-h-0 overflow-y-auto custom-scroll p-3 space-y-2">
-        <div class="flex items-center justify-between text-[12px] text-[var(--text-muted)] pb-1">
-          <span>本地持久化对话会话</span>
-          <button type="button" onclick="startNewAgentSession()" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn text-[11.5px]">+ 新对话</button>
+      <div id="agent-pane-sessions" class="hidden flex-1 min-h-0 overflow-y-auto custom-scroll p-3.5 space-y-2.5">
+        <div class="flex items-center justify-between gap-2 pb-1.5 border-b border-[var(--border-hairline)]">
+          <div class="flex items-center gap-1.5">
+            <button type="button" onclick="switchAgentPane('chat')" class="agent-icon-btn" title="返回对话">
+              <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-back"/></svg>
+            </button>
+            <span class="text-[12.5px] font-semibold text-[var(--text-primary)]">历史会话</span>
+          </div>
+          <button type="button" onclick="startNewAgentSession()" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[11.5px]">+ 新对话</button>
         </div>
         <div id="agent-sessions-list" class="space-y-1.5"></div>
       </div>
 
       <!-- 面板 3：SKILL.md 渐进式技能管理 -->
       <div id="agent-pane-skills" class="hidden flex-1 min-h-0 flex flex-col overflow-hidden">
-        <div id="agent-skills-browser" class="flex-1 min-h-0 overflow-y-auto custom-scroll p-3 space-y-2">
-          <div class="flex items-center justify-between gap-2 pb-1">
-            <span class="text-[12px] text-[var(--text-muted)]">渐进式 SKILL.md（固定或输入 <code>/技能名</code> 触发）</span>
-            <button type="button" onclick="openSkillEditor()" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn text-[11.5px] shrink-0">+ 新建 Skill</button>
+        <div id="agent-skills-browser" class="flex-1 min-h-0 overflow-y-auto custom-scroll p-3.5 space-y-2.5">
+          <div class="flex items-center justify-between gap-2 pb-1.5 border-b border-[var(--border-hairline)]">
+            <div class="flex items-center gap-1.5 min-w-0">
+              <button type="button" onclick="switchAgentPane('chat')" class="agent-icon-btn shrink-0" title="返回对话">
+                <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-back"/></svg>
+              </button>
+              <span class="text-[12.5px] font-semibold text-[var(--text-primary)] truncate">SKILL.md 专业技能库</span>
+            </div>
+            <button type="button" onclick="openSkillEditor()" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[11.5px] shrink-0">+ 新建</button>
           </div>
           <div id="agent-skills-list" class="space-y-2"></div>
         </div>
 
-        <div id="agent-skill-editor" class="hidden flex-1 min-h-0 overflow-y-auto custom-scroll p-3 space-y-2.5">
+        <div id="agent-skill-editor" class="hidden flex-1 min-h-0 overflow-y-auto custom-scroll p-3.5 space-y-2.5">
           <div class="flex items-center justify-between pb-1.5 border-b border-[var(--border-hairline)]">
             <span id="skill-editor-heading" class="font-semibold text-[12.5px]">新建自定义 Skill</span>
             <button type="button" onclick="closeSkillEditor()" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn text-[11.5px]">返回列表</button>
@@ -1722,7 +1756,7 @@
 
   <div id="studio-tooltip" role="tooltip" aria-hidden="true"></div>
 
-  <script src="/static/app.js?v=p2-14"></script>
-  <script src="/static/agent_window.js?v=p2-14"></script>
+  <script src="/static/app.js?v=p2-15"></script>
+  <script src="/static/agent_window.js?v=p2-15"></script>
 </body>
 </html>

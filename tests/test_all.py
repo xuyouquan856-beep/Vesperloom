@@ -592,4 +592,172 @@ def test_studio_agent_skills_sessions_and_workbench_tools():
     assert clean_txt == "这是三个方向。" and q_opts == ["方案一", "方案二", "直接出图"]
 
 
+def test_agent_v2_skills_and_library_curation_tools(tmp_path, monkeypatch):
+    import backend.database as db_mod
+    from backend import skills_manager as sk_mod
+    from backend.studio_agent import STUDIO_AGENT_TOOLS, _execute_studio_tool
+
+    # 1. Verify all 8 built-in v2 skills & deep NAI V4.5/V5 engineering knowledge
+    tool_names = {t["function"]["name"] for t in STUDIO_AGENT_TOOLS}
+    assert {"manage_artist_catalog", "manage_mix_presets", "manage_gallery_items"}.issubset(tool_names)
+    assert len(STUDIO_AGENT_TOOLS) == 17
+
+    skills = sk_mod.list_skills()
+    names = {s["name"] for s in skills}
+    expected_8 = {
+        "nai-v5-prompt-craft",
+        "colloquial-to-danbooru",
+        "creative-interview",
+        "artist-style-blending",
+        "director-and-inpaint-workflow",
+        "multi-character-staging",
+        "cinematography-and-lighting",
+        "library-curator",
+    }
+    assert expected_8.issubset(names)
+
+    v5_sk = sk_mod.get_skill("nai-v5-prompt-craft")
+    assert v5_sk and "-1.2::" in v5_sk["content"]
+    mc_sk = sk_mod.get_skill("multi-character-staging")
+    assert mc_sk and "source#" in mc_sk["content"] and "target#" in mc_sk["content"]
+    cur_sk = sk_mod.get_skill("library-curator")
+    assert cur_sk and "manage_artist_catalog" in cur_sk["content"]
+
+    # 2. Isolate DB & outputs so live library is never touched
+    import backend.studio_agent as sa_mod
+    temp_db = tmp_path / "test_curation.db"
+    temp_out = tmp_path / "outputs"
+    temp_out.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(db_mod, "DB_PATH", temp_db)
+    monkeypatch.setattr(db_mod, "OUTPUTS_DIR", temp_out)
+    monkeypatch.setattr(sa_mod, "OUTPUTS_DIR", temp_out)
+    db_mod.init_db()
+
+    wb = {"model": "nai-diffusion-5-full", "stage_has_image": False}
+    live_blocks = {"artist": "", "character": "1girl, silver hair", "lighting": "sunset", "negative": "lowres"}
+
+    # 3. manage_artist_catalog: add -> update -> favorite -> generate_preview -> delete
+    out_add, _, act_add = _execute_studio_tool(
+        "manage_artist_catalog",
+        {"action": "add", "name": "TestArtist", "tag": "test_artist_xyz", "category": "测试分类", "desc": "清透赛璐璐"},
+        wb,
+        live_blocks,
+    )
+    add_data = json.loads(out_add)
+    assert add_data["ok"] is True and add_data["artist"]["tag"] == "artist:test_artist_xyz"
+    assert act_add and act_add["type"] == "refresh_artists"
+    aid = add_data["artist"]["id"]
+
+    out_upd, _, act_upd = _execute_studio_tool(
+        "manage_artist_catalog",
+        {"action": "update", "artist_id": aid, "desc": "升级厚涂光影", "favorite": True},
+        wb,
+        live_blocks,
+    )
+    assert json.loads(out_upd)["artist"]["favorite"] is True and act_upd["type"] == "refresh_artists"
+
+    out_fav_art, _, act_fav_art = _execute_studio_tool(
+        "manage_artist_catalog",
+        {"action": "favorite", "artist_id": aid},
+        wb,
+        live_blocks,
+    )
+    assert json.loads(out_fav_art)["ok"] is True and act_fav_art["type"] == "refresh_artists"
+
+    out_prev, _, act_prev = _execute_studio_tool(
+        "manage_artist_catalog",
+        {"action": "generate_preview", "artist_id": aid},
+        wb,
+        live_blocks,
+    )
+    assert json.loads(out_prev)["ok"] is True and act_prev["payload"]["generate_preview_artist_id"] == aid
+
+    # 4. manage_mix_presets: save -> list -> apply -> delete
+    out_mp, _, act_mp = _execute_studio_tool(
+        "manage_mix_presets",
+        {
+            "action": "save",
+            "name": "清透日系混搭",
+            "items": [
+                {"tag": "artist:rella", "weight": 0.9},
+                {"tag": "artist:ciloranko", "weight": 0.65},
+            ],
+        },
+        wb,
+        live_blocks,
+    )
+    mp_id = json.loads(out_mp)["preset"]["id"]
+    assert act_mp and act_mp["type"] == "refresh_mix_presets"
+
+    out_apply, _, act_apply = _execute_studio_tool(
+        "manage_mix_presets",
+        {"action": "apply", "preset_id": mp_id},
+        wb,
+        live_blocks,
+    )
+    assert json.loads(out_apply)["ok"] is True
+    assert act_apply and act_apply["type"] == "patch_prompt_blocks"
+    assert "0.9::artist:rella::" in live_blocks["artist"] and "0.65::artist:ciloranko::" in live_blocks["artist"]
+
+    out_del_mp, _, _ = _execute_studio_tool("manage_mix_presets", {"action": "delete", "preset_id": mp_id}, wb, live_blocks)
+    assert json.loads(out_del_mp)["ok"] is True
+
+    # Delete test artist
+    out_del_a, _, act_del_a = _execute_studio_tool("manage_artist_catalog", {"action": "delete", "artist_id": aid}, wb, live_blocks)
+    assert json.loads(out_del_a)["ok"] is True and act_del_a["payload"]["deleted_id"] == aid
+
+    # 5. manage_gallery_items: favorite -> set_notes -> load_to_workbench -> sync_folder -> delete
+    png_path = temp_out / "sample_agent.png"
+    png_path.write_bytes(b"\x89PNG\r\n\x1a\n")
+    item = db_mod.add_gallery_item(
+        {
+            "filename": "sample_agent.png",
+            "rel_path": "sample_agent.png",
+            "model": "nai-diffusion-5-full",
+            "model_short": "V5 Full",
+            "action": "generate",
+            "prompt": "1girl, silver hair, sunset",
+            "uc": "lowres",
+            "width": 832,
+            "height": 1216,
+            "steps": 28,
+            "scale": 5.0,
+            "seed": 123456,
+        }
+    )
+    gid = item["id"]
+
+    out_fav, _, act_fav = _execute_studio_tool("manage_gallery_items", {"action": "favorite", "item_id": gid}, wb, live_blocks)
+    assert json.loads(out_fav)["updated"] == 1 and act_fav["type"] == "refresh_gallery"
+
+    out_note, _, _ = _execute_studio_tool(
+        "manage_gallery_items",
+        {"action": "set_notes", "item_id": gid, "notes": "黄昏夕阳氛围极佳"},
+        wb,
+        live_blocks,
+    )
+    assert json.loads(out_note)["item"]["notes"] == "黄昏夕阳氛围极佳"
+
+    out_load, _, act_load = _execute_studio_tool(
+        "manage_gallery_items",
+        {"action": "load_to_workbench", "item_id": gid},
+        wb,
+        live_blocks,
+    )
+    assert json.loads(out_load)["ok"] is True and act_load["type"] == "load_gallery_item"
+
+    out_sync, _, act_sync = _execute_studio_tool("manage_gallery_items", {"action": "sync_folder"}, wb, live_blocks)
+    assert json.loads(out_sync)["ok"] is True and act_sync["type"] == "refresh_gallery"
+
+    out_gdel, _, act_gdel = _execute_studio_tool(
+        "manage_gallery_items",
+        {"action": "delete", "ids": [gid]},
+        wb,
+        live_blocks,
+    )
+    assert json.loads(out_gdel)["removed"] == 1 and act_gdel["type"] == "refresh_gallery"
+    assert not png_path.exists()
+
+
+
 
