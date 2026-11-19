@@ -5,6 +5,7 @@
    ========================================================================== */
 
 :root {
+  color-scheme: dark;
   /* 1. Studio Obsidian Palette (Dark Default) */
   --bg-base: #0a0c10;
   --bg-canvas-well: #06080b;
@@ -94,6 +95,7 @@
 }
 
 html.light {
+  color-scheme: light;
   --bg-base: #eaedf2;
   --bg-canvas-well: #e3e7ee;
   --canvas-dot-color: rgba(15, 23, 42, 0.085);
@@ -798,9 +800,9 @@ html.light .ui-btn {
 }
 .glass-select-menu-auto {
   right: auto;
-  min-width: max(100%, 168px);
+  min-width: 100%;
   width: max-content;
-  max-width: 260px;
+  max-width: 240px;
 }
 .glass-select-menu-end {
   left: auto;
@@ -1112,13 +1114,13 @@ html.light .prompt-muted-mark {
 /* High-Contrast Selection inside Mirrored & Structured Prompt Editors */
 #prompt-input::selection,
 #uc-input::selection {
-  background: rgba(241, 245, 249, 0.42);
-  color: transparent;
+  background: #e2e8f0;
+  color: #090b0f;
 }
 html.light #prompt-input::selection,
 html.light #uc-input::selection {
-  background: rgba(15, 23, 42, 0.26);
-  color: transparent;
+  background: #0f172a;
+  color: #ffffff;
 }
 .prompt-block-input {
   font-family: var(--font-mono);

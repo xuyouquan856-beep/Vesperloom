@@ -285,11 +285,11 @@ async function bootstrapApp() {
     updateLeftRefsBadge();
     renderTagPillsBar("pos");
     renderTagPillsBar("uc");
-    runPromptLinter("uc");
     if (data.queue?.running) {
       startQueuePolling();
     }
     switchTab("workbench");
+    document.fonts?.ready?.then(() => updateActiveTabIndicator());
     refreshAccountStatus(false);
   } catch (err) {
     console.error("Bootstrap error:", err);
@@ -472,6 +472,25 @@ function updateLeftRefsBadge() {
 }
 
 // ================= Tab Navigation =================
+function updateActiveTabIndicator(tabOverride = null) {
+  const tab =
+    tabOverride ||
+    ["workbench", "artists", "gallery", "settings"].find(
+      id => !document.getElementById(`view-${id}`)?.classList.contains("hidden")
+    ) ||
+    "workbench";
+  const indicator = document.getElementById("tab-indicator");
+  const activeBtn = document.querySelector(`.tab-btn[data-tab="${tab}"]`);
+  document.querySelectorAll(".tab-btn").forEach(btn => {
+    const isAct = btn.dataset.tab === tab;
+    btn.style.color = isAct ? "var(--cta-fg)" : "var(--text-muted)";
+  });
+  if (activeBtn && indicator) {
+    indicator.style.width = `${activeBtn.offsetWidth}px`;
+    indicator.style.transform = `translateX(${activeBtn.offsetLeft}px)`;
+  }
+}
+
 function switchTab(tab) {
   ["workbench", "artists", "gallery", "settings"].forEach(id => {
     const el = document.getElementById(`view-${id}`);
@@ -481,16 +500,7 @@ function switchTab(tab) {
   document.getElementById("topbar-left-toggle-wrap")?.classList.toggle("hidden", !isWorkbench);
   document.getElementById("topbar-right-toggle-wrap")?.classList.toggle("hidden", !isWorkbench);
 
-  const indicator = document.getElementById("tab-indicator");
-  const activeBtn = document.querySelector(`.tab-btn[data-tab="${tab}"]`);
-  document.querySelectorAll(".tab-btn").forEach(btn => {
-    const isAct = btn.dataset.tab === tab;
-    btn.style.color = isAct ? "var(--cta-fg)" : "var(--text-muted)";
-  });
-  if (activeBtn && indicator) {
-    indicator.style.width = `${activeBtn.offsetWidth}px`;
-    indicator.style.transform = `translateX(${activeBtn.offsetLeft - 2}px)`;
-  }
+  updateActiveTabIndicator(tab);
   if (tab === "gallery") renderFullGallery(state.galleryViewDirty || state.galleryView.length === 0);
   if (tab === "artists") {
     renderArtistCatPills();
@@ -585,6 +595,7 @@ function renderStorageBadges() {
   const st = state.storage || {};
   const navCnt = document.getElementById("nav-gallery-count");
   if (navCnt) navCnt.textContent = String(state.galleryTotal || state.gallery.length);
+  updateActiveTabIndicator();
   const badge = document.getElementById("gallery-storage-badge");
   if (badge) {
     badge.textContent = `存储于 ${st.output_dir || "D:\\NAI-Studio\\outputs"} (${st.total_size_mb || 0} MB) · C盘占用 0 Bytes`;
@@ -2748,7 +2759,7 @@ function renderArtistsGrid() {
             ${previewHtml}
             <span class="absolute top-2 left-2 px-2 py-0.5 rounded-[5px] studio-hud text-[11.5px] font-medium pointer-events-none">${escapeHtml(a.category)}</span>
             <div class="absolute top-2 right-2 flex items-center gap-1">
-              <button onclick="openArtistModal(${a.id})" aria-label="编辑画师" title="编辑或删除画师" class="spring-btn w-7 h-7 rounded-[6px] studio-hud flex items-center justify-center text-[var(--text-secondary)] opacity-0 group-hover:opacity-100 transition-opacity">
+              <button onclick="openArtistModal(${a.id})" aria-label="编辑画师" title="编辑或删除画师" class="spring-btn w-7 h-7 rounded-[6px] studio-hud flex items-center justify-center text-[var(--text-secondary)] opacity-75 group-hover:opacity-100 transition-opacity">
                 ${uiIcon("edit", "ui-ic-sm")}
               </button>
               <button onclick="toggleArtistFav(${a.id})" aria-label="收藏画师" title="${a.favorite ? "取消收藏" : "收藏画师"}" class="spring-btn w-7 h-7 rounded-[6px] studio-hud flex items-center justify-center ${a.favorite ? "text-[var(--status-warning)]" : "text-[var(--text-muted)]"}">
@@ -4162,9 +4173,11 @@ function syncStructuredToClassic() {
 
 function toggleAiTracePanel(force) {
   const box = document.getElementById("ai-agent-trace-box");
+  const btn = document.getElementById("ai-trace-toggle-btn");
   if (!box) return;
-  if (typeof force === "boolean") box.classList.toggle("hidden", !force);
-  else box.classList.toggle("hidden");
+  const open = typeof force === "boolean" ? force : box.classList.contains("hidden");
+  box.classList.toggle("hidden", !open);
+  if (btn) btn.textContent = open ? "收起依据 ▴" : "检索依据 ▾";
 }
 
 async function runPromptAgent(scope = "all") {
@@ -4219,14 +4232,14 @@ async function runPromptAgent(scope = "all") {
     const traceBtn = document.getElementById("ai-trace-toggle-btn");
     const expEl = document.getElementById("ai-agent-explanation");
     const traceList = document.getElementById("ai-agent-trace-list");
+    const traceItems = Array.isArray(data.agent_trace) ? data.agent_trace : [];
     if (traceBtn) traceBtn.classList.remove("hidden");
     if (expEl) expEl.textContent = data.explanation || "已完成知识校验并生成结构化提示词。";
     if (traceList) {
-      const items = Array.isArray(data.agent_trace) ? data.agent_trace : [];
-      traceList.innerHTML = items.map(t => `<span class="px-1.5 py-0.5 rounded-[4px] ui-badge">${escapeHtml(t.summary || t.tool)}</span>`).join("");
+      traceList.innerHTML = traceItems.map(t => `<span class="px-1.5 py-0.5 rounded-[4px] ui-badge">${escapeHtml(t.summary || t.tool)}</span>`).join("");
     }
-    toggleAiTracePanel(true);
-    if (statusEl) statusEl.textContent = `已完成 (${data.model}) · 语法检查${data.lint?.is_clean ? "通过" : `含 ${data.lint?.issues_count || 0} 处提醒`}`;
+    toggleAiTracePanel(false);
+    if (statusEl) statusEl.textContent = `✓ ${data.model} · 检索 ${traceItems.length} 项 · 语法${data.lint?.is_clean ? "通过" : `含 ${data.lint?.issues_count || 0} 处提醒`}`;
     showToast(scope === "all" ? "AI 已生成四区块专业提示词" : "AI 已更新所选提示词区块");
   } catch (err) {
     if (statusEl) statusEl.textContent = err.message || "生成失败";
