@@ -379,6 +379,27 @@ def compose_blocks_prompt(blocks: Dict[str, str]) -> str:
     return ", ".join(p for p in parts if p)
 
 
+async def post_chat_with_max_tokens_fallback(
+    client: httpx.AsyncClient,
+    endpoint: str,
+    headers: Dict[str, str],
+    req_body: Dict[str, Any],
+    timeout: float = 120.0,
+) -> Tuple[httpx.Response, int]:
+    """Post an OpenAI-compatible chat request and step down max_tokens if the model enforces a lower cap."""
+    active_cap = int(req_body.get("max_tokens") or 100000)
+    r = await client.post(endpoint, headers=headers, json=req_body, timeout=timeout)
+    if r.status_code == 400 and any(k in r.text.lower() for k in ("max_tokens", "range", "maximum", "limit")):
+        for fallback_cap in (32768, 16384, 8192):
+            if active_cap > fallback_cap:
+                active_cap = fallback_cap
+                req_body["max_tokens"] = active_cap
+                r = await client.post(endpoint, headers=headers, json=req_body, timeout=timeout)
+                if r.status_code == 200:
+                    break
+    return r, active_cap
+
+
 async def run_prompt_agent(
     instruction: str,
     model_id: str = "nai-diffusion-5-full",
@@ -391,6 +412,7 @@ async def run_prompt_agent(
     api_key = str(conf.get("llm_api_key") or "").strip()
     llm_model = str(conf.get("llm_model") or "qwen4-max").strip()
     use_agent = bool(conf.get("llm_use_knowledge_agent", True))
+    active_max_out = max(2048, min(128000, int(conf.get("llm_max_output_tokens") or 100000)))
 
     if not base_url or not api_key:
         raise ValueError("尚未配置 LLM API Key 或 Base URL，请前往「设置与 Agent」填写并保存。")
@@ -443,9 +465,11 @@ async def run_prompt_agent(
                     "tools": AGENT_TOOLS,
                     "tool_choice": "auto" if round_idx < 3 else "none",
                     "temperature": 0.45,
-                    "max_tokens": 2400,
+                    "max_tokens": active_max_out,
                 }
-                r = await client.post(endpoint, headers=headers, json=req_body, timeout=60.0)
+                r, active_max_out = await post_chat_with_max_tokens_fallback(
+                    client, endpoint, headers, req_body, timeout=120.0
+                )
                 if r.status_code != 200:
                     raise ValueError(f"HTTP {r.status_code}: {r.text[:240]}")
                 data = r.json()
@@ -489,10 +513,12 @@ async def run_prompt_agent(
                 {"role": "user", "content": user_payload},
             ],
             "temperature": 0.45,
-            "max_tokens": 2200,
+            "max_tokens": active_max_out,
             "response_format": {"type": "json_object"},
         }
-        r2 = await client.post(endpoint, headers=headers, json=base_payload, timeout=60.0)
+        r2, active_max_out = await post_chat_with_max_tokens_fallback(
+            client, endpoint, headers, base_payload, timeout=120.0
+        )
         if r2.status_code == 400 and "response_format" in r2.text.lower():
             base_payload.pop("response_format", None)
             r2 = await client.post(endpoint, headers=headers, json=base_payload, timeout=60.0)

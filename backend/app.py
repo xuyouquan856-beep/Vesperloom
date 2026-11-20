@@ -166,12 +166,26 @@ async def api_update_config(body: Dict[str, Any]) -> Dict[str, Any]:
         "llm_api_key",
         "llm_model",
         "llm_use_knowledge_agent",
+        "llm_context_tokens",
+        "llm_max_output_tokens",
     ):
         if k in body and body[k] is not None:
             if k in ("api_token", "llm_api_key") and "..." in str(body[k]):
                 continue
             if k in ("api_token", "output_dir"):
                 account_check_needed = True
+            if k == "llm_context_tokens":
+                try:
+                    cfg[k] = max(8000, min(1000000, int(body[k])))
+                except Exception:
+                    continue
+                continue
+            if k == "llm_max_output_tokens":
+                try:
+                    cfg[k] = max(2048, min(128000, int(body[k])))
+                except Exception:
+                    continue
+                continue
             cfg[k] = body[k]
     saved = save_config(cfg)
     account = await fetch_account_status(saved) if account_check_needed and not body.get("skip_account_check") else None

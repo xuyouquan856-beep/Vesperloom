@@ -34,7 +34,12 @@ from .database import (
     upsert_artist,
 )
 from .models_spec import DIRECTOR_EMOTIONS, MODELS_CATALOG, get_model_spec
-from .prompt_agent import _clean_base_url, _clean_tag_field, _get_llm_client
+from .prompt_agent import (
+    _clean_base_url,
+    _clean_tag_field,
+    _get_llm_client,
+    post_chat_with_max_tokens_fallback,
+)
 from .prompt_engine import lint_prompt, search_builtin_tags
 from .skills_manager import get_skill, list_skills
 
@@ -328,14 +333,14 @@ STUDIO_AGENT_TOOLS: List[Dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "lookup_danbooru_artists",
-            "description": "Query Danbooru public API concurrently for up to 12 artist tags to retrieve canonical tag, post count, aliases, Pixiv/Twitter/X links, wiki excerpt, and top recurring visual tags.",
+            "description": "Query Danbooru public API concurrently for up to 20 artist tags to retrieve canonical tag, post count, aliases, Pixiv/Twitter/X links, wiki excerpt, and top recurring visual tags.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "tags": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "Up to 12 artist tags (with or without 'artist:' prefix, spaces or underscores accepted).",
+                        "description": "Up to 20 artist tags (with or without 'artist:' prefix, spaces or underscores accepted).",
                     },
                 },
                 "required": ["tags"],
@@ -346,14 +351,14 @@ STUDIO_AGENT_TOOLS: List[Dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "inspect_artist_previews",
-            "description": "Visually inspect generated local artist preview cards (up to 4 artist_ids per call) using multimodal vision to analyze brushwork, color palette, lighting, and recommend category/desc/tags.",
+            "description": "Visually inspect generated local artist preview cards (up to 6 artist_ids per call) using multimodal vision to analyze brushwork, color palette, lighting, and recommend category/desc/tags.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "artist_ids": {
                         "type": "array",
                         "items": {"type": "integer"},
-                        "description": "Up to 4 artist IDs that already have preview images generated.",
+                        "description": "Up to 6 artist IDs that already have preview images generated.",
                     },
                 },
                 "required": ["artist_ids"],
@@ -588,7 +593,7 @@ def _execute_studio_tool(
                 "has_preview": bool(a.get("preview_url")),
                 "desc": a["desc"],
             }
-            for a in artists[:80]
+            for a in artists[:200]
         ]
         missing_prev = sum(1 for a in artists if not a.get("preview_url"))
         return (
@@ -637,7 +642,7 @@ def _execute_studio_tool(
     if name == "query_gallery":
         search = str(args.get("search") or "")
         fav = bool(args.get("favorite_only", False))
-        lim = max(1, min(12, int(args.get("limit") or 6)))
+        lim = max(1, min(50, int(args.get("limit") or 12)))
         rows = list_gallery(limit=lim, offset=0, search=search, favorite_only=fav)
         compact = [
             {
@@ -1200,10 +1205,10 @@ async def _lookup_one_danbooru_artist(client: httpx.AsyncClient, raw_tag: str, s
 
 
 async def _lookup_danbooru_artists_async(tags: List[str]) -> Tuple[str, str, Optional[Dict[str, Any]]]:
-    clean_tags = [str(t).strip() for t in (tags or []) if str(t).strip()][:12]
+    clean_tags = [str(t).strip() for t in (tags or []) if str(t).strip()][:20]
     if not clean_tags:
         return json.dumps({"ok": False, "error": "请提供至少一个画师 Tag"}, ensure_ascii=False), "缺少画师 Tag", None
-    sem = asyncio.Semaphore(4)
+    sem = asyncio.Semaphore(5)
     try:
         async with httpx.AsyncClient(
             timeout=10.0,
@@ -1232,9 +1237,9 @@ async def _inspect_artist_previews_async(
     headers: Dict[str, str],
     llm_model: str,
 ) -> Tuple[str, str, Optional[Dict[str, Any]]]:
-    clean_ids = [int(x) for x in (artist_ids or []) if str(x).isdigit()][:4]
+    clean_ids = [int(x) for x in (artist_ids or []) if str(x).isdigit()][:6]
     if not clean_ids:
-        return json.dumps({"ok": False, "error": "请提供 1~4 个已有预览图的 artist_id"}, ensure_ascii=False), "缺少画师 ID", None
+        return json.dumps({"ok": False, "error": "请提供 1~6 个已有预览图的 artist_id"}, ensure_ascii=False), "缺少画师 ID", None
 
     by_id = {a["id"]: a for a in list_artists()}
     content_parts: List[Dict[str, Any]] = [
@@ -1294,9 +1299,9 @@ async def _inspect_artist_previews_async(
                 "model": llm_model,
                 "messages": [{"role": "user", "content": content_parts}],
                 "temperature": 0.3,
-                "max_tokens": 2400,
+                "max_tokens": 16384,
             },
-            timeout=60.0,
+            timeout=90.0,
         )
         if r.status_code != 200:
             return (
@@ -1336,6 +1341,34 @@ async def _execute_studio_tool_async(
     return _execute_studio_tool(name, args, workbench_state, live_blocks)
 
 
+def _estimate_tokens(text: str) -> int:
+    """Fast bilingual token estimator (~1.35 chars/tok CJK, ~4 chars/tok ASCII)."""
+    s = str(text or "")
+    if not s:
+        return 0
+    cjk = sum(1 for ch in s if ord(ch) > 127)
+    ascii_cnt = len(s) - cjk
+    return max(1, int(cjk / 1.35 + ascii_cnt / 4.0) + 4)
+
+
+def _build_history_within_budget(history_rows: List[Dict[str, Any]], budget_tokens: int) -> List[Dict[str, str]]:
+    """Pack conversation history from newest backward up to budget_tokens (default 100K)."""
+    picked: List[Dict[str, str]] = []
+    used = 0
+    for hist in reversed(history_rows or []):
+        role = hist.get("role")
+        content = str(hist.get("content") or "").strip()
+        if role not in ("user", "assistant") or not content:
+            continue
+        cost = _estimate_tokens(content)
+        if picked and used + cost > budget_tokens:
+            break
+        picked.append({"role": role, "content": content})
+        used += cost
+    picked.reverse()
+    return picked
+
+
 async def stream_studio_agent(
     user_message: str,
     session_id: Optional[str] = None,
@@ -1351,6 +1384,8 @@ async def stream_studio_agent(
     base_url = _clean_base_url(cfg.get("llm_base_url") or "")
     api_key = str(cfg.get("llm_api_key") or "").strip()
     llm_model = str(cfg.get("llm_model") or "qwen4-max").strip()
+    context_budget = max(8000, min(1000000, int(cfg.get("llm_context_tokens") or 100000)))
+    max_out_tokens = max(2048, min(128000, int(cfg.get("llm_max_output_tokens") or 100000)))
     if not base_url or not api_key:
         yield sse("error", {"message": "尚未配置 LLM API Key 或 Base URL，请前往「设置与 Agent」填写并保存。"})
         return
@@ -1390,12 +1425,12 @@ async def stream_studio_agent(
     # Persist user message
     append_agent_message(sid, "user", user_message)
 
-    # Build OpenAI conversation messages (system + recent history + current user message)
+    # Build OpenAI conversation messages dynamically within configured context budget (default 100K tokens)
     sys_prompt = _build_agent_system_prompt(wb, active_pinned, slash_skills)
+    sys_and_user_cost = _estimate_tokens(sys_prompt) + _estimate_tokens(user_message) + 2500
+    history_budget = max(4000, context_budget - sys_and_user_cost)
     messages: List[Dict[str, Any]] = [{"role": "system", "content": sys_prompt}]
-    for hist in (sess.get("messages") or [])[-14:]:
-        if hist.get("role") in ("user", "assistant") and hist.get("content"):
-            messages.append({"role": hist["role"], "content": hist["content"]})
+    messages.extend(_build_history_within_budget(sess.get("messages") or [], history_budget))
     messages.append({"role": "user", "content": user_message})
 
     client = _get_llm_client()
@@ -1411,25 +1446,28 @@ async def stream_studio_agent(
     final_reply = ""
     empty_retries = 0
     last_finish_reason = ""
+    active_max_out = max_out_tokens
 
-    yield sse("status", {"text": f"{llm_model} 正在分析当前画布与需求..."})
+    yield sse("status", {"text": f"{llm_model} ({context_budget // 1000}K 上下文) 正在分析需求..."})
 
     try:
-        for round_idx in range(12):
+        for round_idx in range(16):
             req_body: Dict[str, Any] = {
                 "model": llm_model,
                 "messages": messages,
                 "tools": STUDIO_AGENT_TOOLS,
-                "tool_choice": "auto" if round_idx < 10 else "none",
+                "tool_choice": "auto" if round_idx < 14 else "none",
                 "temperature": 0.45,
-                "max_tokens": 8192,
+                "max_tokens": active_max_out,
             }
-            r = await client.post(endpoint, headers=headers, json=req_body, timeout=120.0)
+            r, active_max_out = await post_chat_with_max_tokens_fallback(
+                client, endpoint, headers, req_body, timeout=180.0
+            )
             if r.status_code == 400 and "tool" in r.text.lower():
                 # Graceful fallback if chosen model doesn't support OpenAI tools
                 req_body.pop("tools", None)
                 req_body.pop("tool_choice", None)
-                r = await client.post(endpoint, headers=headers, json=req_body, timeout=120.0)
+                r = await client.post(endpoint, headers=headers, json=req_body, timeout=180.0)
             if r.status_code != 200:
                 raise ValueError(f"LLM 请求失败 (HTTP {r.status_code}): {r.text[:240]}")
 

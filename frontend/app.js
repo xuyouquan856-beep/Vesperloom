@@ -3964,9 +3964,13 @@ function populateSettingsForm() {
   const llmKey = document.getElementById("settings-llm-key");
   const llmCustom = document.getElementById("settings-llm-model-custom");
   const llmAgentSw = document.getElementById("settings-llm-agent-switch");
+  const llmCtx = document.getElementById("settings-llm-context");
+  const llmMaxOut = document.getElementById("settings-llm-max-output");
   if (llmUrl) llmUrl.value = state.config.llm_base_url || "https://maas.qianwenaiapi.com/compatible-mode/v1";
   if (llmKey) llmKey.value = state.config.llm_api_key_masked || "";
   if (llmCustom) llmCustom.value = state.config.llm_model || "qwen4-max";
+  if (llmCtx) llmCtx.value = String(state.config.llm_context_tokens || 100000);
+  if (llmMaxOut) llmMaxOut.value = String(state.config.llm_max_output_tokens || 100000);
   if (llmAgentSw) {
     const on = state.config.llm_use_knowledge_agent !== false;
     llmAgentSw.classList.toggle("on", on);
@@ -4036,12 +4040,19 @@ async function refreshLlmModels() {
   }
 }
 
+function applyLlmContextPreset(tokens) {
+  const ctxEl = document.getElementById("settings-llm-context");
+  if (ctxEl) ctxEl.value = String(tokens);
+}
+
 async function saveLlmSettings() {
   const llm_base_url = document.getElementById("settings-llm-url")?.value.trim() || "";
   const llm_api_key = document.getElementById("settings-llm-key")?.value.trim() || "";
   const customModel = document.getElementById("settings-llm-model-custom")?.value.trim() || "";
   const llm_model = customModel || state.config.llm_model || "qwen4-max";
   const llm_use_knowledge_agent = state.config.llm_use_knowledge_agent !== false;
+  const llm_context_tokens = Math.max(8000, Math.min(1000000, Number(document.getElementById("settings-llm-context")?.value || 100000)));
+  const llm_max_output_tokens = Math.max(2048, Math.min(128000, Number(document.getElementById("settings-llm-max-output")?.value || 100000)));
   try {
     const res = await fetch("/api/config", {
       method: "POST",
@@ -4051,6 +4062,8 @@ async function saveLlmSettings() {
         llm_api_key,
         llm_model,
         llm_use_knowledge_agent,
+        llm_context_tokens,
+        llm_max_output_tokens,
         prompt_workspace_mode: state.promptWorkspaceMode,
         skip_account_check: true,
       }),
@@ -4059,7 +4072,7 @@ async function saveLlmSettings() {
     if (!res.ok) throw new Error(data.detail || "保存失败");
     state.config = data.config || state.config;
     populateSettingsForm();
-    showToast(`已保存 AI 配置 (${llm_model})`);
+    showToast(`已保存 AI 配置 (${llm_model} · ${Math.round(llm_context_tokens / 1000)}K 上下文)`);
   } catch (err) {
     showToast(err.message || "保存 AI 配置失败");
   }

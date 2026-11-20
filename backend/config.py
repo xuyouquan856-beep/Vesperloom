@@ -41,6 +41,8 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "llm_api_key": "",
     "llm_model": "qwen4-max",
     "llm_use_knowledge_agent": True,
+    "llm_context_tokens": 100000,
+    "llm_max_output_tokens": 100000,
 }
 
 

@@ -799,6 +799,16 @@ def test_agent_v2_skills_and_library_curation_tools(tmp_path, monkeypatch):
     assert json.loads(out_gdel)["removed"] == 1 and act_gdel["type"] == "refresh_gallery"
     assert not png_path.exists()
 
+    # 6. Verify 100K context budget packing & defaults
+    from backend.config import DEFAULT_CONFIG
+    assert DEFAULT_CONFIG["llm_context_tokens"] == 100000
+    assert DEFAULT_CONFIG["llm_max_output_tokens"] == 100000
+    fake_hist = [{"role": "user", "content": f"msg_{i} " + ("测" * 200)} for i in range(40)]
+    packed_small = sa_mod._build_history_within_budget(fake_hist, budget_tokens=600)
+    packed_100k = sa_mod._build_history_within_budget(fake_hist, budget_tokens=100000)
+    assert 1 <= len(packed_small) < len(packed_100k) == 40
+    assert packed_small[-1]["content"].startswith("msg_39")
+
 
 
 
