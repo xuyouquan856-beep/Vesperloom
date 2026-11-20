@@ -7,7 +7,7 @@ from .config import DATA_DIR
 SKILLS_DIR = DATA_DIR / "skills"
 SKILLS_DIR.mkdir(parents=True, exist_ok=True)
 
-CURRENT_SKILL_VERSION = 4
+CURRENT_SKILL_VERSION = 5
 
 BUILTIN_SKILLS: List[Dict[str, str]] = [
     {
@@ -79,22 +79,27 @@ BUILTIN_SKILLS: List[Dict[str, str]] = [
     {
         "name": "artist-style-blending",
         "title": "画师库检索与风格混搭调音",
-        "description": "从本地画师库挑选契合氛围的画师并科学配比权重，诊断画风不满意原因并精准换药。",
+        "description": "按多维风格标签(style_tags)、Danbooru 熟度(post_count)、推荐权重(weight_hint)与完整档案科学选人调音，避免单一分类误导。",
         "triggers": "画师, 画风, 混搭, 风格, 水彩, 厚涂, 赛博, 轻小说, artist, 不喜欢",
         "content": """# Artist Style Blending & Diagnostic Guide
 
-## 1. 先查本地库再配比
-- 选画师前**必须调用 `search_artist_catalog`**，优先结合用户本地画师库和收藏画师（`favorite=true`）。
+## 1. 多维特征检索（不要被单一「6大分类」误导！）
+- 每位画师往往横跨多个维度（例如既「赛璐璐平涂」又「强逆光」「青春日常」，或「厚涂立体」+「奇幻华丽」）。
+- 调用 `search_artist_catalog` 时，**优先使用 `style_tags` 多标签组合与多关键词 `query`**（如 `style_tags=["清透水彩", "高饱和幻彩"]` 或 `query="逆光 轻小说"`），并关注返回的完整档案：
+  - `style_tags`：渲染技法 / 色彩光影 / 题材特长 / NAI 权重层级
+  - `post_count`（Danbooru 帖数）：反映 NAI 训练集中该画师的出图稳定度与熟度（`>= 500` 为高熟度主力，`150–499` 为稳健主力，`< 150` 为冷门/氛围辅料，主画师过冷门易导致画风漂移）
+  - `weight_hint`：每位画师的经验最佳权重区间（单用 / 混搭建议）
+  - `notes`：完整画师档案笔记（线条/上色/光影/眼眸画法/擅长题材与避坑提示）
 - 若用户想引入库里还没有的知名画师，可主动提出调用 `manage_artist_catalog(action="add", ...)` 帮他收入画师库并免费生成标准预览图！
 
 ## 2. 黄金稀释与混搭公式
-- **单画师主控**：`0.85::artist:primary::` ~ `0.95::artist:primary::`（比 1.0 更稳，减少人脸同质化或手部崩坏）。
-- **双画师互补（推荐）**：主结构画师 `0.85–0.9` + 氛围/色彩辅画师 `0.55–0.7`。
+- **单画师主控**：参考该画师 `weight_hint`，通常 `0.85::artist:primary::` ~ `0.95::artist:primary::`（比 1.0 更稳，减少人脸同质化或手部崩坏）。
+- **双画师互补（推荐）**：高熟度结构主画师（`post_count` 较高）`0.85–0.9` + 色彩/氛围/光影辅画师 `0.55–0.7`。
 - **三画师调色盘**：主 `0.85` + 辅 `0.6` + 点缀 `0.4`（切忌超过 4 位同权重画师互相抵消）。
 
 ## 3. 画风不满意精准调参
-- 嫌厚重/偏写实：降厚涂画师权重或换清透/轻小说系，并可加 `-0.8::oil painting::`。
-- 嫌平淡/色脏：叠加光影氛围画师（如 Rella / Ciloranko / Mika Pikazo）并精简多余环境词。
+- 嫌厚重/偏写实：降厚涂画师权重或从 `style_tags` 检索「清透水彩 / 轻小说封面 / 赛璐璐平涂」，必要时加 `-0.8::oil painting::`。
+- 嫌平淡/色脏：叠加「高饱和幻彩 / 强烈光影 / 空气感透光」类辅画师并精简多余环境词。
 - 仅换画风时只改 `artist` 区块（`patch_prompt_blocks(artist=..., mode="replace")`），绝不误改人物与光影。
 """,
     },
@@ -175,7 +180,7 @@ BUILTIN_SKILLS: List[Dict[str, str]] = [
 ## 1. 画师库管理（`manage_artist_catalog`、`lookup_danbooru_artists`、`inspect_artist_previews` & `manage_mix_presets`）
 - **大批量导入画师（关键规范）**：当用户一次性贴出多位（2~100位）画师 Tag 时，**严禁逐个调用 `add`**！必须立刻调用一次 `manage_artist_catalog(action="batch_add", artists=[...], generate_preview=true, model="nai-diffusion-4-5-full")` 将全部画师一次性录入本地库，并自动启动 0-Anlas 的 V4.5 Full 预览图后台补齐队列！
 - **Danbooru / Pixiv 画师情报采集**：调用 `lookup_danbooru_artists(tags=[...])`（每次最多 12 位，可按需分批），获取每位画师的权威 Danbooru Tag、作品数（反映 NAI 熟悉度）、Pixiv/X 主页链接、Wiki 简介与高频视觉特征标签。
-- **看预览图打风格标签**：待预览图生成后，调用 `inspect_artist_previews(artist_ids=[...])`（每次最多 4 位）让多模态视觉模型直接审阅画师预览图，再结合 Danbooru 情报调用 `manage_artist_catalog(action="batch_update", updates=[...])` 一次性批量写入精准的 `category`、`desc` 与 `sample_tags`。
+- **看预览图打多维标签与完整档案**：待预览图生成后，调用 `inspect_artist_previews(artist_ids=[...])`（每次最多 4 位）让多模态视觉模型直接审阅画师预览图，再结合 Danbooru 情报调用 `manage_artist_catalog(action="batch_update", updates=[...])` 一次性批量写入正交多维 `style_tags`（技法/光影/题材/权重层级）、`post_count`、`weight_hint`、`aliases`、`urls`、`desc`（精炼摘要）、完整不截断 `notes`（画师详尽档案与混搭要点）与 `sample_tags`。不要把多才多艺的画师死塞进单一分类而不写 `style_tags`！
 - **单画师新增/收藏/混搭**：单条录入可用 `action="add"`；满意的画师组合调用 `manage_mix_presets(action="save", name=..., items=...)` 归档。
 
 ## 2. 作品图库管理与视觉审阅（`manage_gallery_items` & `inspect_gallery_images`）

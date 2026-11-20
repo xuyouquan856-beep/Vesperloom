@@ -673,8 +673,20 @@ async def api_queue_status() -> Dict[str, Any]:
 
 
 @app.get("/api/artists")
-async def api_get_artists(search: str = "", category: str = "", favorite_only: bool = False) -> Dict[str, Any]:
-    return {"artists": list_artists(search=search, category=category, favorite_only=favorite_only)}
+async def api_get_artists(
+    search: str = "",
+    category: str = "",
+    favorite_only: bool = False,
+    style_tag: str = "",
+) -> Dict[str, Any]:
+    return {
+        "artists": list_artists(
+            search=search,
+            category=category,
+            favorite_only=favorite_only,
+            style_tag=style_tag,
+        )
+    }
 
 
 @app.post("/api/artists")
@@ -689,6 +701,12 @@ async def api_create_artist(body: Dict[str, Any]) -> Dict[str, Any]:
         desc=str(body.get("desc") or ""),
         sample_tags=str(body.get("sample_tags") or ""),
         is_custom=True,
+        style_tags=body.get("style_tags"),
+        post_count=int(body.get("post_count") or 0),
+        weight_hint=str(body.get("weight_hint") or ""),
+        aliases=str(body.get("aliases") or ""),
+        urls=body.get("urls"),
+        notes=str(body.get("notes") or ""),
     )
     if body.get("generate_preview", True):
         try:
@@ -721,6 +739,12 @@ async def api_patch_artist(artist_id: int, body: Dict[str, Any]) -> Dict[str, An
             category=body.get("category"),
             desc=body.get("desc"),
             sample_tags=body.get("sample_tags"),
+            style_tags=body.get("style_tags"),
+            post_count=body.get("post_count"),
+            weight_hint=body.get("weight_hint"),
+            aliases=body.get("aliases"),
+            urls=body.get("urls"),
+            notes=body.get("notes"),
         )
     except Exception as exc:
         msg = "该画师 Tag 已存在，请勿与现有画师重复" if "UNIQUE" in str(exc).upper() else str(exc)

@@ -821,5 +821,97 @@ def test_agent_v2_skills_and_library_curation_tools(tmp_path, monkeypatch):
     assert data_url and data_url.startswith("data:image/jpeg;base64,")
 
 
+def test_artist_multifacet_dossier_schema_and_search(tmp_path):
+    import backend.database as db_mod
+    from backend.studio_agent import _execute_studio_tool
+
+    orig_db = db_mod.DB_PATH
+    try:
+        db_mod.DB_PATH = tmp_path / "artists_multifacet.db"
+        db_mod.init_db()
+        # Re-run init_db to guarantee idempotent migration
+        db_mod.init_db()
+
+        # Verify upsert + update persist full un-truncated multi-facet dossier
+        art = db_mod.upsert_artist(
+            name="SWAV测试",
+            tag="artist:swav",
+            category="厚涂与光影",
+            desc="极具机械冷冽美感与高对比光影的质感系画师",
+            sample_tags="tactical gear, cyberpunk, sharp silhouette",
+            style_tags=["厚涂立体", "机能战术", "低饱和冷灰", "头部高熟度"],
+            post_count=980,
+            weight_hint="主用 0.85~0.95 / 混搭 0.55~0.7",
+            aliases="SWAV_, スワブ",
+            urls=["https://www.pixiv.net/users/123456", "https://x.com/swav_art"],
+            notes="【完整画师档案】擅长战术机能服饰、硬朗金属护具与冷灰蓝电影光影；人物气质偏冷酷御姐。混搭高饱和画师可中和暗度。",
+        )
+        assert art["style_tags"] == ["厚涂立体", "机能战术", "低饱和冷灰", "头部高熟度"]
+        assert art["post_count"] == 980
+        assert art["weight_hint"].startswith("主用")
+        assert "pixiv.net" in art["urls"][0]
+        assert "【完整画师档案】" in art["notes"]
+
+        art2 = db_mod.upsert_artist(
+            name="Yui测试",
+            tag="artist:yui_(niikyouzou)",
+            category="日系清透",
+            desc="通透轻快的日常少女风",
+            style_tags=["赛璐璐平涂", "厚涂立体", "暖柔逆光"],
+            post_count=220,
+            weight_hint="主用 0.85~0.9",
+            aliases="にいきょうぞう",
+            notes="线条极其干净灵动，虽归类在日系清透，但光影体积感兼具微厚涂质感。",
+        )
+
+        # Cross-category multi-facet list_artists
+        matched_tags = db_mod.list_artists(style_tag="厚涂立体")
+        matched_ids = {x["id"] for x in matched_tags}
+        assert art["id"] in matched_ids and art2["id"] in matched_ids
+
+        matched_search = db_mod.list_artists(search="冷灰 护具")
+        assert any(x["id"] == art["id"] for x in matched_search)
+
+        # API PATCH test + filter test
+        client = TestClient(app)
+        r_patch = client.patch(
+            f"/api/artists/{art2['id']}",
+            json={
+                "style_tags": ["赛璐璐平涂", "厚涂立体", "暖柔逆光", "日常少女"],
+                "post_count": 265,
+                "notes": art2["notes"] + " 补充：适合与水彩系混搭。",
+            },
+        )
+        assert r_patch.status_code == 200
+        patched = r_patch.json()["artist"]
+        assert patched["post_count"] == 265
+        assert "日常少女" in patched["style_tags"]
+        assert "适合与水彩系混搭" in patched["notes"]
+
+        r_get = client.get("/api/artists?style_tag=日常少女")
+        assert r_get.status_code == 200
+        assert any(a["id"] == art2["id"] for a in r_get.json()["artists"])
+
+        # Agent search_artist_catalog returns FULL un-truncated dossiers ranked across categories
+        wb = {"model": "nai-diffusion-5-full", "width": 832, "height": 1216, "steps": 28, "scale": 5.0}
+        blocks = {"artist": "", "character": "", "scene": "", "uc": ""}
+        out_s, _, _ = _execute_studio_tool(
+            "search_artist_catalog",
+            {"style_tags": ["厚涂立体"], "query": "护具"},
+            wb,
+            blocks,
+        )
+        res_json = json.loads(out_s)
+        assert res_json["total_matched"] >= 1
+        top = res_json["artists"][0]
+        assert top["tag"] == "artist:swav"
+        assert "【完整画师档案】" in top["notes"]
+        assert top["post_count"] == 980
+        assert top["weight_hint"] == "主用 0.85~0.95 / 混搭 0.55~0.7"
+    finally:
+        db_mod.DB_PATH = orig_db
+
+
+
 
 

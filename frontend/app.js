@@ -59,7 +59,9 @@ const state = {
     { tag: "artist:ciloranko", name: "Ciloranko", weight: 0.7 },
   ],
   artistCatFilter: "all",
+  artistTagFilter: "all",
   artistEditingId: null,
+  artistDetailId: null,
   // Gallery pagination & view state (decoupled from Tab 1 workbench history)
   galleryFavOnly: false,
   galleryTotal: 0,
@@ -2695,6 +2697,40 @@ function renderArtistCatPills() {
     catBtn("fav", "我的收藏", favCount),
     ...cats.map(c => catBtn(c, c, state.artists.filter(a => a.category === c).length)),
   ].join("");
+  renderArtistStyleTagPills();
+}
+
+function renderArtistStyleTagPills() {
+  const wrap = document.getElementById("artist-style-tag-pills");
+  if (!wrap) return;
+  const counts = new Map();
+  state.artists.forEach(a => {
+    (a.style_tags || []).forEach(t => {
+      const tag = String(t || "").trim();
+      if (!tag) return;
+      counts.set(tag, (counts.get(tag) || 0) + 1);
+    });
+  });
+  if (!counts.size) {
+    wrap.innerHTML = `<span class="text-[var(--text-muted)]">多维标签：暂无（可通过右侧 Agent 或编辑画师补充 style_tags，避免单一分类误导）</span>`;
+    return;
+  }
+  const topTags = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "zh-Hans-CN")).slice(0, 18);
+  const tagBtn = (tag, label, cnt) => {
+    const active = state.artistTagFilter === tag ? "is-active" : "";
+    return `<button type="button" onclick="filterArtistsByStyleTag('${escapeHtml(tag).replace(/'/g, "\\'")}')" class="artist-cat-btn spring-btn px-2 py-0.5 rounded-[5px] ui-btn text-[11px] ${active}">${escapeHtml(label)}${cnt !== null ? ` <span class="font-mono opacity-65">${cnt}</span>` : ""}</button>`;
+  };
+  wrap.innerHTML = [
+    `<span class="text-[var(--text-muted)] shrink-0 mr-0.5">多维风格标签:</span>`,
+    tagBtn("all", "不限标签", null),
+    ...topTags.map(([tag, cnt]) => tagBtn(tag, tag, cnt)),
+  ].join("");
+}
+
+function filterArtistsByStyleTag(tag) {
+  state.artistTagFilter = state.artistTagFilter === tag && tag !== "all" ? "all" : (tag || "all");
+  renderArtistStyleTagPills();
+  renderArtistsGrid();
 }
 
 function filterArtistsByCat(cat) {
@@ -2721,6 +2757,7 @@ function renderArtistSortSelect() {
     "artist-sort-select",
     [
       { value: "fav_first", label: "收藏置顶" },
+      { value: "posts_desc", label: "Danbooru 热度 ↓" },
       { value: "name_asc", label: "名称 A–Z" },
       { value: "newest", label: "最新添加" },
       { value: "missing_preview", label: "仅看缺失预览" },
@@ -2732,6 +2769,7 @@ function renderArtistSortSelect() {
 
 function resetArtistFilters() {
   state.artistCatFilter = "all";
+  state.artistTagFilter = "all";
   const inp = document.getElementById("artist-search-input");
   if (inp) inp.value = "";
   state.artistSort = "fav_first";
@@ -2740,29 +2778,35 @@ function resetArtistFilters() {
   renderArtistsGrid();
 }
 
-function renderArtistsGrid() {
-  const grid = document.getElementById("artists-grid");
-  if (!grid) return;
+function getFilteredSortedArtists() {
   const qRaw = (document.getElementById("artist-search-input")?.value || "").trim();
-  const q = qRaw.toLowerCase();
+  const qTokens = qRaw ? qRaw.toLowerCase().split(/[\s,，/|]+/).filter(Boolean) : [];
   const sortMode = state.artistSort || "fav_first";
-  const clearBtn = document.getElementById("artist-search-clear");
-  if (clearBtn) clearBtn.classList.toggle("hidden", !qRaw);
 
   let filtered = state.artists.filter(a => {
     if (state.artistCatFilter === "fav" && !a.favorite) return false;
     if (state.artistCatFilter !== "all" && state.artistCatFilter !== "fav" && a.category !== state.artistCatFilter) return false;
+    if (state.artistTagFilter && state.artistTagFilter !== "all") {
+      const tags = (a.style_tags || []).map(t => String(t).toLowerCase());
+      if (!tags.includes(state.artistTagFilter.toLowerCase())) return false;
+    }
     if (sortMode === "missing_preview" && a.preview_url) return false;
-    if (
-      q &&
-      !(
-        (a.name || "").toLowerCase().includes(q) ||
-        (a.tag || "").toLowerCase().includes(q) ||
-        (a.category || "").toLowerCase().includes(q) ||
-        (a.desc || "").toLowerCase().includes(q)
-      )
-    ) {
-      return false;
+    if (qTokens.length) {
+      const blob = [
+        a.name,
+        a.tag,
+        a.category,
+        (a.style_tags || []).join(" "),
+        a.aliases,
+        a.sample_tags,
+        a.weight_hint,
+        a.desc,
+        a.notes,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      if (!qTokens.every(tok => blob.includes(tok))) return false;
     }
     return true;
   });
@@ -2771,12 +2815,33 @@ function renderArtistsGrid() {
     filtered = [...filtered].sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "zh-Hans-CN"));
   } else if (sortMode === "newest") {
     filtered = [...filtered].sort((a, b) => (b.id || 0) - (a.id || 0));
+  } else if (sortMode === "posts_desc") {
+    filtered = [...filtered].sort((a, b) => (Number(b.post_count) || 0) - (Number(a.post_count) || 0) || (b.favorite ? 1 : 0) - (a.favorite ? 1 : 0));
   } else {
     filtered = [...filtered].sort((a, b) => (b.favorite ? 1 : 0) - (a.favorite ? 1 : 0) || (a.id || 0) - (b.id || 0));
   }
+  return { filtered, qRaw, sortMode };
+}
 
-  const renderKey = `${state.artistCatFilter}|${sortMode}|${q}|${filtered
-    .map(a => `${a.id}:${a.favorite ? 1 : 0}:${a.preview_url || ""}:${a.name}:${a.tag}:${a.category}:${a.desc || ""}:${state.artistPreviewInFlight.has(a.id) ? 1 : 0}`)
+function formatPostCountBadge(postCount) {
+  const n = Number(postCount || 0);
+  if (n <= 0) return "";
+  if (n >= 500) return `${n}帖·高熟度`;
+  if (n >= 150) return `${n}帖·主力`;
+  return `${n}帖·辅料`;
+}
+
+function renderArtistsGrid() {
+  const grid = document.getElementById("artists-grid");
+  if (!grid) return;
+  const { filtered, qRaw, sortMode } = getFilteredSortedArtists();
+  const clearBtn = document.getElementById("artist-search-clear");
+  if (clearBtn) clearBtn.classList.toggle("hidden", !qRaw);
+
+  const renderKey = `${state.artistCatFilter}|${state.artistTagFilter}|${sortMode}|${qRaw}|${filtered
+    .map(a =>
+      `${a.id}:${a.favorite ? 1 : 0}:${a.preview_url || ""}:${a.name}:${a.tag}:${a.category}:${a.post_count || 0}:${a.weight_hint || ""}:${(a.style_tags || []).join("+")}:${a.aliases || ""}:${a.desc || ""}:${a.notes || ""}:${(a.urls || []).join("+")}:${state.artistPreviewInFlight.has(a.id) ? 1 : 0}`
+    )
     .join(",")}`;
   if (grid.dataset.renderKey === renderKey) return;
   grid.dataset.renderKey = renderKey;
@@ -2795,14 +2860,19 @@ function renderArtistsGrid() {
     .map(a => {
       const hasPreview = Boolean(a.preview_url);
       const isGeneratingPrev = state.artistPreviewInFlight.has(a.id);
+      const postBadge = formatPostCountBadge(a.post_count);
+      const styleTags = Array.isArray(a.style_tags) ? a.style_tags : [];
+      const shownTags = styleTags.slice(0, 4);
+      const extraTagCnt = Math.max(0, styleTags.length - shownTags.length);
+      const fullSummary = a.notes || a.desc || "暂无描述";
       const previewHtml = hasPreview
-        ? `<img src="${a.preview_url}" alt="${escapeHtml(a.name)}" loading="lazy" decoding="async" onclick="openArtistPreviewLightbox(${a.id})" onerror="this.onerror=null;this.classList.add('hidden');this.nextElementSibling?.classList.remove('hidden');" class="w-full h-full object-cover object-top transition-opacity duration-150 group-hover:opacity-95 cursor-zoom-in" />
-           <div class="hidden w-full h-full ui-stage-well flex flex-col items-center justify-center p-4 text-center">
+        ? `<img src="${a.preview_url}" alt="${escapeHtml(a.name)}" loading="lazy" decoding="async" onclick="openArtistDetailModal(${a.id})" onerror="this.onerror=null;this.classList.add('hidden');this.nextElementSibling?.classList.remove('hidden');" class="w-full h-full object-cover object-top transition-opacity duration-150 group-hover:opacity-95 cursor-pointer" />
+           <div onclick="openArtistDetailModal(${a.id})" class="hidden w-full h-full ui-stage-well flex flex-col items-center justify-center p-4 text-center cursor-pointer">
              <div class="ui-title text-[var(--text-primary)]">${escapeHtml(a.name)}</div>
              <div class="text-[12px] font-mono text-[var(--text-secondary)] mt-1">${escapeHtml(a.tag)}</div>
              <div class="mt-3 text-[11.5px] px-2.5 py-1 rounded-[6px] ui-badge text-[var(--status-warning)]">预览图文件丢失，请重新生成</div>
            </div>`
-        : `<div class="w-full h-full ui-stage-well flex flex-col items-center justify-center p-4 text-center border-b border-[var(--border-hairline)]">
+        : `<div onclick="openArtistDetailModal(${a.id})" class="w-full h-full ui-stage-well flex flex-col items-center justify-center p-4 text-center border-b border-[var(--border-hairline)] cursor-pointer">
              <div class="ui-title text-[var(--text-primary)]">${escapeHtml(a.name)}</div>
              <div class="text-[12px] font-mono text-[var(--text-secondary)] mt-1">${escapeHtml(a.tag)}</div>
              <div class="mt-3 text-[11.5px] px-2.5 py-1 rounded-[6px] ui-badge text-[var(--text-muted)]">点击「生成预览」制作示例图</div>
@@ -2812,8 +2882,12 @@ function renderArtistsGrid() {
         <div class="studio-grid-card rounded-[10px] ui-card overflow-hidden flex flex-col group">
           <div class="relative shrink-0 aspect-[4/5] overflow-hidden bg-[var(--bg-canvas-well)]">
             ${previewHtml}
-            <span class="absolute top-2 left-2 px-2 py-0.5 rounded-[5px] studio-hud text-[11.5px] font-medium pointer-events-none">${escapeHtml(a.category)}</span>
+            <div class="absolute top-2 left-2 flex flex-col items-start gap-1 pointer-events-none max-w-[72%]">
+              <span class="px-2 py-0.5 rounded-[5px] studio-hud text-[11px] font-medium truncate max-w-full">${escapeHtml(a.category)}</span>
+              ${postBadge ? `<span class="px-1.5 py-0.5 rounded-[5px] studio-hud text-[10.5px] font-mono opacity-90">${escapeHtml(postBadge)}</span>` : ""}
+            </div>
             <div class="absolute top-2 right-2 flex items-center gap-1">
+              <button onclick="openArtistDetailModal(${a.id})" aria-label="画师完整档案" title="查看完整档案与说明" class="spring-btn px-2 h-7 rounded-[6px] studio-hud flex items-center justify-center text-[11px] font-medium text-[var(--text-primary)] opacity-85 group-hover:opacity-100 transition-opacity">档案</button>
               <button onclick="openArtistModal(${a.id})" aria-label="编辑画师" title="编辑或删除画师" class="spring-btn w-7 h-7 rounded-[6px] studio-hud flex items-center justify-center text-[var(--text-secondary)] opacity-75 group-hover:opacity-100 transition-opacity">
                 ${uiIcon("edit", "ui-ic-sm")}
               </button>
@@ -2822,15 +2896,20 @@ function renderArtistsGrid() {
               </button>
             </div>
           </div>
-          <div class="p-3 space-y-2">
-            <div class="flex items-center justify-between gap-2">
-              <span class="ui-section truncate">${escapeHtml(a.name)}</span>
-              <button type="button" onclick="copyArtistTag(${a.id})" title="点击复制画师 Tag" class="selectable-text text-[11.5px] font-mono text-[var(--text-secondary)] hover:text-[var(--text-primary)] truncate max-w-[55%] text-right">${escapeHtml(a.tag)}</button>
+          <div class="p-3 space-y-2 flex-1 flex flex-col justify-between">
+            <div class="space-y-1.5">
+              <div class="flex items-center justify-between gap-2">
+                <button type="button" onclick="openArtistDetailModal(${a.id})" class="ui-section truncate text-left hover:text-[var(--accent-primary)] transition-colors" title="点击查看完整档案">${escapeHtml(a.name)}</button>
+                <button type="button" onclick="copyArtistTag(${a.id})" title="点击复制画师 Tag" class="selectable-text text-[11px] font-mono text-[var(--text-secondary)] hover:text-[var(--text-primary)] truncate max-w-[52%] text-right">${escapeHtml(a.tag)}</button>
+              </div>
+              ${a.weight_hint ? `<div class="text-[11px] font-mono text-[var(--accent-primary)] truncate" title="${escapeHtml(a.weight_hint)}">权重建议: ${escapeHtml(a.weight_hint)}</div>` : ""}
+              ${shownTags.length ? `<div class="flex flex-wrap gap-1">${shownTags.map(t => `<button type="button" onclick="filterArtistsByStyleTag('${escapeHtml(t).replace(/'/g, "\\'")}')" class="px-1.5 py-0.5 rounded-[4px] ui-badge text-[10.5px] hover:border-[var(--accent-primary)] transition-colors">${escapeHtml(t)}</button>`).join("")}${extraTagCnt > 0 ? `<button type="button" onclick="openArtistDetailModal(${a.id})" class="px-1.5 py-0.5 rounded-[4px] ui-badge text-[10.5px] text-[var(--text-muted)]">+${extraTagCnt}</button>` : ""}</div>` : ""}
+              <p onclick="openArtistDetailModal(${a.id})" title="点击展开完整画师介绍与笔记" class="text-[12px] text-[var(--text-secondary)] line-clamp-3 leading-relaxed cursor-pointer hover:text-[var(--text-primary)] transition-colors">${escapeHtml(fullSummary)}</p>
             </div>
-            <p class="text-[12px] text-[var(--text-muted)] line-clamp-2 leading-relaxed min-h-[34px]">${escapeHtml(a.desc || "暂无描述")}</p>
-            <div class="grid grid-cols-3 gap-1.5 pt-1 text-[12px]">
+            <div class="grid grid-cols-2 gap-1.5 pt-1 text-[12px]">
               <button onclick="useArtistById(${a.id})" class="spring-btn py-1 rounded-[6px] ui-btn font-medium">选用</button>
               <button onclick="addArtistByIdToMixer(${a.id})" class="spring-btn py-1 rounded-[6px] ui-btn">+ 混合</button>
+              <button onclick="openArtistDetailModal(${a.id})" class="spring-btn py-1 rounded-[6px] ui-btn text-[var(--accent-primary)]">完整档案</button>
               <button id="gen-card-btn-${a.id}" ${isGeneratingPrev ? "disabled" : ""} onclick="generateArtistCard(${a.id})" class="spring-btn py-1 rounded-[6px] ui-btn text-[var(--status-success)]" title="调用 NovelAI 接口 0点数生成该画师标准预览图">${isGeneratingPrev ? "生成中..." : hasPreview ? "重绘预览" : "生成预览"}</button>
             </div>
           </div>
@@ -2874,6 +2953,7 @@ async function toggleArtistFav(artistId) {
   state.artists[idx].favorite = !prevFav;
   renderArtistCatPills();
   renderArtistsGrid();
+  if (state.artistDetailId === artistId) renderArtistDetailModal();
   try {
     const res = await fetch(`/api/artists/${artistId}/favorite`, { method: "POST" });
     const data = await res.json();
@@ -2883,12 +2963,14 @@ async function toggleArtistFav(artistId) {
       if (latestIdx !== -1) state.artists[latestIdx] = data.artist;
       renderArtistCatPills();
       renderArtistsGrid();
+      if (state.artistDetailId === artistId) renderArtistDetailModal();
     }
   } catch (e) {
     const latestIdx = state.artists.findIndex(x => x.id === artistId);
     if (latestIdx !== -1) state.artists[latestIdx].favorite = prevFav;
     renderArtistCatPills();
     renderArtistsGrid();
+    if (state.artistDetailId === artistId) renderArtistDetailModal();
     showToast("收藏状态同步失败");
   } finally {
     state.favArtistLocks.delete(artistId);
@@ -2902,6 +2984,7 @@ async function generateArtistCard(artistId, modelId = "nai-diffusion-4-5-full") 
   }
   state.artistPreviewInFlight.add(artistId);
   renderArtistsGrid();
+  if (state.artistDetailId === artistId) renderArtistDetailModal();
   showToast(`正在调用 NovelAI (${modelId === "nai-diffusion-5-full" ? "V5" : "V4.5"} · 0 Anlas) 生成该画师标准预览图...`);
   try {
     const res = await fetch(`/api/artists/${artistId}/generate-preview`, {
@@ -2921,6 +3004,7 @@ async function generateArtistCard(artistId, modelId = "nai-diffusion-4-5-full") 
   } finally {
     state.artistPreviewInFlight.delete(artistId);
     renderArtistsGrid();
+    if (state.artistDetailId === artistId) renderArtistDetailModal();
   }
 }
 
@@ -3238,18 +3322,28 @@ function openArtistModal(artistId = null) {
 
   const nameIn = document.getElementById("new-artist-name");
   const tagIn = document.getElementById("new-artist-tag");
+  const aliasesIn = document.getElementById("new-artist-aliases");
+  const styleTagsIn = document.getElementById("new-artist-style-tags");
+  const weightHintIn = document.getElementById("new-artist-weight-hint");
   const descIn = document.getElementById("new-artist-desc");
+  const notesIn = document.getElementById("new-artist-notes");
+  const urlsIn = document.getElementById("new-artist-urls");
   const sampleIn = document.getElementById("new-artist-sample");
 
   if (artist) {
     if (titleEl) titleEl.textContent = `编辑画师：${artist.name}`;
-    if (hintEl) hintEl.textContent = "修改画师显示名称、分类、Tag 或基准预览词；如需刷新封面图，可在保存后点击卡片「重绘预览」。";
+    if (hintEl) hintEl.textContent = "编辑画师完整档案（多维标签、建议权重、简介与长笔记），保存后同步供 Agent 检索；如需刷新封面图，可点击「重绘预览」。";
     if (delBtn) delBtn.classList.remove("hidden");
     if (subBtn) subBtn.textContent = "保存修改";
     if (nameIn) nameIn.value = artist.name || "";
     state.artistModalCategory = artist.category || "私人收藏";
     if (tagIn) tagIn.value = artist.tag || "";
+    if (aliasesIn) aliasesIn.value = artist.aliases || "";
+    if (styleTagsIn) styleTagsIn.value = (artist.style_tags || []).join(", ");
+    if (weightHintIn) weightHintIn.value = artist.weight_hint || "";
     if (descIn) descIn.value = artist.desc || "";
+    if (notesIn) notesIn.value = artist.notes || "";
+    if (urlsIn) urlsIn.value = (artist.urls || []).join("\n");
     if (sampleIn) sampleIn.value = artist.sample_tags || "";
   } else {
     if (titleEl) titleEl.textContent = "新增画师并生成预览图 (0 Anlas)";
@@ -3259,7 +3353,12 @@ function openArtistModal(artistId = null) {
     if (nameIn) nameIn.value = "";
     state.artistModalCategory = "私人收藏";
     if (tagIn) tagIn.value = "";
+    if (aliasesIn) aliasesIn.value = "";
+    if (styleTagsIn) styleTagsIn.value = "";
+    if (weightHintIn) weightHintIn.value = "";
     if (descIn) descIn.value = "";
+    if (notesIn) notesIn.value = "";
+    if (urlsIn) urlsIn.value = "";
     if (sampleIn) sampleIn.value = "";
   }
   renderArtistModalCatSelect();
@@ -3270,7 +3369,18 @@ async function submitArtistModal() {
   const name = document.getElementById("new-artist-name").value.trim();
   const category = state.artistModalCategory || "私人收藏";
   const tag = document.getElementById("new-artist-tag").value.trim();
+  const aliases = document.getElementById("new-artist-aliases")?.value.trim() || "";
+  const style_tags = (document.getElementById("new-artist-style-tags")?.value || "")
+    .split(/[,，|/]+/)
+    .map(s => s.trim())
+    .filter(Boolean);
+  const weight_hint = document.getElementById("new-artist-weight-hint")?.value.trim() || "";
   const desc = document.getElementById("new-artist-desc").value.trim();
+  const notes = document.getElementById("new-artist-notes")?.value.trim() || "";
+  const urls = (document.getElementById("new-artist-urls")?.value || "")
+    .split(/[\r\n,，]+/)
+    .map(s => s.trim())
+    .filter(Boolean);
   const sample_tags = document.getElementById("new-artist-sample")?.value.trim() || "";
   if (!tag) {
     showToast("请输入画师英文 Tag");
@@ -3284,8 +3394,8 @@ async function submitArtistModal() {
     const url = isEdit ? `/api/artists/${state.artistEditingId}` : "/api/artists";
     const method = isEdit ? "PATCH" : "POST";
     const payload = isEdit
-      ? { name: name || tag, tag, desc, category, sample_tags }
-      : { name, tag, desc, category, sample_tags, generate_preview: true };
+      ? { name: name || tag, tag, desc, category, sample_tags, style_tags, weight_hint, aliases, urls, notes }
+      : { name, tag, desc, category, sample_tags, style_tags, weight_hint, aliases, urls, notes, generate_preview: true };
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
@@ -3299,6 +3409,7 @@ async function submitArtistModal() {
       else state.artists.unshift(data.artist);
       renderArtistCatPills();
       renderArtistsGrid();
+      if (state.artistDetailId === data.artist.id) renderArtistDetailModal();
       toggleCustomArtistModal(false);
       showToast(isEdit ? `已更新画师「${data.artist.name}」` : `已添加 ${data.artist.name} 并生成画风预览图`);
     }
@@ -3326,6 +3437,7 @@ async function deleteEditingArtist() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "删除失败");
       state.artists = state.artists.filter(x => x.id !== targetId);
+      if (state.artistDetailId === targetId) closeArtistDetailModal();
       toggleCustomArtistModal(false);
       renderArtistCatPills();
       renderArtistsGrid();
@@ -3334,6 +3446,140 @@ async function deleteEditingArtist() {
       showToast(err.message || "删除画师失败");
     }
   });
+}
+
+function openArtistDetailModal(artistId) {
+  state.artistDetailId = artistId;
+  renderArtistDetailModal();
+  document.getElementById("artist-detail-modal")?.classList.remove("hidden");
+}
+
+function closeArtistDetailModal() {
+  state.artistDetailId = null;
+  document.getElementById("artist-detail-modal")?.classList.add("hidden");
+}
+
+function renderArtistDetailModal() {
+  const modal = document.getElementById("artist-detail-modal");
+  if (!modal || !state.artistDetailId) return;
+  const a = state.artists.find(x => x.id === state.artistDetailId);
+  if (!a) {
+    closeArtistDetailModal();
+    return;
+  }
+  const img = document.getElementById("ad-img");
+  const empty = document.getElementById("ad-img-empty");
+  const emptyName = document.getElementById("ad-empty-name");
+  if (a.preview_url) {
+    if (img) {
+      img.src = a.preview_url;
+      img.alt = a.name || "";
+      img.classList.remove("hidden");
+    }
+    if (empty) empty.classList.add("hidden");
+  } else {
+    if (img) img.classList.add("hidden");
+    if (empty) empty.classList.remove("hidden");
+    if (emptyName) emptyName.textContent = a.name || a.tag || "暂无预览图";
+  }
+
+  const nameEl = document.getElementById("ad-name");
+  const catEl = document.getElementById("ad-cat");
+  const postsEl = document.getElementById("ad-posts");
+  const tagBtn = document.getElementById("ad-tag-btn");
+  const aliasesEl = document.getElementById("ad-aliases");
+  if (nameEl) nameEl.textContent = a.name || a.tag || "未命名画师";
+  if (catEl) catEl.textContent = `主类: ${a.category || "私人收藏"}`;
+  if (postsEl) {
+    const pBadge = formatPostCountBadge(a.post_count);
+    postsEl.textContent = pBadge || "帖数未同步";
+  }
+  if (tagBtn) tagBtn.textContent = a.tag || "";
+  if (aliasesEl) aliasesEl.textContent = a.aliases ? `别名: ${a.aliases}` : "";
+
+  const tagsEl = document.getElementById("ad-style-tags");
+  if (tagsEl) {
+    const tags = Array.isArray(a.style_tags) ? a.style_tags : [];
+    tagsEl.innerHTML = tags.length
+      ? tags.map(t => `<button type="button" onclick="filterArtistsByStyleTag('${escapeHtml(t).replace(/'/g, "\\'")}'); closeArtistDetailModal();" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn text-[11.5px] hover:border-[var(--accent-primary)]">${escapeHtml(t)}</button>`).join("")
+      : `<span class="text-[12px] text-[var(--text-muted)]">暂未标注多维风格标签</span>`;
+  }
+
+  const wWrap = document.getElementById("ad-weight-wrap");
+  const wEl = document.getElementById("ad-weight");
+  if (wWrap && wEl) {
+    if (a.weight_hint) {
+      wWrap.classList.remove("hidden");
+      wEl.textContent = a.weight_hint;
+    } else {
+      wWrap.classList.add("hidden");
+    }
+  }
+
+  const descEl = document.getElementById("ad-desc");
+  if (descEl) descEl.textContent = a.desc || "暂无概览";
+
+  const notesEl = document.getElementById("ad-notes");
+  if (notesEl) notesEl.textContent = a.notes || a.desc || "暂无完整档案笔记。可点击下方「编辑档案」或让右侧 Agent 自动补齐该画师的详尽风格分析、线条色彩特点与 NAI 混搭指南。";
+
+  const sWrap = document.getElementById("ad-sample-wrap");
+  const sEl = document.getElementById("ad-sample");
+  if (sWrap && sEl) {
+    if (a.sample_tags) {
+      sWrap.classList.remove("hidden");
+      sEl.textContent = a.sample_tags;
+    } else {
+      sWrap.classList.add("hidden");
+    }
+  }
+
+  const uWrap = document.getElementById("ad-urls-wrap");
+  const uEl = document.getElementById("ad-urls");
+  if (uWrap && uEl) {
+    const urls = Array.isArray(a.urls) ? a.urls.filter(u => /^https?:\/\//i.test(String(u || ""))) : [];
+    if (urls.length) {
+      uWrap.classList.remove("hidden");
+      uEl.innerHTML = urls.map(u => {
+        let host = u;
+        try { host = new URL(u).hostname.replace(/^www\./, ""); } catch {}
+        return `<a href="${escapeHtml(u)}" target="_blank" rel="noopener noreferrer" class="spring-btn inline-flex items-center px-2.5 py-1 rounded-[5px] ui-btn text-[11.5px] font-mono text-[var(--accent-primary)] hover:underline">${escapeHtml(host)}</a>`;
+      }).join("");
+    } else {
+      uWrap.classList.add("hidden");
+      uEl.innerHTML = "";
+    }
+  }
+
+  const favBtn = document.getElementById("ad-fav-btn");
+  const favLabel = document.getElementById("ad-fav-label");
+  if (favBtn) favBtn.classList.toggle("text-[var(--status-warning)]", Boolean(a.favorite));
+  if (favLabel) favLabel.textContent = a.favorite ? "已收藏" : "收藏";
+
+  const regenBtn = document.getElementById("ad-regen-btn");
+  if (regenBtn) {
+    const busy = state.artistPreviewInFlight.has(a.id);
+    regenBtn.disabled = busy;
+    regenBtn.textContent = busy ? "生成中..." : (a.preview_url ? "重绘预览" : "生成预览");
+  }
+
+  const { filtered } = getFilteredSortedArtists();
+  const idx = filtered.findIndex(x => x.id === a.id);
+  const prevBtn = document.getElementById("ad-prev-btn");
+  const nextBtn = document.getElementById("ad-next-btn");
+  if (prevBtn) prevBtn.disabled = idx <= 0;
+  if (nextBtn) nextBtn.disabled = idx === -1 || idx >= filtered.length - 1;
+}
+
+function navigateArtistDetail(step) {
+  const { filtered } = getFilteredSortedArtists();
+  const idx = filtered.findIndex(x => x.id === state.artistDetailId);
+  if (idx === -1) return;
+  const target = filtered[idx + step];
+  if (target) openArtistDetailModal(target.id);
+}
+
+function toggleDetailArtistFav() {
+  if (state.artistDetailId) toggleArtistFav(state.artistDetailId);
 }
 
 // ================= Tab 3: Full Local Gallery & Asset Inspector =================
@@ -5257,6 +5503,7 @@ function setupGlobalHotkeys() {
     if (e.key === "Escape") {
       const overlayIds = [
         "studio-confirm-modal",
+        "artist-detail-modal",
         "gallery-detail-modal",
         "lightbox-modal",
         "diff-modal",
@@ -5276,6 +5523,7 @@ function setupGlobalHotkeys() {
         return el && !el.classList.contains("hidden");
       });
       resolveStudioConfirm(false);
+      closeArtistDetailModal();
       closeGalleryDetailModal();
       closeLightbox();
       closeInspectPngModal();
@@ -5749,6 +5997,7 @@ function setupFastTooltips() {
 function setupModalBackdropClose() {
   const closers = {
     "studio-confirm-modal": () => resolveStudioConfirm(false),
+    "artist-detail-modal": () => closeArtistDetailModal(),
     "gallery-detail-modal": () => closeGalleryDetailModal(),
     "custom-artist-modal": () => toggleCustomArtistModal(false),
     "diff-modal": () => document.getElementById("diff-modal")?.classList.add("hidden"),

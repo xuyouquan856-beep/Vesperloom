@@ -1,5 +1,6 @@
 import contextlib
 import json
+import re
 import sqlite3
 import time
 from pathlib import Path
@@ -262,6 +263,12 @@ def init_db() -> None:
                 category TEXT NOT NULL,
                 desc TEXT DEFAULT '',
                 sample_tags TEXT DEFAULT '',
+                style_tags_json TEXT DEFAULT '[]',
+                post_count INTEGER DEFAULT 0,
+                weight_hint TEXT DEFAULT '',
+                aliases TEXT DEFAULT '',
+                urls_json TEXT DEFAULT '[]',
+                notes TEXT DEFAULT '',
                 preview_url TEXT DEFAULT '',
                 favorite INTEGER DEFAULT 0,
                 is_custom INTEGER DEFAULT 0,
@@ -270,6 +277,19 @@ def init_db() -> None:
             )
             """
         )
+        # Idempotent schema migration for existing studio.db artist dossiers
+        existing_cols = {r["name"] for r in conn.execute("PRAGMA table_info(artists)").fetchall()}
+        migrations = [
+            ("style_tags_json", "TEXT DEFAULT '[]'"),
+            ("post_count", "INTEGER DEFAULT 0"),
+            ("weight_hint", "TEXT DEFAULT ''"),
+            ("aliases", "TEXT DEFAULT ''"),
+            ("urls_json", "TEXT DEFAULT '[]'"),
+            ("notes", "TEXT DEFAULT ''"),
+        ]
+        for col_name, col_def in migrations:
+            if col_name not in existing_cols:
+                conn.execute(f"ALTER TABLE artists ADD COLUMN {col_name} {col_def}")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS mix_presets (
@@ -644,24 +664,71 @@ def sync_outputs_folder(outputs_root: Optional[Path] = None, prune_missing: bool
     }
 
 
+def _normalize_str_list(val: Any) -> List[str]:
+    if isinstance(val, list):
+        items = [str(x).strip() for x in val if str(x).strip()]
+    elif isinstance(val, str):
+        items = [x.strip() for x in re.split(r"[,，/|]+", val) if x.strip()]
+    else:
+        items = []
+    seen = set()
+    out: List[str] = []
+    for x in items:
+        k = x.lower()
+        if k not in seen:
+            seen.add(k)
+            out.append(x)
+    return out
+
+
+def _safe_json_list(raw: Any, fallback: List[str]) -> List[str]:
+    try:
+        parsed = json.loads(raw) if isinstance(raw, str) else raw
+        return parsed if isinstance(parsed, list) else list(fallback)
+    except Exception:
+        return list(fallback)
+
+
 def _row_to_artist(row: sqlite3.Row) -> Dict[str, Any]:
     d = dict(row)
     d["favorite"] = bool(d["favorite"])
     d["is_custom"] = bool(d["is_custom"])
-    d["palette"] = json.loads(d.pop("palette_json", '["#2563eb","#38bdf8"]'))
+    d["palette"] = _safe_json_list(d.pop("palette_json", '["#2563eb","#38bdf8"]'), ["#2563eb", "#38bdf8"])
+    d["style_tags"] = _safe_json_list(d.pop("style_tags_json", "[]"), [])
+    d["urls"] = _safe_json_list(d.pop("urls_json", "[]"), [])
+    d["post_count"] = int(d.get("post_count") or 0)
+    d["weight_hint"] = str(d.get("weight_hint") or "")
+    d["aliases"] = str(d.get("aliases") or "")
+    d["notes"] = str(d.get("notes") or "")
     return d
 
 
-def list_artists(search: str = "", category: str = "", favorite_only: bool = False) -> List[Dict[str, Any]]:
+def list_artists(
+    search: str = "",
+    category: str = "",
+    favorite_only: bool = False,
+    style_tag: str = "",
+) -> List[Dict[str, Any]]:
     sql = "SELECT * FROM artists WHERE 1=1"
     params: List[Any] = []
     if search.strip():
-        q = _like_pattern(search)
-        sql += " AND (name LIKE ? ESCAPE '\\' OR tag LIKE ? ESCAPE '\\' OR desc LIKE ? ESCAPE '\\' OR category LIKE ? ESCAPE '\\')"
-        params.extend([q, q, q, q])
+        tokens = [tok for tok in re.split(r"[\s,，/|]+", search.strip()) if tok]
+        for tok in tokens[:6]:
+            q = _like_pattern(tok)
+            sql += (
+                " AND (name LIKE ? ESCAPE '\\' OR tag LIKE ? ESCAPE '\\' OR desc LIKE ? ESCAPE '\\' "
+                "OR category LIKE ? ESCAPE '\\' OR COALESCE(style_tags_json,'') LIKE ? ESCAPE '\\' "
+                "OR COALESCE(sample_tags,'') LIKE ? ESCAPE '\\' OR COALESCE(aliases,'') LIKE ? ESCAPE '\\' "
+                "OR COALESCE(notes,'') LIKE ? ESCAPE '\\')"
+            )
+            params.extend([q, q, q, q, q, q, q, q])
     if category.strip() and category != "all":
         sql += " AND category = ?"
         params.append(category.strip())
+    if style_tag.strip() and style_tag != "all":
+        sq = _like_pattern(style_tag.strip())
+        sql += " AND COALESCE(style_tags_json,'') LIKE ? ESCAPE '\\'"
+        params.append(sq)
     if favorite_only:
         sql += " AND favorite = 1"
     sql += " ORDER BY favorite DESC, id ASC"
@@ -677,6 +744,12 @@ def update_artist(
     category: Optional[str] = None,
     desc: Optional[str] = None,
     sample_tags: Optional[str] = None,
+    style_tags: Optional[Any] = None,
+    post_count: Optional[int] = None,
+    weight_hint: Optional[str] = None,
+    aliases: Optional[str] = None,
+    urls: Optional[Any] = None,
+    notes: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     with get_conn() as conn:
         row = conn.execute("SELECT * FROM artists WHERE id = ?", (artist_id,)).fetchone()
@@ -689,9 +762,42 @@ def update_artist(
         new_cat = (category if category is not None else row["category"]).strip() or row["category"]
         new_desc = (desc if desc is not None else row["desc"]).strip()
         new_sample = (sample_tags if sample_tags is not None else row["sample_tags"]).strip()
+        new_style_tags_json = (
+            json.dumps(_normalize_str_list(style_tags), ensure_ascii=False)
+            if style_tags is not None
+            else (row["style_tags_json"] or "[]")
+        )
+        new_post_count = int(post_count) if post_count is not None else int(row["post_count"] or 0)
+        new_weight_hint = (weight_hint if weight_hint is not None else (row["weight_hint"] or "")).strip()
+        new_aliases = (aliases if aliases is not None else (row["aliases"] or "")).strip()
+        new_urls_json = (
+            json.dumps(_normalize_str_list(urls), ensure_ascii=False)
+            if urls is not None
+            else (row["urls_json"] or "[]")
+        )
+        new_notes = (notes if notes is not None else (row["notes"] or "")).strip()
         conn.execute(
-            "UPDATE artists SET name = ?, tag = ?, category = ?, desc = ?, sample_tags = ? WHERE id = ?",
-            (new_name, new_tag, new_cat, new_desc, new_sample, artist_id),
+            """
+            UPDATE artists
+            SET name = ?, tag = ?, category = ?, desc = ?, sample_tags = ?,
+                style_tags_json = ?, post_count = ?, weight_hint = ?,
+                aliases = ?, urls_json = ?, notes = ?
+            WHERE id = ?
+            """,
+            (
+                new_name,
+                new_tag,
+                new_cat,
+                new_desc,
+                new_sample,
+                new_style_tags_json,
+                new_post_count,
+                new_weight_hint,
+                new_aliases,
+                new_urls_json,
+                new_notes,
+                artist_id,
+            ),
         )
         conn.commit()
         updated = conn.execute("SELECT * FROM artists WHERE id = ?", (artist_id,)).fetchone()
@@ -713,13 +819,7 @@ def toggle_artist_favorite(artist_id: int) -> Optional[Dict[str, Any]]:
         conn.execute("UPDATE artists SET favorite = CASE WHEN favorite = 1 THEN 0 ELSE 1 END WHERE id = ?", (artist_id,))
         conn.commit()
         row = conn.execute("SELECT * FROM artists WHERE id = ?", (artist_id,)).fetchone()
-        if not row:
-            return None
-        d = dict(row)
-        d["favorite"] = bool(d["favorite"])
-        d["is_custom"] = bool(d["is_custom"])
-        d["palette"] = json.loads(d.pop("palette_json", '["#2563eb","#38bdf8"]'))
-        return d
+        return _row_to_artist(row) if row else None
 
 
 def upsert_artist(
@@ -730,11 +830,19 @@ def upsert_artist(
     sample_tags: str = "",
     preview_url: str = "",
     is_custom: bool = True,
+    style_tags: Optional[Any] = None,
+    post_count: int = 0,
+    weight_hint: str = "",
+    aliases: str = "",
+    urls: Optional[Any] = None,
+    notes: str = "",
 ) -> Dict[str, Any]:
     clean_tag = tag.strip()
     if not clean_tag.startswith("artist:"):
         clean_tag = f"artist:{clean_tag}"
     now = int(time.time())
+    st_json = json.dumps(_normalize_str_list(style_tags), ensure_ascii=False) if style_tags is not None else "[]"
+    u_json = json.dumps(_normalize_str_list(urls), ensure_ascii=False) if urls is not None else "[]"
     with get_conn() as conn:
         existing = conn.execute("SELECT id FROM artists WHERE tag = ?", (clean_tag,)).fetchone()
         if existing:
@@ -744,24 +852,55 @@ def upsert_artist(
                 SET name = COALESCE(NULLIF(?, ''), name),
                     category = COALESCE(NULLIF(?, ''), category),
                     desc = COALESCE(NULLIF(?, ''), desc),
-                    preview_url = COALESCE(NULLIF(?, ''), preview_url)
+                    preview_url = COALESCE(NULLIF(?, ''), preview_url),
+                    style_tags_json = CASE WHEN ? != '[]' THEN ? ELSE style_tags_json END,
+                    post_count = CASE WHEN ? > 0 THEN ? ELSE post_count END,
+                    weight_hint = COALESCE(NULLIF(?, ''), weight_hint),
+                    aliases = COALESCE(NULLIF(?, ''), aliases),
+                    urls_json = CASE WHEN ? != '[]' THEN ? ELSE urls_json END,
+                    notes = COALESCE(NULLIF(?, ''), notes)
                 WHERE id = ?
                 """,
-                (name, category, desc, preview_url, existing["id"]),
+                (
+                    name,
+                    category,
+                    desc,
+                    preview_url,
+                    st_json,
+                    st_json,
+                    int(post_count or 0),
+                    int(post_count or 0),
+                    weight_hint,
+                    aliases,
+                    u_json,
+                    u_json,
+                    notes,
+                    existing["id"],
+                ),
             )
             aid = existing["id"]
         else:
             cur = conn.execute(
                 """
-                INSERT INTO artists (name, tag, category, desc, sample_tags, preview_url, favorite, is_custom, palette_json, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
+                INSERT INTO artists (
+                    name, tag, category, desc, sample_tags,
+                    style_tags_json, post_count, weight_hint, aliases, urls_json, notes,
+                    preview_url, favorite, is_custom, palette_json, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
                 """,
                 (
                     name or clean_tag.replace("artist:", ""),
                     clean_tag,
                     category or "私人收藏",
                     desc or "用户自定义收录画师标准预览卡",
-                    sample_tags or "1girl, solo, silver hair, blue eyes, sunset, detailed eyes",
+                    sample_tags,
+                    st_json,
+                    int(post_count or 0),
+                    weight_hint,
+                    aliases,
+                    u_json,
+                    notes,
                     preview_url,
                     1 if is_custom else 0,
                     json.dumps(["#3b82f6", "#06b6d4"]),
@@ -771,11 +910,7 @@ def upsert_artist(
             aid = cur.lastrowid
         conn.commit()
         row = conn.execute("SELECT * FROM artists WHERE id = ?", (aid,)).fetchone()
-        d = dict(row)
-        d["favorite"] = bool(d["favorite"])
-        d["is_custom"] = bool(d["is_custom"])
-        d["palette"] = json.loads(d.pop("palette_json", '["#3b82f6","#06b6d4"]'))
-        return d
+        return _row_to_artist(row)
 
 
 def update_artist_preview(artist_id: int, preview_url: str) -> Optional[Dict[str, Any]]:
@@ -783,13 +918,7 @@ def update_artist_preview(artist_id: int, preview_url: str) -> Optional[Dict[str
         conn.execute("UPDATE artists SET preview_url = ? WHERE id = ?", (preview_url, artist_id))
         conn.commit()
         row = conn.execute("SELECT * FROM artists WHERE id = ?", (artist_id,)).fetchone()
-        if not row:
-            return None
-        d = dict(row)
-        d["favorite"] = bool(d["favorite"])
-        d["is_custom"] = bool(d["is_custom"])
-        d["palette"] = json.loads(d.pop("palette_json", '["#3b82f6","#06b6d4"]'))
-        return d
+        return _row_to_artist(row) if row else None
 
 
 def list_mix_presets() -> List[Dict[str, Any]]:

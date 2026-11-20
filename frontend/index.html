@@ -6,7 +6,7 @@
   <title>NAI Studio — 个人创作工作台</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23111318'/%3E%3Cpath d='M20 44V20l24 24V20' stroke='%23ffffff' stroke-width='6' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E" />
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="/static/styles.css?v=p2-18" />
+  <link rel="stylesheet" href="/static/styles.css?v=p2-19" />
 </head>
 <body class="lg:h-screen min-h-screen flex flex-col lg:overflow-hidden overflow-y-auto">
 
@@ -962,30 +962,33 @@
   <!-- ================= TAB 2: 画师图鉴 & 混搭调音台 ================= -->
   <main id="view-artists" class="hidden relative z-10 flex-1 min-h-0 flex flex-col lg:flex-row">
     <section class="flex-1 studio-canvas-grid flex flex-col min-h-0">
-      <div class="relative z-30 studio-panel px-4 py-3 border-b border-[var(--border-hairline)] flex flex-wrap items-center justify-between gap-2.5 shrink-0">
-        <div class="flex items-center gap-1.5 flex-wrap" id="artist-cat-pills"></div>
-        <div class="flex items-center gap-2 flex-wrap">
-          <div class="relative w-36" id="artist-sort-select-wrap">
-            <button type="button" onclick="toggleGlassSelect('artist-sort-select')" id="artist-sort-select-trigger" class="glass-select-trigger !py-1 !px-2.5 !text-[12px]">
-              <span id="artist-sort-select-label" class="truncate">收藏置顶</span>
-              <span class="glass-select-chevron">▾</span>
+      <div class="relative z-30 studio-panel px-4 py-3 border-b border-[var(--border-hairline)] flex flex-col gap-2 shrink-0">
+        <div class="flex flex-wrap items-center justify-between gap-2.5">
+          <div class="flex items-center gap-1.5 flex-wrap" id="artist-cat-pills"></div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <div class="relative w-36" id="artist-sort-select-wrap">
+              <button type="button" onclick="toggleGlassSelect('artist-sort-select')" id="artist-sort-select-trigger" class="glass-select-trigger !py-1 !px-2.5 !text-[12px]">
+                <span id="artist-sort-select-label" class="truncate">收藏置顶</span>
+                <span class="glass-select-chevron">▾</span>
+              </button>
+              <div id="artist-sort-select-menu" class="glass-select-menu glass-select-menu-auto liquid-popover hidden"></div>
+            </div>
+            <button id="artist-backfill-btn" onclick="startArtistBackfillQueue()" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12.5px]" title="使用 Opus 0 点数静默生成缺失的画师预览图">补齐缺失预览</button>
+            <button id="artist-backfill-stop-btn" onclick="stopAutoRollQueue()" class="hidden spring-btn inline-flex items-center gap-1 px-2.5 py-1 rounded-[6px] ui-btn text-[var(--status-danger)] text-[12.5px]">
+              <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-stop"/></svg>
+              <span>停止生成 (<span id="artist-backfill-progress">0/0</span>)</span>
             </button>
-            <div id="artist-sort-select-menu" class="glass-select-menu glass-select-menu-auto liquid-popover hidden"></div>
+            <div class="relative">
+              <svg class="ui-ic-sm ui-ic text-[var(--text-muted)] absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" aria-hidden="true"><use href="#ic-search"/></svg>
+              <input id="artist-search-input" type="text" oninput="renderArtistsGrid()" placeholder="搜画师名、Tag、别名、笔记..." class="ui-well rounded-[6px] pl-8 pr-7 py-1 text-[13px] w-56 placeholder:text-[var(--placeholder)]" />
+              <button type="button" onclick="clearArtistSearch()" id="artist-search-clear" class="hidden absolute right-1.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-[4px] hover:bg-[var(--surface-well-hover)] flex items-center justify-center text-[var(--text-muted)]" title="清空搜索">
+                <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-close"/></svg>
+              </button>
+            </div>
+            <button onclick="openArtistModal()" class="liquid-cta spring-btn px-3 py-1 rounded-[6px] text-[12.5px] font-semibold">+ 新增画师</button>
           </div>
-          <button id="artist-backfill-btn" onclick="startArtistBackfillQueue()" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12.5px]" title="使用 Opus 0 点数静默生成缺失的画师预览图">补齐缺失预览</button>
-          <button id="artist-backfill-stop-btn" onclick="stopAutoRollQueue()" class="hidden spring-btn inline-flex items-center gap-1 px-2.5 py-1 rounded-[6px] ui-btn text-[var(--status-danger)] text-[12.5px]">
-            <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-stop"/></svg>
-            <span>停止生成 (<span id="artist-backfill-progress">0/0</span>)</span>
-          </button>
-          <div class="relative">
-            <svg class="ui-ic-sm ui-ic text-[var(--text-muted)] absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" aria-hidden="true"><use href="#ic-search"/></svg>
-            <input id="artist-search-input" type="text" oninput="renderArtistsGrid()" placeholder="搜画师名、Tag、分类..." class="ui-well rounded-[6px] pl-8 pr-7 py-1 text-[13px] w-48 placeholder:text-[var(--placeholder)]" />
-            <button type="button" onclick="clearArtistSearch()" id="artist-search-clear" class="hidden absolute right-1.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-[4px] hover:bg-[var(--surface-well-hover)] flex items-center justify-center text-[var(--text-muted)]" title="清空搜索">
-              <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-close"/></svg>
-            </button>
-          </div>
-          <button onclick="openArtistModal()" class="liquid-cta spring-btn px-3 py-1 rounded-[6px] text-[12.5px] font-semibold">+ 新增画师</button>
         </div>
+        <div id="artist-style-tag-pills" class="flex items-center gap-1.5 flex-wrap text-[11.5px]"></div>
       </div>
 
       <div class="flex-1 min-h-0 overflow-y-auto custom-scroll p-4">
@@ -1282,7 +1285,7 @@
 
   <!-- ================= 所有弹窗保持精简一致 ================= -->
   <div id="custom-artist-modal" class="hidden fixed inset-0 z-50 bg-black/55 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="w-full max-w-lg rounded-[14px] liquid-popover p-6 space-y-4 ui-body">
+    <div class="w-full max-w-2xl max-h-[90vh] overflow-y-auto custom-scroll rounded-[14px] liquid-popover p-6 space-y-4 ui-body">
       <div class="flex items-center justify-between">
         <h3 id="artist-modal-title" class="ui-title">新增画师并生成预览图 (0 Anlas)</h3>
         <button onclick="toggleCustomArtistModal(false)" aria-label="关闭" class="w-6 h-6 rounded-[6px] ui-btn flex items-center justify-center text-[var(--text-secondary)]">
@@ -1299,7 +1302,7 @@
             <input id="new-artist-name" type="text" placeholder="例如：QuAn_ / 荻pote" class="w-full ui-well rounded-[6px] px-3 py-1.5 ui-body" />
           </div>
           <div>
-            <label class="block text-[12px] text-[var(--text-muted)] mb-1">风格分类</label>
+            <label class="block text-[12px] text-[var(--text-muted)] mb-1">主分类（兼容分组）</label>
             <div class="relative z-30" id="artist-cat-select-wrap">
               <button type="button" onclick="event.stopPropagation();toggleGlassSelect('artist-cat-select')" id="artist-cat-select-trigger" class="glass-select-trigger !py-1.5 !px-2.5 !text-[13px]">
                 <span id="artist-cat-select-label" class="truncate">私人收藏</span>
@@ -1309,17 +1312,43 @@
             </div>
           </div>
         </div>
-        <div>
-          <label class="block text-[12px] text-[var(--text-muted)] mb-1">画师 Tag（英文 Danbooru 名）</label>
-          <input id="new-artist-tag" type="text" placeholder="例如：artist:ogipote 或 ask_(askzy)" class="w-full ui-well rounded-[6px] px-3 py-1.5 font-mono ui-body" />
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <div>
+            <label class="block text-[12px] text-[var(--text-muted)] mb-1">画师 Tag（英文 Danbooru 名）</label>
+            <input id="new-artist-tag" type="text" placeholder="例如：artist:ogipote 或 ask_(askzy)" class="w-full ui-well rounded-[6px] px-3 py-1.5 font-mono ui-body" />
+          </div>
+          <div>
+            <label class="block text-[12px] text-[var(--text-muted)] mb-1">别名 / 常见写法</label>
+            <input id="new-artist-aliases" type="text" placeholder="逗号分隔，如 望月しいな, mochizuki" class="w-full ui-well rounded-[6px] px-3 py-1.5 ui-body" />
+          </div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <div>
+            <label class="block text-[12px] text-[var(--text-muted)] mb-1">多维风格标签（逗号分隔，无限制）</label>
+            <input id="new-artist-style-tags" type="text" placeholder="如：清透水彩, 高饱和幻彩, 轻小说封面, 头部高熟度" class="w-full ui-well rounded-[6px] px-3 py-1.5 ui-body" />
+          </div>
+          <div>
+            <label class="block text-[12px] text-[var(--text-muted)] mb-1">推荐权重区间 (weight_hint)</label>
+            <input id="new-artist-weight-hint" type="text" placeholder="例如：主用 0.85~0.95 / 混搭 0.5~0.65" class="w-full ui-well rounded-[6px] px-3 py-1.5 font-mono text-[12px]" />
+          </div>
         </div>
         <div>
-          <label class="block text-[12px] text-[var(--text-muted)] mb-1">画风描述与备注</label>
-          <textarea id="new-artist-desc" rows="2" placeholder="例如：强逆光色彩、戏剧化构图" class="custom-scroll w-full ui-well rounded-[6px] px-3 py-1.5 ui-body resize-none"></textarea>
+          <label class="block text-[12px] text-[var(--text-muted)] mb-1">画风一句话概括</label>
+          <textarea id="new-artist-desc" rows="2" placeholder="例如：清透幻彩厚涂、强烈高光对比、擅长礼服/兵器少女" class="custom-scroll w-full ui-well rounded-[6px] px-3 py-1.5 ui-body resize-none"></textarea>
         </div>
         <div>
-          <label class="block text-[12px] text-[var(--text-muted)] mb-1">预览卡基准提示词（可选）</label>
-          <textarea id="new-artist-sample" rows="2" placeholder="留空使用默认：1girl, solo, silver hair, blue eyes, sunset..." class="custom-scroll w-full ui-well rounded-[6px] px-3 py-1.5 font-mono text-[12px] resize-none"></textarea>
+          <label class="block text-[12px] text-[var(--text-muted)] mb-1">完整画师档案与混搭笔记（不限长度）</label>
+          <textarea id="new-artist-notes" rows="4" placeholder="记录画师代表作、线条/上色/光影特征、NAI 实测表现、适合搭配的辅助画师等..." class="custom-scroll w-full ui-well rounded-[6px] px-3 py-1.5 ui-body resize-y"></textarea>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <div>
+            <label class="block text-[12px] text-[var(--text-muted)] mb-1">外部主页链接（每行或逗号分隔）</label>
+            <textarea id="new-artist-urls" rows="2" placeholder="https://www.pixiv.net/users/..." class="custom-scroll w-full ui-well rounded-[6px] px-3 py-1.5 font-mono text-[11.5px] resize-none"></textarea>
+          </div>
+          <div>
+            <label class="block text-[12px] text-[var(--text-muted)] mb-1">预览卡基准提示词（可选）</label>
+            <textarea id="new-artist-sample" rows="2" placeholder="留空使用默认：1girl, solo, silver hair, blue eyes, sunset..." class="custom-scroll w-full ui-well rounded-[6px] px-3 py-1.5 font-mono text-[12px] resize-none"></textarea>
+          </div>
         </div>
       </div>
       <div class="flex items-center justify-between gap-2 pt-2">
@@ -1327,6 +1356,82 @@
         <div class="flex items-center gap-2 ml-auto">
           <button onclick="toggleCustomArtistModal(false)" class="spring-btn px-3 py-1 rounded-[6px] ui-btn">取消</button>
           <button id="create-artist-submit-btn" onclick="submitArtistModal()" class="liquid-cta px-4 py-1 rounded-[6px] font-semibold">生成预览并添加 (0点数)</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 画师完整档案详情弹窗 (Full Artist Dossier Inspector) -->
+  <div id="artist-detail-modal" class="hidden fixed inset-0 z-50 bg-black/65 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="w-full max-w-4xl max-h-[92vh] flex flex-col md:flex-row rounded-[14px] liquid-popover overflow-hidden ui-body">
+      <div class="md:w-[44%] bg-[var(--bg-canvas-well)] p-4 flex flex-col items-center justify-center relative min-h-[280px]">
+        <img id="ad-img" src="" alt="" onclick="openArtistPreviewLightbox(state.artistDetailId)" class="hidden max-h-[66vh] max-w-full rounded-[8px] object-contain cursor-zoom-in" />
+        <div id="ad-img-empty" class="w-full aspect-[4/5] max-h-[56vh] ui-stage-well rounded-[8px] flex flex-col items-center justify-center p-4 text-center">
+          <div id="ad-empty-name" class="ui-title text-[var(--text-primary)]">暂无预览图</div>
+          <div class="text-[12px] text-[var(--text-muted)] mt-1">可点击「重绘预览」生成标准 V4.5 风格卡</div>
+        </div>
+        <div class="mt-3 flex items-center gap-2 flex-wrap justify-center">
+          <button id="ad-prev-btn" type="button" onclick="navigateArtistDetail(-1)" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">← 上一位</button>
+          <button id="ad-fav-btn" type="button" onclick="toggleDetailArtistFav()" class="spring-btn inline-flex items-center gap-1 px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">
+            <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-star"/></svg>
+            <span id="ad-fav-label">收藏</span>
+          </button>
+          <button id="ad-next-btn" type="button" onclick="navigateArtistDetail(1)" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">下一位 →</button>
+        </div>
+      </div>
+      <div class="md:w-[56%] p-5 flex flex-col min-h-0 overflow-y-auto custom-scroll space-y-3.5 border-t md:border-t-0 md:border-l border-[var(--border-hairline)]">
+        <div class="flex items-start justify-between gap-2 pb-2 border-b border-[var(--border-hairline)]">
+          <div class="min-w-0 space-y-1">
+            <div class="flex items-center gap-2 flex-wrap">
+              <h3 id="ad-name" class="ui-title">画师详情</h3>
+              <span id="ad-cat" class="px-2 py-0.5 rounded-[5px] ui-badge text-[11px] font-medium"></span>
+              <span id="ad-posts" class="px-2 py-0.5 rounded-[5px] ui-badge text-[11px] font-mono"></span>
+            </div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <button id="ad-tag-btn" type="button" onclick="copyArtistTag(state.artistDetailId)" title="点击复制画师 Tag" class="selectable-text text-[12px] font-mono text-[var(--accent-primary)] hover:underline text-left"></button>
+              <span id="ad-aliases" class="text-[11.5px] text-[var(--text-muted)]"></span>
+            </div>
+          </div>
+          <button onclick="closeArtistDetailModal()" aria-label="关闭" class="spring-btn w-7 h-7 rounded-[6px] ui-btn flex items-center justify-center text-[var(--text-secondary)] shrink-0">
+            <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-close"/></svg>
+          </button>
+        </div>
+
+        <div class="space-y-1.5">
+          <div class="ui-label">多维风格标签（点击按该维度筛选）</div>
+          <div id="ad-style-tags" class="flex flex-wrap gap-1.5"></div>
+        </div>
+
+        <div id="ad-weight-wrap" class="ui-well rounded-[8px] px-3 py-2 flex items-center justify-between gap-2 text-[12px]">
+          <span class="text-[var(--text-muted)] shrink-0">推荐权重</span>
+          <span id="ad-weight" class="font-mono text-[var(--text-primary)] selectable-text text-right"></span>
+        </div>
+
+        <div class="space-y-1">
+          <div class="ui-label">核心画风概览</div>
+          <div id="ad-desc" class="ui-well rounded-[8px] p-2.5 text-[12.5px] leading-relaxed whitespace-pre-wrap selectable-text"></div>
+        </div>
+
+        <div class="space-y-1">
+          <div class="ui-label">完整档案与 Agent 选型笔记</div>
+          <div id="ad-notes" class="ui-well rounded-[8px] p-3 text-[12.5px] leading-relaxed whitespace-pre-wrap selectable-text"></div>
+        </div>
+
+        <div id="ad-sample-wrap" class="space-y-1 hidden">
+          <div class="ui-label">高频伴生视觉标签 / 预览基准词</div>
+          <div id="ad-sample" class="ui-well rounded-[8px] p-2.5 font-mono text-[11.5px] leading-relaxed whitespace-pre-wrap selectable-text text-[var(--text-secondary)]"></div>
+        </div>
+
+        <div id="ad-urls-wrap" class="space-y-1 hidden">
+          <div class="ui-label">外部主页 / 来源参考</div>
+          <div id="ad-urls" class="flex flex-wrap gap-1.5"></div>
+        </div>
+
+        <div class="pt-2 border-t border-[var(--border-hairline)] grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <button type="button" onclick="useArtistById(state.artistDetailId); closeArtistDetailModal();" class="liquid-cta spring-btn py-1.5 rounded-[6px] text-[12.5px] font-semibold">主用画师</button>
+          <button type="button" onclick="addArtistByIdToMixer(state.artistDetailId)" class="spring-btn py-1.5 rounded-[6px] ui-btn text-[12.5px]">+ 加入混搭</button>
+          <button id="ad-regen-btn" type="button" onclick="generateArtistCard(state.artistDetailId)" class="spring-btn py-1.5 rounded-[6px] ui-btn text-[var(--status-success)] text-[12.5px]">重绘预览</button>
+          <button type="button" onclick="closeArtistDetailModal(); openArtistModal(state.artistDetailId);" class="spring-btn py-1.5 rounded-[6px] ui-btn text-[12.5px]">编辑档案</button>
         </div>
       </div>
     </div>
@@ -1783,7 +1888,7 @@
 
   <div id="studio-tooltip" role="tooltip" aria-hidden="true"></div>
 
-  <script src="/static/app.js?v=p2-18"></script>
-  <script src="/static/agent_window.js?v=p2-18"></script>
+  <script src="/static/app.js?v=p2-19"></script>
+  <script src="/static/agent_window.js?v=p2-19"></script>
 </body>
 </html>

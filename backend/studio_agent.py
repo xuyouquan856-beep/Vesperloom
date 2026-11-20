@@ -63,12 +63,22 @@ STUDIO_AGENT_TOOLS: List[Dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "search_artist_catalog",
-            "description": "Search NAI Studio's local artist catalog (curated + custom) by keyword, style mood, category, or favorites.",
+            "description": (
+                "Search NAI Studio's local artist catalog across ALL orthogonal dimensions "
+                "(multi-label style_tags, brushwork, palette, subjects, Danbooru post_count, weight_hint, full notes, sample_tags, aliases, category, favorites). "
+                "Supports multi-keyword space/comma queries (e.g. '水彩 逆光 轻小说' or 'impasto dark tactical') without relying on a single misleading category bucket."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "Chinese or English keyword."},
-                    "category": {"type": "string", "description": "Optional category (厚涂光影, 清透水彩, 幻彩插画, 日系轻小说, 赛博冷调, 私人收藏)."},
+                    "query": {"type": "string", "description": "Multi-keyword Chinese or English query (space/comma separated facets)."},
+                    "style_tags": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional multi-label style tags to match/rank across orthogonal dimensions.",
+                    },
+                    "category": {"type": "string", "description": "Optional coarse category filter (prefer query/style_tags over narrow category!)."},
+                    "min_posts": {"type": "integer", "description": "Optional minimum Danbooru post_count filter for high NAI familiarity."},
                     "favorite_only": {"type": "boolean"},
                 },
             },
@@ -282,9 +292,19 @@ STUDIO_AGENT_TOOLS: List[Dict[str, Any]] = [
                     "artist_id": {"type": "integer", "description": "Target artist id (for update/favorite/delete/generate_preview)."},
                     "name": {"type": "string", "description": "Display name."},
                     "tag": {"type": "string", "description": "Danbooru artist tag (e.g. artist:ogipote)."},
-                    "category": {"type": "string", "description": "Category (厚涂光影, 清透水彩, 幻彩插画, 日系轻小说, 赛博冷调, 私人收藏, etc.)."},
-                    "desc": {"type": "string", "description": "Short Chinese description of the artist style & traits."},
-                    "sample_tags": {"type": "string", "description": "Comma-separated style/visual tags for this artist."},
+                    "category": {"type": "string", "description": "Primary affinity label (e.g. 厚涂光影, 清透水彩, 幻彩插画, 日系轻小说, 赛博冷调, 萌系赛璐璐, 写实复古, 哥特幻想, 黑白/线条, etc.)."},
+                    "style_tags": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "4-7 orthogonal multi-label style tags covering Rendering (厚涂/赛璐璐/水彩/手绘纸纹), Tone (高饱和/低饱和/冷灰/暖逆光/暗黑), and Subject strengths (轻小说封面/机能战术/奇幻华丽/少女日常/肉感光影).",
+                    },
+                    "post_count": {"type": "integer", "description": "Danbooru post count (reflects NAI model familiarity)."},
+                    "weight_hint": {"type": "string", "description": "Recommended usage weight & role (e.g. '主画师 0.85–1.0' or '辅画师 0.35–0.55')."},
+                    "aliases": {"type": "string", "description": "Alternate pen names, Japanese names, or circle names."},
+                    "urls": {"type": "array", "items": {"type": "string"}, "description": "Official Pixiv / X / Fanbox links."},
+                    "desc": {"type": "string", "description": "Clear Chinese style summary & core visual impression."},
+                    "notes": {"type": "string", "description": "Full un-truncated artist dossier: Danbooru/Pixiv background, representative works, V4.5 preview analysis, pairing recipes, and pitfall warnings."},
+                    "sample_tags": {"type": "string", "description": "Comma-separated English style/visual tags for this artist."},
                     "model": {
                         "type": "string",
                         "default": "nai-diffusion-4-5-full",
@@ -304,7 +324,13 @@ STUDIO_AGENT_TOOLS: List[Dict[str, Any]] = [
                                 "tag": {"type": "string"},
                                 "name": {"type": "string"},
                                 "category": {"type": "string"},
+                                "style_tags": {"type": "array", "items": {"type": "string"}},
+                                "post_count": {"type": "integer"},
+                                "weight_hint": {"type": "string"},
+                                "aliases": {"type": "string"},
+                                "urls": {"type": "array", "items": {"type": "string"}},
                                 "desc": {"type": "string"},
+                                "notes": {"type": "string"},
                                 "sample_tags": {"type": "string"},
                             },
                             "required": ["tag"],
@@ -312,7 +338,7 @@ STUDIO_AGENT_TOOLS: List[Dict[str, Any]] = [
                     },
                     "updates": {
                         "type": "array",
-                        "description": "For action='batch_update': list of artist metadata/tag updates in one single tool call.",
+                        "description": "For action='batch_update': list of artist metadata/dossier updates in one single tool call.",
                         "items": {
                             "type": "object",
                             "properties": {
@@ -320,7 +346,13 @@ STUDIO_AGENT_TOOLS: List[Dict[str, Any]] = [
                                 "tag": {"type": "string"},
                                 "name": {"type": "string"},
                                 "category": {"type": "string"},
+                                "style_tags": {"type": "array", "items": {"type": "string"}},
+                                "post_count": {"type": "integer"},
+                                "weight_hint": {"type": "string"},
+                                "aliases": {"type": "string"},
+                                "urls": {"type": "array", "items": {"type": "string"}},
                                 "desc": {"type": "string"},
+                                "notes": {"type": "string"},
                                 "sample_tags": {"type": "string"},
                             },
                         },
@@ -621,28 +653,105 @@ def _execute_studio_tool(
         q = str(args.get("query") or "").strip()
         cat = str(args.get("category") or "").strip()
         fav = bool(args.get("favorite_only", False))
-        artists = list_artists(search=q, category=cat, favorite_only=fav)
-        if not artists and q:
-            artists = list_artists(favorite_only=True) or list_artists()
-        trimmed = [
+        min_posts = int(args.get("min_posts") or 0)
+        raw_req_tags = args.get("style_tags") or []
+        if isinstance(raw_req_tags, str):
+            req_tags = [t.strip().lower() for t in re.split(r"[,，|/]+", raw_req_tags) if t.strip()]
+        elif isinstance(raw_req_tags, list):
+            req_tags = [str(t).strip().lower() for t in raw_req_tags if str(t).strip()]
+        else:
+            req_tags = []
+
+        # 先按基础过滤（如果指定了明确多维标签，先拉同类别/收藏全集做多维打分，避免单一 category 漏召回）
+        candidates = list_artists(search="", category=cat, favorite_only=fav)
+        q_tokens = [t.lower() for t in re.split(r"[\s,，/|]+", q) if t.strip()]
+
+        scored: List[Tuple[int, int, int, int, Dict[str, Any]]] = []
+        for a in candidates:
+            if min_posts and int(a.get("post_count") or 0) < min_posts:
+                continue
+            art_tags_lower = [str(t).lower() for t in (a.get("style_tags") or [])]
+            searchable_blob = " ".join([
+                str(a.get("name") or ""),
+                str(a.get("tag") or ""),
+                str(a.get("category") or ""),
+                " ".join(art_tags_lower),
+                str(a.get("sample_tags") or ""),
+                str(a.get("aliases") or ""),
+                str(a.get("desc") or ""),
+                str(a.get("notes") or ""),
+            ]).lower()
+
+            tag_hits = 0
+            for rt in req_tags:
+                if any(rt in at or at in rt for at in art_tags_lower) or rt in searchable_blob:
+                    tag_hits += 1
+
+            q_hits = 0
+            for tok in q_tokens:
+                if tok in searchable_blob:
+                    q_hits += 1
+
+            # 当用户/Agent提供了检索词或 style_tags 时，过滤 0 命中（除非全库都 0 命中时兜底）
+            if (req_tags or q_tokens) and (tag_hits + q_hits == 0):
+                continue
+
+            exact_tag_bonus = 2 if q and q.lower() in str(a.get("tag") or "").lower() else 0
+            scored.append((
+                tag_hits * 3 + q_hits * 2 + exact_tag_bonus,
+                1 if a.get("favorite") else 0,
+                int(a.get("post_count") or 0),
+                -int(a.get("id") or 0),
+                a,
+            ))
+
+        fallback_used = False
+        if not scored and (req_tags or q_tokens or min_posts or cat):
+            fallback_used = True
+            for a in list_artists(favorite_only=fav):
+                scored.append((
+                    0,
+                    1 if a.get("favorite") else 0,
+                    int(a.get("post_count") or 0),
+                    -int(a.get("id") or 0),
+                    a,
+                ))
+
+        scored.sort(key=lambda x: (x[0], x[1], x[2], x[3]), reverse=True)
+        matched_artists = [item[4] for item in scored]
+
+        full_dossiers = [
             {
                 "id": a["id"],
                 "name": a["name"],
                 "tag": a["tag"],
                 "category": a["category"],
-                "favorite": a["favorite"],
+                "style_tags": a.get("style_tags") or [],
+                "sample_tags": a.get("sample_tags") or "",
+                "post_count": int(a.get("post_count") or 0),
+                "weight_hint": a.get("weight_hint") or "",
+                "aliases": a.get("aliases") or "",
+                "urls": a.get("urls") or [],
+                "favorite": bool(a.get("favorite")),
                 "has_preview": bool(a.get("preview_url")),
-                "desc": a["desc"],
+                "desc": a.get("desc") or "",
+                "notes": a.get("notes") or "",
             }
-            for a in artists[:200]
+            for a in matched_artists[:120]
         ]
-        missing_prev = sum(1 for a in artists if not a.get("preview_url"))
+        missing_prev = sum(1 for a in matched_artists if not a.get("preview_url"))
+        label_parts = [p for p in [q, ",".join(req_tags), cat] if p]
         return (
             json.dumps(
-                {"total_matched": len(artists), "missing_preview_count": missing_prev, "artists": trimmed},
+                {
+                    "total_matched": len(matched_artists),
+                    "fallback_used": fallback_used,
+                    "missing_preview_count": missing_prev,
+                    "artists": full_dossiers,
+                },
                 ensure_ascii=False,
             ),
-            f"检索画师库({q or cat or '全部'}) -> {len(trimmed)}/{len(artists)} 位",
+            f"检索画师库({' | '.join(label_parts) or '全部'}) -> {len(full_dossiers)}/{len(matched_artists)} 位",
             None,
         )
 
@@ -895,6 +1004,12 @@ def _execute_studio_tool(
                 desc=str(args.get("desc") or ""),
                 sample_tags=str(args.get("sample_tags") or ""),
                 is_custom=True,
+                style_tags=args.get("style_tags"),
+                post_count=int(args.get("post_count") or 0),
+                weight_hint=str(args.get("weight_hint") or ""),
+                aliases=str(args.get("aliases") or ""),
+                urls=args.get("urls"),
+                notes=str(args.get("notes") or ""),
             )
             gen_prev = bool(args.get("generate_preview", False))
             ui_action = {
@@ -932,6 +1047,12 @@ def _execute_studio_tool(
                     desc=str(entry.get("desc") or ""),
                     sample_tags=str(entry.get("sample_tags") or ""),
                     is_custom=True,
+                    style_tags=entry.get("style_tags"),
+                    post_count=int(entry.get("post_count") or 0),
+                    weight_hint=str(entry.get("weight_hint") or ""),
+                    aliases=str(entry.get("aliases") or ""),
+                    urls=entry.get("urls"),
+                    notes=str(entry.get("notes") or ""),
                 )
                 saved.append({"id": art["id"], "name": art["name"], "tag": art["tag"], "has_preview": bool(art.get("preview_url"))})
             gen_prev = bool(args.get("generate_preview", False))
@@ -977,6 +1098,12 @@ def _execute_studio_tool(
                         category=u.get("category"),
                         desc=u.get("desc"),
                         sample_tags=u.get("sample_tags"),
+                        style_tags=u.get("style_tags"),
+                        post_count=u.get("post_count"),
+                        weight_hint=u.get("weight_hint"),
+                        aliases=u.get("aliases"),
+                        urls=u.get("urls"),
+                        notes=u.get("notes"),
                     )
                     if art:
                         updated_ids.append(art["id"])
@@ -1005,6 +1132,12 @@ def _execute_studio_tool(
                     category=args.get("category"),
                     desc=args.get("desc"),
                     sample_tags=args.get("sample_tags"),
+                    style_tags=args.get("style_tags"),
+                    post_count=args.get("post_count"),
+                    weight_hint=args.get("weight_hint"),
+                    aliases=args.get("aliases"),
+                    urls=args.get("urls"),
+                    notes=args.get("notes"),
                 )
             except Exception as exc:
                 return json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False), "更新画师冲突", None
