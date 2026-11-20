@@ -963,10 +963,17 @@ def _execute_studio_tool(
                     aid = all_by_tag.get(t)
                 if not aid:
                     continue
+                new_tag = None
+                if u.get("artist_id") and u.get("tag"):
+                    nt = re.sub(r"\s+", "_", str(u["tag"]).strip())
+                    if nt and not nt.lower().startswith("artist:"):
+                        nt = f"artist:{nt}"
+                    new_tag = nt or None
                 try:
                     art = update_artist(
                         int(aid),
                         name=u.get("name"),
+                        tag=new_tag,
                         category=u.get("category"),
                         desc=u.get("desc"),
                         sample_tags=u.get("sample_tags"),
@@ -1249,10 +1256,10 @@ async def _lookup_danbooru_artists_async(tags: List[str]) -> Tuple[str, str, Opt
     clean_tags = [str(t).strip() for t in (tags or []) if str(t).strip()][:20]
     if not clean_tags:
         return json.dumps({"ok": False, "error": "请提供至少一个画师 Tag"}, ensure_ascii=False), "缺少画师 Tag", None
-    sem = asyncio.Semaphore(5)
+    sem = asyncio.Semaphore(3)
     try:
         async with httpx.AsyncClient(
-            timeout=10.0,
+            timeout=15.0,
             headers={"User-Agent": "NAI-Studio-Agent/3.0"},
             follow_redirects=True,
         ) as dclient:
