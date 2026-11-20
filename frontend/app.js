@@ -113,7 +113,26 @@ const state = {
   pendingInspectMeta: null,
   pendingInspectB64: "",
   currentWildcardName: "",
+  isGenerating: false,
+  directorInFlight: false,
+  artistPreviewInFlight: new Set(),
+  favArtistLocks: new Set(),
+  favGalleryLocks: new Set(),
+  busyOps: new Set(),
 };
+
+async function runLockedOp(key, fn, busyMsg = "") {
+  if (state.busyOps.has(key)) {
+    if (busyMsg) showToast(busyMsg);
+    return null;
+  }
+  state.busyOps.add(key);
+  try {
+    return await fn();
+  } finally {
+    state.busyOps.delete(key);
+  }
+}
 
 // ================= Toast & Helpers =================
 function showToast(msg, duration = 2800) {
@@ -514,7 +533,7 @@ window.addEventListener("resize", () => {
   const activeTab = ["workbench", "artists", "gallery", "settings"].find(
     id => !document.getElementById(`view-${id}`).classList.contains("hidden")
   );
-  if (activeTab) switchTab(activeTab);
+  if (activeTab) updateActiveTabIndicator(activeTab);
 });
 
 // ================= Account, Storage & Opus Guard =================
@@ -2017,52 +2036,56 @@ function cancelActiveGeneration() {
 }
 
 async function triggerGenerate() {
+  if (state.isGenerating) return;
+  state.isGenerating = true;
   const btn = document.getElementById("generate-btn");
-
-  if (state.action !== "generate" && !state.stageImageB64 && state.stageImageUrl) {
-    state.stageImageB64 = await urlToBase64(state.stageImageUrl);
-  }
-  const payload = buildGeneratePayload();
-  if (state.action === "infill") {
-    payload.mask = exportBinaryInpaintMask();
-  }
-
-  // Batch / Infinite Auto-Roll Queue Path (when batchCount !== 1)
-  if (state.batchCount !== 1 && state.action === "generate") {
-    try {
-      const res = await fetch("/api/queue/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...payload, count: state.batchCount }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || "启动批量生成失败");
-      startQueuePolling();
-      showToast(state.batchCount === 0 ? "已开启持续自动生成" : `已开启 ${state.batchCount} 张连续自动生成`);
-    } catch (err) {
-      showToast(err.message || "队列启动失败");
-    }
-    return;
-  }
-
   const quickBtn = document.getElementById("collapsed-generate-btn");
-  btn.disabled = true;
+  if (btn) btn.disabled = true;
   if (quickBtn) quickBtn.disabled = true;
-  if (state.activeGenController) state.activeGenController.abort();
-  state.activeGenController = new AbortController();
 
-  const spec = state.models[state.currentModel];
-  const cost = computeInstantCostBadge();
-  startGeneratingOverlay(
-    `正在渲染画面…`,
-    `${spec?.name || state.currentModel} · ${state.width}×${state.height} · Steps ${state.steps}`,
-    `${cost.badge} · 自动落盘至 D:\\NAI-Studio\\outputs`
-  );
-
+  let myGenController = null;
   try {
+    if (state.action !== "generate" && !state.stageImageB64 && state.stageImageUrl) {
+      state.stageImageB64 = await urlToBase64(state.stageImageUrl);
+    }
+    const payload = buildGeneratePayload();
+    if (state.action === "infill") {
+      payload.mask = exportBinaryInpaintMask();
+    }
+
+    // Batch / Infinite Auto-Roll Queue Path (when batchCount !== 1)
+    if (state.batchCount !== 1 && state.action === "generate") {
+      try {
+        const res = await fetch("/api/queue/start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...payload, count: state.batchCount }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "启动批量生成失败");
+        startQueuePolling();
+        showToast(state.batchCount === 0 ? "已开启持续自动生成" : `已开启 ${state.batchCount} 张连续自动生成`);
+      } catch (err) {
+        showToast(err.message || "队列启动失败");
+      }
+      return;
+    }
+
+    if (state.activeGenController) state.activeGenController.abort();
+    myGenController = new AbortController();
+    state.activeGenController = myGenController;
+
+    const spec = state.models[state.currentModel];
+    const cost = computeInstantCostBadge();
+    startGeneratingOverlay(
+      `正在渲染画面…`,
+      `${spec?.name || state.currentModel} · ${state.width}×${state.height} · Steps ${state.steps}`,
+      `${cost.badge} · 自动落盘至 D:\\NAI-Studio\\outputs`
+    );
+
     const res = await fetch("/api/generate", {
       method: "POST",
-      signal: state.activeGenController.signal,
+      signal: myGenController.signal,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
@@ -2097,9 +2120,12 @@ async function triggerGenerate() {
       showToast(err.message || "生成失败", 6000);
     }
   } finally {
-    btn.disabled = false;
-    if (quickBtn) quickBtn.disabled = false;
-    stopGeneratingOverlay();
+    state.isGenerating = false;
+    if (!myGenController || state.activeGenController === myGenController || state.activeGenController === null) {
+      if (btn) btn.disabled = false;
+      if (quickBtn) quickBtn.disabled = false;
+      if (myGenController) stopGeneratingOverlay();
+    }
   }
 }
 
@@ -2176,8 +2202,10 @@ function startQueuePolling() {
 }
 
 async function stopAutoRollQueue() {
-  await fetch("/api/queue/stop", { method: "POST" });
-  showToast("正在等待当前这张出图完成后优雅停止...");
+  return runLockedOp("stop_queue", async () => {
+    await fetch("/api/queue/stop", { method: "POST" });
+    showToast("正在等待当前这张出图完成后优雅停止...");
+  });
 }
 
 function toggleDirectorMenu() {
@@ -2186,26 +2214,33 @@ function toggleDirectorMenu() {
 
 async function runDirectorTool(reqType, extra = {}) {
   document.getElementById("director-menu")?.classList.add("hidden");
-  if (!state.stageImageB64 && state.stageImageUrl) {
-    state.stageImageB64 = await urlToBase64(state.stageImageUrl);
-  }
-  if (!state.stageImageB64) {
-    showToast("请先生成或上传一张画布图像再执行 Director 工具");
+  if (state.directorInFlight) {
+    showToast("Director 工具正在处理中，请稍候...");
     return;
   }
-
-  if (state.activeGenController) state.activeGenController.abort();
-  state.activeGenController = new AbortController();
-  startGeneratingOverlay(
-    `正在执行 Director 处理…`,
-    `工具类型: ${reqType} · 保持原画布分辨率`,
-    `0 Anlas · Opus 免费处理通道`
-  );
-
+  state.directorInFlight = true;
+  let myGenController = null;
   try {
+    if (!state.stageImageB64 && state.stageImageUrl) {
+      state.stageImageB64 = await urlToBase64(state.stageImageUrl);
+    }
+    if (!state.stageImageB64) {
+      showToast("请先生成或上传一张画布图像再执行 Director 工具");
+      return;
+    }
+
+    if (state.activeGenController) state.activeGenController.abort();
+    myGenController = new AbortController();
+    state.activeGenController = myGenController;
+    startGeneratingOverlay(
+      `正在执行 Director 处理…`,
+      `工具类型: ${reqType} · 保持原画布分辨率`,
+      `0 Anlas · Opus 免费处理通道`
+    );
+
     const res = await fetch("/api/augment", {
       method: "POST",
-      signal: state.activeGenController.signal,
+      signal: myGenController.signal,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         req_type: reqType,
@@ -2237,7 +2272,10 @@ async function runDirectorTool(reqType, extra = {}) {
       showToast(err.message || "Director 工具执行失败", 4000);
     }
   } finally {
-    stopGeneratingOverlay();
+    state.directorInFlight = false;
+    if (myGenController && (state.activeGenController === myGenController || state.activeGenController === null)) {
+      stopGeneratingOverlay();
+    }
   }
 }
 
@@ -2737,7 +2775,9 @@ function renderArtistsGrid() {
     filtered = [...filtered].sort((a, b) => (b.favorite ? 1 : 0) - (a.favorite ? 1 : 0) || (a.id || 0) - (b.id || 0));
   }
 
-  const renderKey = `${state.artistCatFilter}|${sortMode}|${q}|${filtered.map(a => `${a.id}:${a.favorite ? 1 : 0}:${a.preview_url || ""}:${a.name}:${a.tag}:${a.category}`).join(",")}`;
+  const renderKey = `${state.artistCatFilter}|${sortMode}|${q}|${filtered
+    .map(a => `${a.id}:${a.favorite ? 1 : 0}:${a.preview_url || ""}:${a.name}:${a.tag}:${a.category}:${a.desc || ""}:${state.artistPreviewInFlight.has(a.id) ? 1 : 0}`)
+    .join(",")}`;
   if (grid.dataset.renderKey === renderKey) return;
   grid.dataset.renderKey = renderKey;
 
@@ -2754,8 +2794,9 @@ function renderArtistsGrid() {
   grid.innerHTML = filtered
     .map(a => {
       const hasPreview = Boolean(a.preview_url);
+      const isGeneratingPrev = state.artistPreviewInFlight.has(a.id);
       const previewHtml = hasPreview
-        ? `<img src="${a.preview_url}" alt="${escapeHtml(a.name)}" onclick="openArtistPreviewLightbox(${a.id})" onerror="this.onerror=null;this.classList.add('hidden');this.nextElementSibling?.classList.remove('hidden');" class="w-full h-full object-cover object-top transition-opacity duration-150 group-hover:opacity-95 cursor-zoom-in" />
+        ? `<img src="${a.preview_url}" alt="${escapeHtml(a.name)}" loading="lazy" decoding="async" onclick="openArtistPreviewLightbox(${a.id})" onerror="this.onerror=null;this.classList.add('hidden');this.nextElementSibling?.classList.remove('hidden');" class="w-full h-full object-cover object-top transition-opacity duration-150 group-hover:opacity-95 cursor-zoom-in" />
            <div class="hidden w-full h-full ui-stage-well flex flex-col items-center justify-center p-4 text-center">
              <div class="ui-title text-[var(--text-primary)]">${escapeHtml(a.name)}</div>
              <div class="text-[12px] font-mono text-[var(--text-secondary)] mt-1">${escapeHtml(a.tag)}</div>
@@ -2768,7 +2809,7 @@ function renderArtistsGrid() {
            </div>`;
 
       return `
-        <div class="rounded-[10px] ui-card overflow-hidden flex flex-col group">
+        <div class="studio-grid-card rounded-[10px] ui-card overflow-hidden flex flex-col group">
           <div class="relative shrink-0 aspect-[4/5] overflow-hidden bg-[var(--bg-canvas-well)]">
             ${previewHtml}
             <span class="absolute top-2 left-2 px-2 py-0.5 rounded-[5px] studio-hud text-[11.5px] font-medium pointer-events-none">${escapeHtml(a.category)}</span>
@@ -2790,7 +2831,7 @@ function renderArtistsGrid() {
             <div class="grid grid-cols-3 gap-1.5 pt-1 text-[12px]">
               <button onclick="useArtistById(${a.id})" class="spring-btn py-1 rounded-[6px] ui-btn font-medium">选用</button>
               <button onclick="addArtistByIdToMixer(${a.id})" class="spring-btn py-1 rounded-[6px] ui-btn">+ 混合</button>
-              <button id="gen-card-btn-${a.id}" onclick="generateArtistCard(${a.id})" class="spring-btn py-1 rounded-[6px] ui-btn text-[var(--status-success)]" title="调用 NovelAI 接口 0点数生成该画师标准预览图">${hasPreview ? "重绘预览" : "生成预览"}</button>
+              <button id="gen-card-btn-${a.id}" ${isGeneratingPrev ? "disabled" : ""} onclick="generateArtistCard(${a.id})" class="spring-btn py-1 rounded-[6px] ui-btn text-[var(--status-success)]" title="调用 NovelAI 接口 0点数生成该画师标准预览图">${isGeneratingPrev ? "生成中..." : hasPreview ? "重绘预览" : "生成预览"}</button>
             </div>
           </div>
         </div>
@@ -2825,8 +2866,10 @@ async function copyArtistTag(artistId) {
 }
 
 async function toggleArtistFav(artistId) {
+  if (state.favArtistLocks.has(artistId)) return;
   const idx = state.artists.findIndex(x => x.id === artistId);
   if (idx === -1) return;
+  state.favArtistLocks.add(artistId);
   const prevFav = Boolean(state.artists[idx].favorite);
   state.artists[idx].favorite = !prevFav;
   renderArtistCatPills();
@@ -2836,25 +2879,29 @@ async function toggleArtistFav(artistId) {
     const data = await res.json();
     if (!res.ok) throw new Error("收藏同步失败");
     if (data.artist) {
-      state.artists[idx] = data.artist;
+      const latestIdx = state.artists.findIndex(x => x.id === artistId);
+      if (latestIdx !== -1) state.artists[latestIdx] = data.artist;
       renderArtistCatPills();
       renderArtistsGrid();
     }
   } catch (e) {
-    state.artists[idx].favorite = prevFav;
+    const latestIdx = state.artists.findIndex(x => x.id === artistId);
+    if (latestIdx !== -1) state.artists[latestIdx].favorite = prevFav;
     renderArtistCatPills();
     renderArtistsGrid();
     showToast("收藏状态同步失败");
+  } finally {
+    state.favArtistLocks.delete(artistId);
   }
 }
 
 async function generateArtistCard(artistId, modelId = "nai-diffusion-4-5-full") {
-  const btn = document.getElementById(`gen-card-btn-${artistId}`);
-  const hadPreview = Boolean(state.artists.find(x => x.id === artistId)?.preview_url);
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = "生成中...";
+  if (state.artistPreviewInFlight.has(artistId)) {
+    showToast("该画师预览图正在生成中...");
+    return;
   }
+  state.artistPreviewInFlight.add(artistId);
+  renderArtistsGrid();
   showToast(`正在调用 NovelAI (${modelId === "nai-diffusion-5-full" ? "V5" : "V4.5"} · 0 Anlas) 生成该画师标准预览图...`);
   try {
     const res = await fetch(`/api/artists/${artistId}/generate-preview`, {
@@ -2867,16 +2914,13 @@ async function generateArtistCard(artistId, modelId = "nai-diffusion-4-5-full") 
     if (data.artist) {
       const idx = state.artists.findIndex(x => x.id === artistId);
       if (idx !== -1) state.artists[idx] = data.artist;
-      renderArtistsGrid();
       showToast(`已生成并保存 ${data.artist.name} 的画风预览图`);
     }
   } catch (err) {
     showToast(err.message || "生成预览图失败");
   } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = hadPreview ? "重绘预览" : "生成预览";
-    }
+    state.artistPreviewInFlight.delete(artistId);
+    renderArtistsGrid();
   }
 }
 
@@ -3115,16 +3159,18 @@ function applyMixPresetById(id) {
 }
 
 async function deleteMixPresetById(id) {
-  const p = state.mixPresets.find(x => x.id === id);
-  try {
-    const res = await fetch(`/api/mix-presets/${id}`, { method: "DELETE" });
-    if (!res.ok) throw new Error("删除失败");
-    state.mixPresets = state.mixPresets.filter(x => x.id !== id);
-    renderMixPresets();
-    showToast(`已删除方案${p ? `「${p.name}」` : ""}`);
-  } catch (e) {
-    showToast("删除混合方案失败");
-  }
+  return runLockedOp(`del_mix_${id}`, async () => {
+    const p = state.mixPresets.find(x => x.id === id);
+    try {
+      const res = await fetch(`/api/mix-presets/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("删除失败");
+      state.mixPresets = state.mixPresets.filter(x => x.id !== id);
+      renderMixPresets();
+      showToast(`已删除方案${p ? `「${p.name}」` : ""}`);
+    } catch (e) {
+      showToast("删除混合方案失败");
+    }
+  });
 }
 
 async function saveCurrentMixPreset() {
@@ -3132,21 +3178,28 @@ async function saveCurrentMixPreset() {
     showToast("混合器为空，无法保存");
     return;
   }
-  const nameInput = document.getElementById("mix-preset-name-input");
-  const customName = nameInput ? nameInput.value.trim() : "";
-  const name = customName || state.mixerItems.map(x => `${x.name}(${x.weight})`).join(" + ");
-  const res = await fetch("/api/mix-presets", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, items: state.mixerItems }),
+  return runLockedOp("save_mix_preset", async () => {
+    const nameInput = document.getElementById("mix-preset-name-input");
+    const customName = nameInput ? nameInput.value.trim() : "";
+    const name = customName || state.mixerItems.map(x => `${x.name}(${x.weight})`).join(" + ");
+    try {
+      const res = await fetch("/api/mix-presets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, items: state.mixerItems }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "保存失败");
+      if (data.preset) {
+        state.mixPresets.unshift(data.preset);
+        if (nameInput) nameInput.value = "";
+        renderMixPresets();
+        showToast(`已保存混合方案：${name}`);
+      }
+    } catch (err) {
+      showToast(err.message || "保存混合方案失败");
+    }
   });
-  const data = await res.json();
-  if (data.preset) {
-    state.mixPresets.unshift(data.preset);
-    if (nameInput) nameInput.value = "";
-    renderMixPresets();
-    showToast(`已保存混合方案：${name}`);
-  }
 }
 
 function toggleCustomArtistModal(show) {
@@ -3259,25 +3312,28 @@ async function submitArtistModal() {
 
 async function deleteEditingArtist() {
   if (!state.artistEditingId) return;
-  const artist = state.artists.find(x => x.id === state.artistEditingId);
-  const ok = await openStudioConfirm(
-    "删除画师记录",
-    `确定从画师库中移除「${artist?.name || "该画师"}」吗？工作台已写入的提示词不受影响。`,
-    "确认删除"
-  );
-  if (!ok) return;
-  try {
-    const res = await fetch(`/api/artists/${state.artistEditingId}`, { method: "DELETE" });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || "删除失败");
-    state.artists = state.artists.filter(x => x.id !== state.artistEditingId);
-    toggleCustomArtistModal(false);
-    renderArtistCatPills();
-    renderArtistsGrid();
-    showToast(`已移除画师「${artist?.name || ""}」`);
-  } catch (err) {
-    showToast(err.message || "删除画师失败");
-  }
+  const targetId = state.artistEditingId;
+  return runLockedOp(`del_artist_${targetId}`, async () => {
+    const artist = state.artists.find(x => x.id === targetId);
+    const ok = await openStudioConfirm(
+      "删除画师记录",
+      `确定从画师库中移除「${artist?.name || "该画师"}」吗？工作台已写入的提示词不受影响。`,
+      "确认删除"
+    );
+    if (!ok) return;
+    try {
+      const res = await fetch(`/api/artists/${targetId}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "删除失败");
+      state.artists = state.artists.filter(x => x.id !== targetId);
+      toggleCustomArtistModal(false);
+      renderArtistCatPills();
+      renderArtistsGrid();
+      showToast(`已移除画师「${artist?.name || ""}」`);
+    } catch (err) {
+      showToast(err.message || "删除画师失败");
+    }
+  });
 }
 
 // ================= Tab 3: Full Local Gallery & Asset Inspector =================
@@ -3412,7 +3468,14 @@ function toggleGalleryDensity() {
   renderFullGallery(false);
 }
 
+let _galleryFetchController = null;
+let _galleryFetchSeq = 0;
+
 async function fetchGalleryPage(offset = 0, append = false) {
+  const mySeq = ++_galleryFetchSeq;
+  if (_galleryFetchController) _galleryFetchController.abort();
+  _galleryFetchController = new AbortController();
+
   const q = (document.getElementById("gallery-search-input")?.value || "").trim();
   const model = state.galleryModelFilter || "";
   const sort = state.gallerySort || "newest";
@@ -3425,8 +3488,9 @@ async function fetchGalleryPage(offset = 0, append = false) {
   if (model) params.set("model", model);
   if (state.galleryFavOnly) params.set("favorite_only", "true");
   try {
-    const res = await fetch(`/api/gallery?${params.toString()}`);
+    const res = await fetch(`/api/gallery?${params.toString()}`, { signal: _galleryFetchController.signal });
     const data = await res.json();
+    if (mySeq !== _galleryFetchSeq) return;
     const fetched = Array.isArray(data.items) ? data.items : [];
     state.galleryViewTotal = Number(data.total ?? fetched.length);
     state.galleryViewHasMore = Boolean(data.has_more);
@@ -3443,13 +3507,29 @@ async function fetchGalleryPage(offset = 0, append = false) {
     }
     state.galleryViewDirty = false;
   } catch (e) {
-    showToast("加载图库列表失败");
+    if (e?.name !== "AbortError") {
+      showToast("加载图库列表失败");
+    }
   }
 }
 
 async function loadMoreGallery() {
-  await fetchGalleryPage(state.galleryViewOffset, true);
-  renderFullGallery(false);
+  return runLockedOp("gallery_load_more", async () => {
+    const btn = document.getElementById("gallery-load-more-btn");
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "加载中...";
+    }
+    try {
+      await fetchGalleryPage(state.galleryViewOffset, true);
+      renderFullGallery(false);
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = "加载更多历史作品";
+      }
+    }
+  });
 }
 
 function syncGalleryItemAcrossLists(updated) {
@@ -3584,9 +3664,9 @@ async function renderFullGallery(reloadFromServer = false) {
       const ringCls = selected ? "ring-2 ring-[var(--text-primary)]" : "";
       if (isCompact) {
         return `
-          <div class="rounded-[7px] ui-card overflow-hidden flex flex-col group ${ringCls}">
+          <div class="studio-grid-card-compact rounded-[7px] ui-card overflow-hidden flex flex-col group ${ringCls}">
             <div class="relative shrink-0 overflow-hidden bg-[var(--bg-canvas-well)] aspect-square flex items-center justify-center">
-              <img src="${it.image_url}" alt="" loading="lazy" onerror="this.onerror=null;this.style.opacity='0.22';" class="w-full h-full object-cover object-top transition-opacity duration-150 group-hover:opacity-90 cursor-pointer" onclick="openGalleryDetailModal(${it.id})" />
+              <img src="${it.image_url}" alt="" loading="lazy" decoding="async" onerror="this.onerror=null;this.style.opacity='0.22';" class="w-full h-full object-cover object-top transition-opacity duration-150 group-hover:opacity-90 cursor-pointer" onclick="openGalleryDetailModal(${it.id})" />
               <button type="button" onclick="toggleSelectGalleryItem(${it.id}, event)" aria-label="选择作品" class="spring-btn absolute top-1.5 left-1.5 w-5 h-5 rounded-[4px] studio-hud flex items-center justify-center text-[10px] font-bold ${selected ? "bg-[var(--text-primary)] text-[var(--cta-fg)] opacity-100" : "opacity-0 group-hover:opacity-100"} transition-opacity">
                 ${selected ? "✓" : ""}
               </button>
@@ -3614,9 +3694,9 @@ async function renderFullGallery(reloadFromServer = false) {
            </div>`;
 
       return `
-        <div class="rounded-[10px] ui-card overflow-hidden flex flex-col group ${ringCls}">
+        <div class="studio-grid-card rounded-[10px] ui-card overflow-hidden flex flex-col group ${ringCls}">
           <div class="relative shrink-0 overflow-hidden bg-[var(--bg-canvas-well)] aspect-[4/5] flex items-center justify-center">
-            <img src="${it.image_url}" alt="" loading="lazy" onerror="this.onerror=null;this.style.opacity='0.22';" class="w-full h-full object-contain transition-opacity duration-150 group-hover:opacity-95 cursor-pointer" onclick="openGalleryDetailModal(${it.id})" />
+            <img src="${it.image_url}" alt="" loading="lazy" decoding="async" onerror="this.onerror=null;this.style.opacity='0.22';" class="w-full h-full object-contain transition-opacity duration-150 group-hover:opacity-95 cursor-pointer" onclick="openGalleryDetailModal(${it.id})" />
             <div class="absolute top-2 left-2 flex items-center gap-1.5">
               <button type="button" onclick="toggleSelectGalleryItem(${it.id}, event)" aria-label="选择作品" title="选择（支持 Shift 连选）" class="spring-btn w-6 h-6 rounded-[5px] studio-hud flex items-center justify-center text-[11px] font-bold ${selected ? "bg-[var(--text-primary)] text-[var(--cta-fg)] opacity-100" : "opacity-0 group-hover:opacity-100"} transition-opacity">
                 ${selected ? "✓" : ""}
@@ -3706,23 +3786,26 @@ function navigateGalleryDetail(step) {
 
 async function saveGalleryDetailNotes() {
   if (!state.galleryDetailId) return;
-  const notes = document.getElementById("gd-notes-input")?.value.trim() || "";
-  try {
-    const res = await fetch(`/api/gallery/${state.galleryDetailId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ notes }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || "保存失败");
-    if (data.item) {
-      syncGalleryItemAcrossLists(data.item);
-      renderFullGallery(false);
-      showToast("已保存作品备注");
+  const targetId = state.galleryDetailId;
+  return runLockedOp(`save_notes_${targetId}`, async () => {
+    const notes = document.getElementById("gd-notes-input")?.value.trim() || "";
+    try {
+      const res = await fetch(`/api/gallery/${targetId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notes }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "保存失败");
+      if (data.item) {
+        syncGalleryItemAcrossLists(data.item);
+        renderFullGallery(false);
+        showToast("已保存作品备注");
+      }
+    } catch (err) {
+      showToast(err.message || "更新备注失败");
     }
-  } catch (err) {
-    showToast(err.message || "更新备注失败");
-  }
+  });
 }
 
 async function copyDetailField(field) {
@@ -3794,25 +3877,27 @@ function openSelectedGalleryDiff() {
 async function batchFavSelectedGallery(fav) {
   const ids = [...state.selectedGalleryIds];
   if (!ids.length) return;
-  try {
-    const res = await fetch("/api/gallery/batch-favorite", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ids, favorite: Boolean(fav) }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || "批量操作失败");
-    const idSet = new Set(ids);
-    [state.gallery, state.galleryView].forEach(list => {
-      list.forEach(it => {
-        if (idSet.has(it.id)) it.favorite = Boolean(fav);
+  return runLockedOp("gallery_batch_fav", async () => {
+    try {
+      const res = await fetch("/api/gallery/batch-favorite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids, favorite: Boolean(fav) }),
       });
-    });
-    renderFullGallery(state.galleryFavOnly);
-    showToast(fav ? `已收藏选中的 ${data.updated || ids.length} 张作品` : `已取消收藏 ${data.updated || ids.length} 张作品`);
-  } catch (err) {
-    showToast(err.message || "批量收藏失败");
-  }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "批量操作失败");
+      const idSet = new Set(ids);
+      [state.gallery, state.galleryView].forEach(list => {
+        list.forEach(it => {
+          if (idSet.has(it.id)) it.favorite = Boolean(fav);
+        });
+      });
+      renderFullGallery(state.galleryFavOnly);
+      showToast(fav ? `已收藏选中的 ${data.updated || ids.length} 张作品` : `已取消收藏 ${data.updated || ids.length} 张作品`);
+    } catch (err) {
+      showToast(err.message || "批量收藏失败");
+    }
+  });
 }
 
 async function copySelectedGalleryPrompts() {
@@ -3830,61 +3915,72 @@ async function copySelectedGalleryPrompts() {
 async function confirmDeleteSelectedGallery() {
   const ids = [...state.selectedGalleryIds];
   if (!ids.length) return;
-  const ok = await openStudioConfirm(
-    `删除所选 ${ids.length} 张作品`,
-    `确定删除选中的 ${ids.length} 条图库记录及对应的 D 盘 PNG 原图吗？已收藏作品也会在本次所选中一并删除。`,
-    "确认删除"
-  );
-  if (!ok) return;
-  try {
-    const res = await fetch("/api/gallery/batch-delete", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ids, delete_file: true }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || "删除失败");
-    if (data.storage) state.storage = data.storage;
-    if (typeof data.total === "number") state.galleryTotal = data.total;
-    const idSet = new Set(ids);
-    removeGalleryIdsAcrossLists(idSet);
-    state.galleryViewTotal = Math.max(0, state.galleryViewTotal - (data.removed || ids.length));
-    renderStorageBadges();
-    renderWorkbenchHistory();
-    await renderFullGallery(true);
-    showToast(`已删除所选 ${data.removed || ids.length} 张作品并释放空间`);
-  } catch (err) {
-    showToast(err.message || "批量删除失败");
-  }
+  return runLockedOp("gallery_batch_delete", async () => {
+    const ok = await openStudioConfirm(
+      `删除所选 ${ids.length} 张作品`,
+      `确定删除选中的 ${ids.length} 条图库记录及对应的 D 盘 PNG 原图吗？已收藏作品也会在本次所选中一并删除。`,
+      "确认删除"
+    );
+    if (!ok) return;
+    try {
+      const res = await fetch("/api/gallery/batch-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids, delete_file: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "删除失败");
+      if (data.storage) state.storage = data.storage;
+      if (typeof data.total === "number") state.galleryTotal = data.total;
+      const idSet = new Set(ids);
+      removeGalleryIdsAcrossLists(idSet);
+      state.galleryViewTotal = Math.max(0, state.galleryViewTotal - (data.removed || ids.length));
+      renderStorageBadges();
+      renderWorkbenchHistory();
+      await renderFullGallery(true);
+      showToast(`已删除所选 ${data.removed || ids.length} 张作品并释放空间`);
+    } catch (err) {
+      showToast(err.message || "批量删除失败");
+    }
+  });
 }
 
 async function confirmBatchCleanUnfav() {
-  const ok = await openStudioConfirm(
-    "清理未收藏作品",
-    "确定一键清理所有未收藏的图库记录与 D 盘对应原图文件吗？已收藏作品将完整保留。",
-    "清理未收藏"
-  );
-  if (!ok) return;
-  const res = await fetch("/api/gallery/batch-delete", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ unfav_only: true, delete_file: true }),
+  return runLockedOp("gallery_clean_unfav", async () => {
+    const ok = await openStudioConfirm(
+      "清理未收藏作品",
+      "确定一键清理所有未收藏的图库记录与 D 盘对应原图文件吗？已收藏作品将完整保留。",
+      "清理未收藏"
+    );
+    if (!ok) return;
+    try {
+      const res = await fetch("/api/gallery/batch-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ unfav_only: true, delete_file: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "清理失败");
+      if (data.storage) state.storage = data.storage;
+      if (typeof data.total === "number") state.galleryTotal = data.total;
+      state.gallery = state.gallery.filter(x => x.favorite);
+      state.galleryView = state.galleryView.filter(x => x.favorite);
+      state.selectedGalleryIds.clear();
+      renderStorageBadges();
+      renderWorkbenchHistory();
+      await renderFullGallery(true);
+      showToast(`已清理 ${data.removed || 0} 张未收藏图片`);
+    } catch (err) {
+      showToast(err.message || "清理失败");
+    }
   });
-  const data = await res.json();
-  if (data.storage) state.storage = data.storage;
-  if (typeof data.total === "number") state.galleryTotal = data.total;
-  state.gallery = state.gallery.filter(x => x.favorite);
-  state.galleryView = state.galleryView.filter(x => x.favorite);
-  state.selectedGalleryIds.clear();
-  renderStorageBadges();
-  renderWorkbenchHistory();
-  await renderFullGallery(true);
-  showToast(`已清理 ${data.removed || 0} 张未收藏图片`);
 }
 
 async function toggleGalleryFav(id) {
+  if (state.favGalleryLocks.has(id)) return;
   const item = findGalleryItemById(id);
   if (!item) return;
+  state.favGalleryLocks.add(id);
   const prevFav = Boolean(item.favorite);
   syncGalleryItemAcrossLists({ ...item, favorite: !prevFav });
   renderFullGallery(false);
@@ -3900,29 +3996,38 @@ async function toggleGalleryFav(id) {
     syncGalleryItemAcrossLists({ ...item, favorite: prevFav });
     renderFullGallery(false);
     showToast("收藏状态同步失败");
+  } finally {
+    state.favGalleryLocks.delete(id);
   }
 }
 
 async function deleteGalleryRecord(id, skipConfirm = false) {
-  if (!skipConfirm) {
-    const item = findGalleryItemById(id);
-    const ok = await openStudioConfirm(
-      "删除图库作品",
-      `确定删除「${item?.filename || `#${id}`}」及 D 盘原图文件吗？`,
-      "删除"
-    );
-    if (!ok) return;
-  }
-  const res = await fetch(`/api/gallery/${id}`, { method: "DELETE" });
-  const data = await res.json();
-  if (data.storage) state.storage = data.storage;
-  if (typeof data.total === "number") state.galleryTotal = data.total;
-  removeGalleryIdsAcrossLists(new Set([id]));
-  state.galleryViewTotal = Math.max(0, state.galleryViewTotal - 1);
-  renderStorageBadges();
-  renderWorkbenchHistory();
-  renderFullGallery(false);
-  showToast("已删除图库记录并释放 D 盘原图文件");
+  return runLockedOp(`del_gallery_${id}`, async () => {
+    if (!skipConfirm) {
+      const item = findGalleryItemById(id);
+      const ok = await openStudioConfirm(
+        "删除图库作品",
+        `确定删除「${item?.filename || `#${id}`}」及 D 盘原图文件吗？`,
+        "删除"
+      );
+      if (!ok) return;
+    }
+    try {
+      const res = await fetch(`/api/gallery/${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "删除失败");
+      if (data.storage) state.storage = data.storage;
+      if (typeof data.total === "number") state.galleryTotal = data.total;
+      removeGalleryIdsAcrossLists(new Set([id]));
+      state.galleryViewTotal = Math.max(0, state.galleryViewTotal - 1);
+      renderStorageBadges();
+      renderWorkbenchHistory();
+      renderFullGallery(false);
+      showToast("已删除图库记录并释放 D 盘原图文件");
+    } catch (err) {
+      showToast(err.message || "删除作品失败");
+    }
+  });
 }
 
 function editGalleryNotes(id) {
@@ -3931,18 +4036,25 @@ function editGalleryNotes(id) {
 }
 
 async function syncGalleryFolder() {
-  showToast("正在扫描 D:\\NAI-Studio\\outputs 同步磁盘原图...");
-  const res = await fetch("/api/gallery/sync", { method: "POST" });
-  const data = await res.json();
-  if (Array.isArray(data.items)) state.gallery = data.items;
-  if (typeof data.total === "number") state.galleryTotal = data.total;
-  if (data.storage) state.storage = data.storage;
-  const imported = data.imported ?? data.added_count ?? 0;
-  const pruned = data.pruned_missing ?? 0;
-  renderStorageBadges();
-  renderWorkbenchHistory();
-  await renderFullGallery(true);
-  showToast(`同步完成：新收录 ${imported} 张，清理失效记录 ${pruned} 条`);
+  return runLockedOp("sync_gallery_folder", async () => {
+    showToast("正在扫描 D:\\NAI-Studio\\outputs 同步磁盘原图...");
+    try {
+      const res = await fetch("/api/gallery/sync", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "同步失败");
+      if (Array.isArray(data.items)) state.gallery = data.items;
+      if (typeof data.total === "number") state.galleryTotal = data.total;
+      if (data.storage) state.storage = data.storage;
+      const imported = data.imported ?? data.added_count ?? 0;
+      const pruned = data.pruned_missing ?? 0;
+      renderStorageBadges();
+      renderWorkbenchHistory();
+      await renderFullGallery(true);
+      showToast(`同步完成：新收录 ${imported} 张，清理失效记录 ${pruned} 条`);
+    } catch (err) {
+      showToast(err.message || "同步目录失败");
+    }
+  }, "磁盘同步正在进行中，请稍候...");
 }
 
 // ================= Tab 4: Settings, Dual Prompt Mode & LLM Agent =================
@@ -4046,58 +4158,62 @@ function applyLlmContextPreset(tokens) {
 }
 
 async function saveLlmSettings() {
-  const llm_base_url = document.getElementById("settings-llm-url")?.value.trim() || "";
-  const llm_api_key = document.getElementById("settings-llm-key")?.value.trim() || "";
-  const customModel = document.getElementById("settings-llm-model-custom")?.value.trim() || "";
-  const llm_model = customModel || state.config.llm_model || "qwen4-max";
-  const llm_use_knowledge_agent = state.config.llm_use_knowledge_agent !== false;
-  const llm_context_tokens = Math.max(8000, Math.min(1000000, Number(document.getElementById("settings-llm-context")?.value || 100000)));
-  const llm_max_output_tokens = Math.max(2048, Math.min(128000, Number(document.getElementById("settings-llm-max-output")?.value || 100000)));
-  try {
-    const res = await fetch("/api/config", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        llm_base_url,
-        llm_api_key,
-        llm_model,
-        llm_use_knowledge_agent,
-        llm_context_tokens,
-        llm_max_output_tokens,
-        prompt_workspace_mode: state.promptWorkspaceMode,
-        skip_account_check: true,
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || "保存失败");
-    state.config = data.config || state.config;
-    populateSettingsForm();
-    showToast(`已保存 AI 配置 (${llm_model} · ${Math.round(llm_context_tokens / 1000)}K 上下文)`);
-  } catch (err) {
-    showToast(err.message || "保存 AI 配置失败");
-  }
+  return runLockedOp("save_llm_settings", async () => {
+    const llm_base_url = document.getElementById("settings-llm-url")?.value.trim() || "";
+    const llm_api_key = document.getElementById("settings-llm-key")?.value.trim() || "";
+    const customModel = document.getElementById("settings-llm-model-custom")?.value.trim() || "";
+    const llm_model = customModel || state.config.llm_model || "qwen4-max";
+    const llm_use_knowledge_agent = state.config.llm_use_knowledge_agent !== false;
+    const llm_context_tokens = Math.max(8000, Math.min(1000000, Number(document.getElementById("settings-llm-context")?.value || 100000)));
+    const llm_max_output_tokens = Math.max(2048, Math.min(128000, Number(document.getElementById("settings-llm-max-output")?.value || 100000)));
+    try {
+      const res = await fetch("/api/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          llm_base_url,
+          llm_api_key,
+          llm_model,
+          llm_use_knowledge_agent,
+          llm_context_tokens,
+          llm_max_output_tokens,
+          prompt_workspace_mode: state.promptWorkspaceMode,
+          skip_account_check: true,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "保存失败");
+      state.config = data.config || state.config;
+      populateSettingsForm();
+      showToast(`已保存 AI 配置 (${llm_model} · ${Math.round(llm_context_tokens / 1000)}K 上下文)`);
+    } catch (err) {
+      showToast(err.message || "保存 AI 配置失败");
+    }
+  });
 }
 
 async function testLlmConnection() {
-  const url = document.getElementById("settings-llm-url")?.value.trim() || "";
-  const key = document.getElementById("settings-llm-key")?.value.trim() || "";
-  const model = document.getElementById("settings-llm-model-custom")?.value.trim() || state.config.llm_model || "qwen4-max";
-  const pill = document.getElementById("settings-llm-status-pill");
-  if (pill) pill.textContent = `正在测试 ${model}...`;
-  try {
-    const res = await fetch("/api/llm/test", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ llm_base_url: url, llm_api_key: key, llm_model: model }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || "连接失败");
-    if (pill) pill.textContent = `连通正常 · ${data.model} (${data.latency_ms}ms)`;
-    showToast(`LLM 连通成功：${data.model} (${data.latency_ms}ms)`);
-  } catch (err) {
-    if (pill) pill.textContent = "连通失败";
-    showToast(err.message || "LLM 测试失败");
-  }
+  return runLockedOp("test_llm_conn", async () => {
+    const url = document.getElementById("settings-llm-url")?.value.trim() || "";
+    const key = document.getElementById("settings-llm-key")?.value.trim() || "";
+    const model = document.getElementById("settings-llm-model-custom")?.value.trim() || state.config.llm_model || "qwen4-max";
+    const pill = document.getElementById("settings-llm-status-pill");
+    if (pill) pill.textContent = `正在测试 ${model}...`;
+    try {
+      const res = await fetch("/api/llm/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ llm_base_url: url, llm_api_key: key, llm_model: model }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "连接失败");
+      if (pill) pill.textContent = `连通正常 · ${data.model} (${data.latency_ms}ms)`;
+      showToast(`LLM 连通成功：${data.model} (${data.latency_ms}ms)`);
+    } catch (err) {
+      if (pill) pill.textContent = "连通失败";
+      showToast(err.message || "LLM 测试失败");
+    }
+  }, "正在测试 LLM 连通性...");
 }
 
 function updatePromptWorkspaceModeButtons() {
@@ -4217,26 +4333,33 @@ function syncStructuredToClassic() {
   updateStructuredBlockCounts();
   syncPromptImmediateVisuals("pos");
   syncPromptImmediateVisuals("uc");
-  clearTimeout(state.lintTimer);
-  state.lintTimer = setTimeout(() => runPromptLinter("pos"), 320);
+  clearTimeout(_lintTimer);
+  _lintTimer = setTimeout(() => runPromptLinter("pos"), 220);
 }
 
 async function saveSettingsConfig() {
-  const tok = document.getElementById("settings-token-input").value.trim();
-  const outDir = document.getElementById("settings-output-dir").value.trim();
-  const res = await fetch("/api/config", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ api_token: tok, output_dir: outDir }),
+  return runLockedOp("save_nai_settings", async () => {
+    const tok = document.getElementById("settings-token-input").value.trim();
+    const outDir = document.getElementById("settings-output-dir").value.trim();
+    try {
+      const res = await fetch("/api/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ api_token: tok, output_dir: outDir }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "保存失败");
+      state.config = data.config || state.config;
+      state.account = data.account || state.account;
+      state.storage = data.storage || state.storage;
+      renderAccountHeader();
+      renderStorageBadges();
+      populateSettingsForm();
+      showToast("已保存配置并验证 NovelAI 官方连接");
+    } catch (err) {
+      showToast(err.message || "保存配置失败");
+    }
   });
-  const data = await res.json();
-  state.config = data.config || state.config;
-  state.account = data.account || state.account;
-  state.storage = data.storage || state.storage;
-  renderAccountHeader();
-  renderStorageBadges();
-  populateSettingsForm();
-  showToast("已保存配置并验证 NovelAI 官方连接");
 }
 
 async function runMcpTest(tool, args) {
@@ -5266,20 +5389,22 @@ async function runArtistAbTest() {
   payload.action = "generate";
   payload.ab_artists = abList;
 
-  try {
-    const res = await fetch("/api/queue/start", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || "启动对照失败");
-    switchTab("workbench");
-    startQueuePolling();
-    showToast(`已启动 ${abList.length} 位画师同 Seed (#${fixedSeed}) 对照跑图`);
-  } catch (err) {
-    showToast(err.message || "画师对照队列启动失败");
-  }
+  return runLockedOp("artist_ab_queue", async () => {
+    try {
+      const res = await fetch("/api/queue/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "启动对照失败");
+      switchTab("workbench");
+      startQueuePolling();
+      showToast(`已启动 ${abList.length} 位画师同 Seed (#${fixedSeed}) 对照跑图`);
+    } catch (err) {
+      showToast(err.message || "画师对照队列启动失败");
+    }
+  });
 }
 
 // ================= V2.1 OC Character Cards & Snippets CRUD =================
@@ -5360,29 +5485,31 @@ async function pickOcAvatarFromGallery() {
 }
 
 async function bindOcAvatarFromStage(cardId) {
-  const body = state.stageImageUrl
-    ? { image_url: state.stageImageUrl }
-    : state.stageImageB64
-    ? { image_b64: state.stageImageB64 }
-    : null;
-  if (!body) {
-    showToast("当前画布没有可用图像");
-    return;
-  }
-  const res = await fetch(`/api/oc-cards/${cardId}/avatar`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+  return runLockedOp(`oc_avatar_${cardId}`, async () => {
+    const body = state.stageImageUrl
+      ? { image_url: state.stageImageUrl }
+      : state.stageImageB64
+      ? { image_b64: state.stageImageB64 }
+      : null;
+    if (!body) {
+      showToast("当前画布没有可用图像");
+      return;
+    }
+    const res = await fetch(`/api/oc-cards/${cardId}/avatar`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (res.ok && data.card) {
+      const idx = state.ocCards.findIndex(x => x.id === cardId);
+      if (idx !== -1) state.ocCards[idx] = data.card;
+      renderOcCardsList();
+      showToast(`已更新「${data.card.name}」的头像`);
+    } else {
+      showToast(data.detail || "设置头像失败");
+    }
   });
-  const data = await res.json();
-  if (res.ok && data.card) {
-    const idx = state.ocCards.findIndex(x => x.id === cardId);
-    if (idx !== -1) state.ocCards[idx] = data.card;
-    renderOcCardsList();
-    showToast(`已更新「${data.card.name}」的头像`);
-  } else {
-    showToast(data.detail || "设置头像失败");
-  }
 }
 
 async function submitNewOcCard() {
@@ -5393,34 +5520,36 @@ async function submitNewOcCard() {
     showToast("请填写 OC 名称与角色外貌 Prompt");
     return;
   }
-  const res = await fetch("/api/oc-cards", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, prompt, uc }),
-  });
-  const data = await res.json();
-  if (data.card) {
-    let savedCard = data.card;
-    if (state.pendingOcAvatarB64) {
-      try {
-        const avRes = await fetch(`/api/oc-cards/${savedCard.id}/avatar`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ image_b64: state.pendingOcAvatarB64 }),
-        });
-        const avData = await avRes.json();
-        if (avRes.ok && avData.card) savedCard = avData.card;
-      } catch (e) {}
-      state.pendingOcAvatarB64 = "";
-      document.getElementById("oc-avatar-preview")?.classList.add("hidden");
+  return runLockedOp("save_oc_card", async () => {
+    const res = await fetch("/api/oc-cards", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, prompt, uc }),
+    });
+    const data = await res.json();
+    if (data.card) {
+      let savedCard = data.card;
+      if (state.pendingOcAvatarB64) {
+        try {
+          const avRes = await fetch(`/api/oc-cards/${savedCard.id}/avatar`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ image_b64: state.pendingOcAvatarB64 }),
+          });
+          const avData = await avRes.json();
+          if (avRes.ok && avData.card) savedCard = avData.card;
+        } catch (e) {}
+        state.pendingOcAvatarB64 = "";
+        document.getElementById("oc-avatar-preview")?.classList.add("hidden");
+      }
+      const idx = state.ocCards.findIndex(x => x.id === savedCard.id);
+      if (idx !== -1) state.ocCards[idx] = savedCard;
+      else state.ocCards.unshift(savedCard);
+      renderOcCardsList();
+      document.getElementById("oc-name-input").value = "";
+      showToast(`已保存 OC 角色卡：${savedCard.name}`);
     }
-    const idx = state.ocCards.findIndex(x => x.id === savedCard.id);
-    if (idx !== -1) state.ocCards[idx] = savedCard;
-    else state.ocCards.unshift(savedCard);
-    renderOcCardsList();
-    document.getElementById("oc-name-input").value = "";
-    showToast(`已保存 OC 角色卡：${savedCard.name}`);
-  }
+  });
 }
 
 function injectOcAsCharSlot(id) {
@@ -5458,9 +5587,11 @@ function injectOcIntoPrompt(id) {
 }
 
 async function deleteOcCardRecord(id) {
-  await fetch(`/api/oc-cards/${id}`, { method: "DELETE" });
-  state.ocCards = state.ocCards.filter(c => c.id !== id);
-  renderOcCardsList();
+  return runLockedOp(`del_oc_${id}`, async () => {
+    await fetch(`/api/oc-cards/${id}`, { method: "DELETE" });
+    state.ocCards = state.ocCards.filter(c => c.id !== id);
+    renderOcCardsList();
+  });
 }
 
 function toggleSnippetModal(show) {
@@ -5474,26 +5605,30 @@ async function submitNewSnippet() {
     showToast("请填写词条名称和对应 Tags");
     return;
   }
-  const res = await fetch("/api/snippets", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ label, tags, cat: "custom" }),
+  return runLockedOp("save_snippet", async () => {
+    const res = await fetch("/api/snippets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label, tags, cat: "custom" }),
+    });
+    const data = await res.json();
+    if (data.snippet) {
+      state.snippets.push(data.snippet);
+      renderSnippetsBar();
+      toggleSnippetModal(false);
+      document.getElementById("snippet-label-input").value = "";
+      document.getElementById("snippet-tags-input").value = "";
+      showToast(`已添加预设词条：${data.snippet.label}`);
+    }
   });
-  const data = await res.json();
-  if (data.snippet) {
-    state.snippets.push(data.snippet);
-    renderSnippetsBar();
-    toggleSnippetModal(false);
-    document.getElementById("snippet-label-input").value = "";
-    document.getElementById("snippet-tags-input").value = "";
-    showToast(`已添加预设词条：${data.snippet.label}`);
-  }
 }
 
 async function deleteSnippetRecord(id) {
-  await fetch(`/api/snippets/${id}`, { method: "DELETE" });
-  state.snippets = state.snippets.filter(s => s.id !== id);
-  renderSnippetsBar();
+  return runLockedOp(`del_snip_${id}`, async () => {
+    await fetch(`/api/snippets/${id}`, { method: "DELETE" });
+    state.snippets = state.snippets.filter(s => s.id !== id);
+    renderSnippetsBar();
+  });
 }
 
 // ================= V2.2 & V2.3: Immersion, Backfill, Wildcard Editor, XYZ Matrix & Snapshots =================
@@ -5642,20 +5777,22 @@ async function startArtistBackfillQueue(modelId = "nai-diffusion-4-5-full") {
     showToast("所有画师都已有预览图，无需补齐");
     return;
   }
-  const targetModel = modelId || "nai-diffusion-4-5-full";
-  try {
-    const res = await fetch("/api/queue/start", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ artist_backfill: true, model: targetModel }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || "启动画师补齐队列失败");
-    startQueuePolling();
-    showToast(`已开启静默补齐队列：共 ${missing.length} 位缺失画师 (0 Anlas ${targetModel.includes("5") ? "V5" : "V4.5"})`);
-  } catch (err) {
-    showToast(err.message || "启动失败");
-  }
+  return runLockedOp("artist_backfill_queue", async () => {
+    const targetModel = modelId || "nai-diffusion-4-5-full";
+    try {
+      const res = await fetch("/api/queue/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ artist_backfill: true, model: targetModel }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "启动画师补齐队列失败");
+      startQueuePolling();
+      showToast(`已开启静默补齐队列：共 ${missing.length} 位缺失画师 (0 Anlas ${targetModel.includes("5") ? "V5" : "V4.5"})`);
+    } catch (err) {
+      showToast(err.message || "启动失败");
+    }
+  });
 }
 
 // --- Wildcard Online Editor ---

@@ -597,7 +597,7 @@ def test_agent_v2_skills_and_library_curation_tools(tmp_path, monkeypatch):
     from backend import skills_manager as sk_mod
     from backend.studio_agent import STUDIO_AGENT_TOOLS, _execute_studio_tool
 
-    # 1. Verify all 8 built-in v3 skills & 19 Studio Agent tools (including batch curation, Danbooru & vision)
+    # 1. Verify all 8 built-in v4 skills & 21 Studio Agent tools (including batch curation, Danbooru & vision)
     tool_names = {t["function"]["name"] for t in STUDIO_AGENT_TOOLS}
     assert {
         "manage_artist_catalog",
@@ -605,8 +605,10 @@ def test_agent_v2_skills_and_library_curation_tools(tmp_path, monkeypatch):
         "manage_gallery_items",
         "lookup_danbooru_artists",
         "inspect_artist_previews",
+        "inspect_canvas_stage",
+        "inspect_gallery_images",
     }.issubset(tool_names)
-    assert len(STUDIO_AGENT_TOOLS) == 19
+    assert len(STUDIO_AGENT_TOOLS) == 21
 
     skills = sk_mod.list_skills()
     names = {s["name"] for s in skills}
@@ -799,7 +801,7 @@ def test_agent_v2_skills_and_library_curation_tools(tmp_path, monkeypatch):
     assert json.loads(out_gdel)["removed"] == 1 and act_gdel["type"] == "refresh_gallery"
     assert not png_path.exists()
 
-    # 6. Verify 100K context budget packing & defaults
+    # 6. Verify 100K context budget packing, path traversal guard & vision helpers
     from backend.config import DEFAULT_CONFIG
     assert DEFAULT_CONFIG["llm_context_tokens"] == 100000
     assert DEFAULT_CONFIG["llm_max_output_tokens"] == 100000
@@ -808,6 +810,15 @@ def test_agent_v2_skills_and_library_curation_tools(tmp_path, monkeypatch):
     packed_100k = sa_mod._build_history_within_budget(fake_hist, budget_tokens=100000)
     assert 1 <= len(packed_small) < len(packed_100k) == 40
     assert packed_small[-1]["content"].startswith("msg_39")
+
+    assert sa_mod._resolve_outputs_url("/outputs/../../secret.txt") is None
+    assert sa_mod._resolve_outputs_url("/etc/passwd") is None
+    valid_img_path = temp_out / "vision_probe.png"
+    from PIL import Image
+    Image.new("RGB", (64, 64), (120, 180, 240)).save(valid_img_path)
+    assert sa_mod._resolve_outputs_url("/outputs/vision_probe.png") == valid_img_path.resolve()
+    data_url = sa_mod._encode_file_to_data_url(valid_img_path, max_dim=128)
+    assert data_url and data_url.startswith("data:image/jpeg;base64,")
 
 
 

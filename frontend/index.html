@@ -6,7 +6,7 @@
   <title>NAI Studio — 个人创作工作台</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23111318'/%3E%3Cpath d='M20 44V20l24 24V20' stroke='%23ffffff' stroke-width='6' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E" />
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="/static/styles.css?v=p2-17" />
+  <link rel="stylesheet" href="/static/styles.css?v=p2-18" />
 </head>
 <body class="lg:h-screen min-h-screen flex flex-col lg:overflow-hidden overflow-y-auto">
 
@@ -1674,6 +1674,12 @@
         <!-- 快捷回复建议条 -->
         <div id="agent-quick-replies" class="hidden px-3.5 pb-1 flex flex-wrap gap-1.5 shrink-0"></div>
 
+        <!-- 排队消息提示条（防流式连点丢失） -->
+        <div id="agent-queue-chip" class="hidden mx-3.5 mb-1 px-2.5 py-1 rounded-[8px] border border-[var(--border-control)] bg-white/[0.04] flex items-center justify-between gap-2 text-[11px] text-[var(--text-secondary)] shrink-0">
+          <span id="agent-queue-chip-text" class="truncate"></span>
+          <button type="button" onclick="clearQueuedAgentPrompt()" class="text-[var(--text-muted)] hover:text-[var(--text-primary)] shrink-0">取消排队</button>
+        </div>
+
         <!-- 底部悬浮一体化 Composer 壳 (Cursor / assistant-ui 质感) -->
         <div class="agent-composer-dock relative shrink-0">
           <div id="agent-slash-menu" class="hidden absolute left-3 right-3 bottom-[calc(100%-2px)] max-h-52 overflow-y-auto custom-scroll liquid-popover rounded-[12px] p-1.5 space-y-0.5 z-30"></div>
@@ -1777,7 +1783,7 @@
 
   <div id="studio-tooltip" role="tooltip" aria-hidden="true"></div>
 
-  <script src="/static/app.js?v=p2-17"></script>
-  <script src="/static/agent_window.js?v=p2-17"></script>
+  <script src="/static/app.js?v=p2-18"></script>
+  <script src="/static/agent_window.js?v=p2-18"></script>
 </body>
 </html>

@@ -1632,6 +1632,67 @@ html.light .agent-timeline > summary:hover {
 .agent-timeline-step.is-ok::before {
   background-color: var(--status-success);
 }
+.agent-timeline-step.is-running::before {
+  background-color: var(--status-warning);
+  animation: agentPulseDot 1s ease-in-out infinite;
+}
+
+/* Live Collapsible Reasoning Trace */
+.agent-reasoning {
+  border-left: 2px solid var(--border-control);
+  padding-left: 9px;
+  margin: 2px 0;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+.agent-reasoning > summary {
+  list-style: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+  user-select: none;
+  padding: 2px 0;
+  transition: color 0.12s ease;
+}
+.agent-reasoning > summary::-webkit-details-marker {
+  display: none;
+}
+.agent-reasoning > summary:hover {
+  color: var(--text-secondary);
+}
+.agent-reasoning-body {
+  margin-top: 4px;
+  max-height: 150px;
+  overflow-y: auto;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.agent-usage-footer {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-muted);
+  opacity: 0.78;
+}
+
+/* Scroll Virtualization Hint for Large Grids */
+.studio-grid-card {
+  content-visibility: auto;
+  contain-intrinsic-size: 240px 330px;
+}
+.studio-grid-card-compact {
+  content-visibility: auto;
+  contain-intrinsic-size: 130px 130px;
+}
 
 /* Git-Style Inline Prompt Diff Card */
 .agent-diff-box {

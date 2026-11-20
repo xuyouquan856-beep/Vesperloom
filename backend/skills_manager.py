@@ -7,7 +7,7 @@ from .config import DATA_DIR
 SKILLS_DIR = DATA_DIR / "skills"
 SKILLS_DIR.mkdir(parents=True, exist_ok=True)
 
-CURRENT_SKILL_VERSION = 3
+CURRENT_SKILL_VERSION = 4
 
 BUILTIN_SKILLS: List[Dict[str, str]] = [
     {
@@ -116,7 +116,8 @@ BUILTIN_SKILLS: List[Dict[str, str]] = [
 - 24 种表情微调：`run_director_tool(req_type="emotion", emotion="happy|shy|smug|sad|angry|surprised|...", defry=0..5)`（`defry` 越小保原图越多，越大改表情越明显）
 - 去杂物：`run_director_tool(req_type="declutter")`
 
-## 3. 图生图 / 局部重绘 / 扩图
+## 3. 视觉检视 + 图生图 / 局部重绘 / 扩图
+- 先看图再动手：当用户让你看画布图哪里不好、需要重绘或调色时，先调用 `inspect_canvas_stage` 视觉分析当前画布，再精准修改提示词或切入 `infill` / `img2img`。
 - 轻度精修光影/细节：`set_workbench_mode(action="img2img", i2i_strength=0.38)`
 - 中度重绘换服饰/氛围：`set_workbench_mode(action="img2img", i2i_strength=0.62)`
 - 局部重绘（修手/换表情/改配饰）：`set_workbench_mode(action="infill")` 并提示用户在画布上涂抹蒙版后点击生成。
@@ -177,7 +178,8 @@ BUILTIN_SKILLS: List[Dict[str, str]] = [
 - **看预览图打风格标签**：待预览图生成后，调用 `inspect_artist_previews(artist_ids=[...])`（每次最多 4 位）让多模态视觉模型直接审阅画师预览图，再结合 Danbooru 情报调用 `manage_artist_catalog(action="batch_update", updates=[...])` 一次性批量写入精准的 `category`、`desc` 与 `sample_tags`。
 - **单画师新增/收藏/混搭**：单条录入可用 `action="add"`；满意的画师组合调用 `manage_mix_presets(action="save", name=..., items=...)` 归档。
 
-## 2. 作品图库管理（`manage_gallery_items`）
+## 2. 作品图库管理与视觉审阅（`manage_gallery_items` & `inspect_gallery_images`）
+- **视觉对比/找瑕疵**：用户让你对比或诊断图库某几张成图效果时，先调用 `inspect_gallery_images(item_ids=[...])` 直接看原图像素与光影细节。
 - **检索与复用**：先调用 `query_gallery` 找到目标作品 `id`，再用 `load_to_workbench` 一键把那张图和完整参数载回工作台。
 - **整理归档**：支持批量收藏/取消收藏（`favorite` / `unfavorite`）、打搜索备注（`set_notes`）以及扫描同步 `D:\\NAI-Studio\\outputs` 磁盘目录（`sync_folder`）。
 - **删除红线**：仅在用户明确指定删除某张/某批作品时才调用 `delete` 并精确传入 `ids`，严禁未确认就批量删除。

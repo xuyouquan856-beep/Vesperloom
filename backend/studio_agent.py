@@ -4,6 +4,7 @@ from io import BytesIO
 import json
 from pathlib import Path
 import re
+import time
 from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 
 import httpx
@@ -368,6 +369,44 @@ STUDIO_AGENT_TOOLS: List[Dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "inspect_canvas_stage",
+            "description": "Visually inspect the image currently displayed on the central workbench canvas using multimodal vision. Use when the user asks you to critique/examine the current canvas artwork (hands, anatomy, lighting, color cast, background artifacts) before editing prompts or running img2img/inpaint/Director.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "focus": {
+                        "type": "string",
+                        "description": "What aspect to inspect closely (e.g. 'overall quality & lighting', 'hands & anatomy', 'color palette & style').",
+                    },
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "inspect_gallery_images",
+            "description": "Visually inspect up to 4 saved Gallery artworks by item_id using multimodal vision to compare results, diagnose defects, or explain why one seed/recipe performed better.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "item_ids": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "Up to 4 gallery item IDs.",
+                    },
+                    "question": {
+                        "type": "string",
+                        "description": "Specific visual question or comparison goal.",
+                    },
+                },
+                "required": ["item_ids"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "manage_mix_presets",
             "description": "List, save, apply (to workbench artist block), or delete saved artist mix presets.",
             "parameters": {
@@ -522,6 +561,7 @@ def _build_agent_system_prompt(workbench_state: Dict[str, Any], pinned_skills: L
         "seed": workbench_state.get("seed") or 0,
         "opus_free_guard": workbench_state.get("opus_free_guard", True),
         "stage_has_image": bool(workbench_state.get("stage_has_image")),
+        "stage_image_url": str(workbench_state.get("stage_image_url") or ""),
         "blocks": workbench_state.get("blocks") or {},
         "lint_issue_count": workbench_state.get("lint_issue_count", 0),
         "lint_issues": (workbench_state.get("lint_issues") or [])[:5],
@@ -536,8 +576,9 @@ def _build_agent_system_prompt(workbench_state: Dict[str, Any], pinned_skills: L
    - Never output SD WebUI `(tag:1.2)` syntax, `BREAK`, or Chinese inside prompt tag fields. Respect V4.5/V5 `w::tag::` vs V3 `{{}}`/`[]`.
 2. **Interactive Creative Director (When User Has No Ideas)**:
    - If the user says they have no ideas / feel lazy / want inspiration, read skill `creative-interview` (`read_skill("creative-interview")`), propose 3 vivid, contrasting concepts or ask 2 lightweight questions, and let them pick before filling everything.
-3. **Direct Workbench, Artist Catalog & Gallery Management**:
+3. **Direct Workbench, Vision Inspection, Artist Catalog & Gallery Management**:
    - You can control parameters (`set_workbench_params`), switch canvas modes (`set_workbench_mode` for `img2img`/`infill`/`outpaint`), load OC cards (`load_oc_character`), run Director post-processing (`run_director_tool`: `lineart`, `sketch`, `colorize`, `emotion`, `declutter`), and trigger generation (`trigger_generate_image`, only when asked to draw/generate now).
+   - **Visual Inspection Tools**: When the user asks you to look at / critique / compare images, call `inspect_canvas_stage` (for the current central canvas) or `inspect_gallery_images` (for specific saved gallery IDs) or `inspect_artist_previews` (for artist preview cards) so you inspect the actual pixels rather than guessing!
    - You can also manage the user's **Artist Catalog** (`manage_artist_catalog`, `manage_mix_presets`) and **Artwork Gallery** (`manage_gallery_items`: favorite/unfavorite, add searchable notes, load past artworks to workbench, sync disk folder, or delete explicitly requested item IDs).
    - **Batch Artist Import & Research Discipline**: When the user gives you multiple artist tags (2–100+), ALWAYS use `manage_artist_catalog(action="batch_add", artists=[...], generate_preview=true, model="nai-diffusion-4-5-full")` in ONE single tool call instead of calling `add` one by one! Use `lookup_danbooru_artists(tags=[...])` (up to 12 tags per call) to gather real Danbooru post counts, Pixiv/X URLs, wiki info & top visual tags, use `inspect_artist_previews(artist_ids=[...])` to visually inspect generated preview cards, and use `manage_artist_catalog(action="batch_update", updates=[...])` to bulk-apply categories, descriptions & style tags cleanly. Keep reasoning concise on large lists so you never exhaust output tokens.
    - Never claim you changed the workbench or ran a tool unless you actually called the tool!
@@ -1230,6 +1271,68 @@ async def _lookup_danbooru_artists_async(tags: List[str]) -> Tuple[str, str, Opt
         )
 
 
+def _encode_pil_to_jpeg_data_url(im: Image.Image, max_dim: int = 512) -> str:
+    rgb = im.convert("RGB")
+    rgb.thumbnail((max_dim, max_dim))
+    buf = BytesIO()
+    rgb.save(buf, format="JPEG", quality=82)
+    b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+    return f"data:image/jpeg;base64,{b64}"
+
+
+def _encode_file_to_data_url(fpath: Path, max_dim: int = 512) -> Optional[str]:
+    if not fpath.is_file():
+        return None
+    try:
+        with Image.open(fpath) as im:
+            return _encode_pil_to_jpeg_data_url(im, max_dim=max_dim)
+    except Exception:
+        return None
+
+
+def _encode_b64_to_data_url(raw_b64: str, max_dim: int = 512) -> Optional[str]:
+    s = str(raw_b64 or "").strip()
+    if not s:
+        return None
+    if "," in s and s.lower().startswith("data:image/"):
+        s = s.split(",", 1)[1]
+    try:
+        raw_bytes = base64.b64decode(s)
+        with Image.open(BytesIO(raw_bytes)) as im:
+            return _encode_pil_to_jpeg_data_url(im, max_dim=max_dim)
+    except Exception:
+        return None
+
+
+async def _run_vision_inspection(
+    content_parts: List[Dict[str, Any]],
+    llm_client: httpx.AsyncClient,
+    endpoint: str,
+    headers: Dict[str, str],
+    llm_model: str,
+) -> Tuple[Optional[str], Optional[str]]:
+    """Shared multimodal chat call returning (analysis_text, error_msg)."""
+    try:
+        r = await llm_client.post(
+            endpoint,
+            headers=headers,
+            json={
+                "model": llm_model,
+                "messages": [{"role": "user", "content": content_parts}],
+                "temperature": 0.3,
+                "max_tokens": 16384,
+            },
+            timeout=90.0,
+        )
+        if r.status_code != 200:
+            return None, f"视觉分析请求失败 (HTTP {r.status_code}): {r.text[:180]}"
+        msg = (r.json().get("choices") or [{}])[0].get("message") or {}
+        analysis = str(msg.get("content") or "").strip()
+        return analysis, None
+    except Exception as exc:
+        return None, f"视觉分析异常: {exc}"
+
+
 async def _inspect_artist_previews_async(
     artist_ids: List[int],
     llm_client: httpx.AsyncClient,
@@ -1260,22 +1363,13 @@ async def _inspect_artist_previews_async(
             missing.append(aid)
             continue
         fname = Path(str(a["preview_url"]).split("?")[0]).name
-        fpath = ARTISTS_DIR / fname
-        if not fpath.exists():
+        data_url = _encode_file_to_data_url(ARTISTS_DIR / fname, max_dim=384)
+        if not data_url:
             missing.append(aid)
             continue
-        try:
-            with Image.open(fpath) as im:
-                rgb = im.convert("RGB")
-                rgb.thumbnail((384, 384))
-                buf = BytesIO()
-                rgb.save(buf, format="JPEG", quality=78)
-                b64 = base64.b64encode(buf.getvalue()).decode("ascii")
-            content_parts.append({"type": "text", "text": f"画师 artist_id={aid} | name={a['name']} | tag={a['tag']}"})
-            content_parts.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}})
-            inspected.append({"artist_id": aid, "name": a["name"], "tag": a["tag"]})
-        except Exception:
-            missing.append(aid)
+        content_parts.append({"type": "text", "text": f"画师 artist_id={aid} | name={a['name']} | tag={a['tag']}"})
+        content_parts.append({"type": "image_url", "image_url": {"url": data_url}})
+        inspected.append({"artist_id": aid, "name": a["name"], "tag": a["tag"]})
 
     if not inspected:
         return (
@@ -1291,37 +1385,126 @@ async def _inspect_artist_previews_async(
             None,
         )
 
+    analysis, err = await _run_vision_inspection(content_parts, llm_client, endpoint, headers, llm_model)
+    if err:
+        return json.dumps({"ok": False, "error": err}, ensure_ascii=False), "视觉模型不支持或限流", None
+    return (
+        json.dumps({"ok": True, "inspected": inspected, "missing_ids": missing, "vision_analysis": analysis}, ensure_ascii=False),
+        f"视觉分析 {len(inspected)} 张画师预览图",
+        None,
+    )
+
+
+def _resolve_outputs_url(url_str: str) -> Optional[Path]:
+    raw = str(url_str or "").split("?")[0].strip()
+    if not raw.startswith("/outputs/"):
+        return None
+    rel = raw[len("/outputs/"):].lstrip("/")
+    candidate = (OUTPUTS_DIR / rel).resolve()
     try:
-        r = await llm_client.post(
-            endpoint,
-            headers=headers,
-            json={
-                "model": llm_model,
-                "messages": [{"role": "user", "content": content_parts}],
-                "temperature": 0.3,
-                "max_tokens": 16384,
-            },
-            timeout=90.0,
-        )
-        if r.status_code != 200:
-            return (
-                json.dumps({"ok": False, "error": f"视觉分析请求失败 (HTTP {r.status_code}): {r.text[:180]}"}, ensure_ascii=False),
-                "视觉模型不支持或限流",
-                None,
-            )
-        msg = (r.json().get("choices") or [{}])[0].get("message") or {}
-        analysis = str(msg.get("content") or "").strip()
+        if not candidate.is_relative_to(OUTPUTS_DIR.resolve()):
+            return None
+    except Exception:
+        return None
+    return candidate if candidate.is_file() else None
+
+
+async def _inspect_canvas_stage_async(
+    focus: str,
+    workbench_state: Dict[str, Any],
+    llm_client: httpx.AsyncClient,
+    endpoint: str,
+    headers: Dict[str, str],
+    llm_model: str,
+) -> Tuple[str, str, Optional[Dict[str, Any]]]:
+    if not workbench_state.get("stage_has_image"):
+        return json.dumps({"ok": False, "error": "当前中央画布暂无图片"}, ensure_ascii=False), "画布为空", None
+
+    data_url = None
+    stage_url = str(workbench_state.get("stage_image_url") or "")
+    fpath = _resolve_outputs_url(stage_url)
+    if fpath:
+        data_url = _encode_file_to_data_url(fpath, max_dim=768)
+    if not data_url and workbench_state.get("stage_image_b64"):
+        data_url = _encode_b64_to_data_url(str(workbench_state.get("stage_image_b64") or ""), max_dim=768)
+    if not data_url:
         return (
-            json.dumps({"ok": True, "inspected": inspected, "missing_ids": missing, "vision_analysis": analysis}, ensure_ascii=False),
-            f"视觉分析 {len(inspected)} 张画师预览图",
+            json.dumps({"ok": False, "error": "未能读取当前画布图像（请确认图像已载入画布或本地outputs文件存在）"}, ensure_ascii=False),
+            "未读取到画布图像",
             None,
         )
-    except Exception as exc:
-        return (
-            json.dumps({"ok": False, "error": f"预览图视觉分析异常: {exc}"}, ensure_ascii=False),
-            "视觉分析异常",
-            None,
+
+    focus_txt = str(focus or "整体构图、光影层次、角色五官手部解剖、色彩偏差与可优化点").strip()
+    prompt_txt = (
+        f"请以专业 NovelAI 插画指导的视角审视这张当前工作台画布图像，重点关注：{focus_txt}。\n"
+        "请指出：1) 画面优点与风格氛围；2) 具体的视觉问题（如手部/肢体畸形、构图空洞、过曝/偏灰、光影逻辑矛盾、背景杂物等）；"
+        "3) 可直接落地的修正建议（适合改哪些正负面 Tag 或是否适合局部重绘/图生图/Director）。控制在 220 字以内。"
+    )
+    analysis, err = await _run_vision_inspection(
+        [{"type": "text", "text": prompt_txt}, {"type": "image_url", "image_url": {"url": data_url}}],
+        llm_client,
+        endpoint,
+        headers,
+        llm_model,
+    )
+    if err:
+        return json.dumps({"ok": False, "error": err}, ensure_ascii=False), "画布视觉分析失败", None
+    return json.dumps({"ok": True, "vision_critique": analysis}, ensure_ascii=False), "视觉检视当前画布", None
+
+
+async def _inspect_gallery_images_async(
+    item_ids: List[int],
+    question: str,
+    llm_client: httpx.AsyncClient,
+    endpoint: str,
+    headers: Dict[str, str],
+    llm_model: str,
+) -> Tuple[str, str, Optional[Dict[str, Any]]]:
+    clean_ids = [int(x) for x in (item_ids or []) if str(x).isdigit()][:4]
+    if not clean_ids:
+        return json.dumps({"ok": False, "error": "请提供 1~4 个图库作品 item_id"}, ensure_ascii=False), "缺少作品 ID", None
+
+    content_parts: List[Dict[str, Any]] = [
+        {
+            "type": "text",
+            "text": (
+                f"请以专业 NovelAI 生图导师的视角对比/审阅以下图库作品。用户重点关注：{question or '画面质量、结构崩坏排查、光影对比与配方优劣'}。\n"
+                "逐张给出简明点评与优胜结论，控制在 280 字以内。"
+            ),
+        }
+    ]
+    inspected: List[Dict[str, Any]] = []
+    missing: List[int] = []
+    for gid in clean_ids:
+        item = get_gallery_item(gid)
+        if not item:
+            missing.append(gid)
+            continue
+        rel = str(item.get("rel_path") or item.get("filename") or "").lstrip("/")
+        data_url = _encode_file_to_data_url(OUTPUTS_DIR / rel, max_dim=512)
+        if not data_url:
+            missing.append(gid)
+            continue
+        content_parts.append(
+            {
+                "type": "text",
+                "text": f"作品 item_id={gid} | 模型={item.get('model_short')} | Seed={item.get('seed')} | Notes={item.get('notes') or '无'}",
+            }
         )
+        content_parts.append({"type": "image_url", "image_url": {"url": data_url}})
+        inspected.append({"id": gid, "seed": item.get("seed"), "model_short": item.get("model_short")})
+
+    if not inspected:
+        return json.dumps({"ok": False, "error": "未找到可读的图库原图文件", "missing_ids": missing}, ensure_ascii=False), "未找到图库原图", None
+
+    analysis, err = await _run_vision_inspection(content_parts, llm_client, endpoint, headers, llm_model)
+    if err:
+        return json.dumps({"ok": False, "error": err}, ensure_ascii=False), "图库视觉分析失败", None
+    return (
+        json.dumps({"ok": True, "inspected": inspected, "missing_ids": missing, "vision_analysis": analysis}, ensure_ascii=False),
+        f"视觉审阅 {len(inspected)} 张图库作品",
+        None,
+    )
 
 
 async def _execute_studio_tool_async(
@@ -1338,6 +1521,10 @@ async def _execute_studio_tool_async(
         return await _lookup_danbooru_artists_async(args.get("tags") or [])
     if name == "inspect_artist_previews":
         return await _inspect_artist_previews_async(args.get("artist_ids") or [], llm_client, endpoint, headers, llm_model)
+    if name == "inspect_canvas_stage":
+        return await _inspect_canvas_stage_async(str(args.get("focus") or ""), workbench_state, llm_client, endpoint, headers, llm_model)
+    if name == "inspect_gallery_images":
+        return await _inspect_gallery_images_async(args.get("item_ids") or [], str(args.get("question") or ""), llm_client, endpoint, headers, llm_model)
     return _execute_studio_tool(name, args, workbench_state, live_blocks)
 
 
@@ -1447,8 +1634,35 @@ async def stream_studio_agent(
     empty_retries = 0
     last_finish_reason = ""
     active_max_out = max_out_tokens
+    last_usage: Dict[str, Any] = {}
+    stream_start_ts = time.perf_counter()
 
     yield sse("status", {"text": f"{llm_model} ({context_budget // 1000}K 上下文) 正在分析需求..."})
+
+    async def _run_nonstream_round(body: Dict[str, Any]) -> Tuple[Dict[str, Any], str, List[Dict[str, Any]], str, Dict[str, Any]]:
+        nonlocal active_max_out
+        req = dict(body)
+        req.pop("stream", None)
+        req.pop("stream_options", None)
+        r, active_max_out = await post_chat_with_max_tokens_fallback(
+            client, endpoint, headers, req, timeout=180.0
+        )
+        if r.status_code == 400 and "tool" in r.text.lower():
+            req.pop("tools", None)
+            req.pop("tool_choice", None)
+            r = await client.post(endpoint, headers=headers, json=req, timeout=180.0)
+        if r.status_code != 200:
+            raise ValueError(f"LLM 请求失败 (HTTP {r.status_code}): {r.text[:240]}")
+        data = r.json()
+        choice0 = (data.get("choices") or [{}])[0]
+        msg = dict(choice0.get("message") or {})
+        return (
+            msg,
+            str(msg.get("content") or "").strip(),
+            list(msg.get("tool_calls") or []),
+            str(choice0.get("finish_reason") or ""),
+            dict(data.get("usage") or {}),
+        )
 
     try:
         for round_idx in range(16):
@@ -1459,26 +1673,106 @@ async def stream_studio_agent(
                 "tool_choice": "auto" if round_idx < 14 else "none",
                 "temperature": 0.45,
                 "max_tokens": active_max_out,
+                "stream": True,
+                "stream_options": {"include_usage": True},
             }
-            r, active_max_out = await post_chat_with_max_tokens_fallback(
-                client, endpoint, headers, req_body, timeout=180.0
-            )
-            if r.status_code == 400 and "tool" in r.text.lower():
-                # Graceful fallback if chosen model doesn't support OpenAI tools
-                req_body.pop("tools", None)
-                req_body.pop("tool_choice", None)
-                r = await client.post(endpoint, headers=headers, json=req_body, timeout=180.0)
-            if r.status_code != 200:
-                raise ValueError(f"LLM 请求失败 (HTTP {r.status_code}): {r.text[:240]}")
 
-            data = r.json()
-            choice0 = (data.get("choices") or [{}])[0]
-            last_finish_reason = str(choice0.get("finish_reason") or "")
-            msg = dict(choice0.get("message") or {})
-            tool_calls = list(msg.get("tool_calls") or [])
+            content_parts: List[str] = []
+            reasoning_buf: List[str] = []
+            last_reason_emit = time.perf_counter()
+            tool_acc: Dict[int, Dict[str, Any]] = {}
+            announced_tools: set[int] = set()
+            finish_reason = ""
+            round_usage: Dict[str, Any] = {}
+            streamed_content_live = False
+            fallback_nonstream = False
+
+            async with client.stream("POST", endpoint, headers=headers, json=req_body, timeout=180.0) as resp:
+                if resp.status_code == 400:
+                    err_bytes = await resp.aread()
+                    err_txt = err_bytes.decode("utf-8", errors="replace")
+                    low_err = err_txt.lower()
+                    if any(k in low_err for k in ("stream", "max_tokens", "range", "maximum", "limit", "tool")):
+                        fallback_nonstream = True
+                    else:
+                        raise ValueError(f"LLM 请求失败 (HTTP {resp.status_code}): {err_txt[:240]}")
+                elif resp.status_code != 200:
+                    err_bytes = await resp.aread()
+                    raise ValueError(f"LLM 请求失败 (HTTP {resp.status_code}): {err_bytes.decode('utf-8', errors='replace')[:240]}")
+                else:
+                    async for raw_line in resp.aiter_lines():
+                        line = raw_line.strip()
+                        if not line or not line.startswith("data:"):
+                            continue
+                        payload_str = line[5:].strip()
+                        if payload_str == "[DONE]":
+                            break
+                        try:
+                            chunk = json.loads(payload_str)
+                        except Exception:
+                            continue
+                        if isinstance(chunk.get("usage"), dict) and chunk["usage"]:
+                            round_usage = chunk["usage"]
+                        choices = chunk.get("choices") or []
+                        if not choices:
+                            continue
+                        c0 = choices[0]
+                        if c0.get("finish_reason"):
+                            finish_reason = str(c0["finish_reason"])
+                        delta = c0.get("delta") or {}
+
+                        r_piece = delta.get("reasoning_content")
+                        if r_piece:
+                            reasoning_buf.append(r_piece)
+                            now = time.perf_counter()
+                            if now - last_reason_emit >= 0.14 or sum(len(x) for x in reasoning_buf) >= 120:
+                                yield sse("reasoning_delta", {"text": "".join(reasoning_buf)})
+                                reasoning_buf.clear()
+                                last_reason_emit = now
+
+                        c_piece = delta.get("content")
+                        if c_piece:
+                            if reasoning_buf:
+                                yield sse("reasoning_delta", {"text": "".join(reasoning_buf)})
+                                reasoning_buf.clear()
+                            if not content_parts and final_reply:
+                                yield sse("delta", {"text": "\n\n"})
+                            content_parts.append(c_piece)
+                            streamed_content_live = True
+                            yield sse("delta", {"text": c_piece})
+
+                        for tc_delta in delta.get("tool_calls") or []:
+                            idx = int(tc_delta.get("index") or 0)
+                            slot = tool_acc.setdefault(idx, {"id": "", "type": "function", "function": {"name": "", "arguments": ""}})
+                            if tc_delta.get("id"):
+                                slot["id"] = str(tc_delta["id"])
+                            fn_d = tc_delta.get("function") or {}
+                            if fn_d.get("name"):
+                                slot["function"]["name"] += str(fn_d["name"])
+                                if idx not in announced_tools and slot["function"]["name"]:
+                                    announced_tools.add(idx)
+                                    yield sse("status", {"text": f"准备工具 {slot['function']['name']}..."})
+                            if fn_d.get("arguments"):
+                                slot["function"]["arguments"] += str(fn_d["arguments"])
+
+                    if reasoning_buf:
+                        yield sse("reasoning_delta", {"text": "".join(reasoning_buf)})
+                        reasoning_buf.clear()
+
+            if fallback_nonstream:
+                msg, content_txt, tool_calls, last_finish_reason, round_usage = await _run_nonstream_round(req_body)
+            else:
+                last_finish_reason = finish_reason
+                content_txt = "".join(content_parts).strip()
+                tool_calls = [tool_acc[i] for i in sorted(tool_acc.keys())]
+                msg = {"role": "assistant", "content": content_txt or None}
+                if tool_calls:
+                    msg["tool_calls"] = tool_calls
+
+            if round_usage:
+                last_usage = round_usage
 
             if not tool_calls:
-                content_txt = str(msg.get("content") or "").strip()
                 if not content_txt and empty_retries < 2:
                     empty_retries += 1
                     yield sse("status", {"text": "模型思考过长触发截断，正在精简重试..."})
@@ -1493,14 +1787,27 @@ async def stream_studio_agent(
                         }
                     )
                     continue
-                messages.append(msg)
-                final_reply = content_txt
+                if content_txt and not streamed_content_live:
+                    clean_chunk, _ = _extract_quick_replies(content_txt)
+                    if final_reply:
+                        yield sse("delta", {"text": "\n\n"})
+                    for i in range(0, len(clean_chunk), 24):
+                        yield sse("delta", {"text": clean_chunk[i : i + 24]})
+                messages.append({"role": "assistant", "content": content_txt})
+                if content_txt:
+                    final_reply = (final_reply + "\n\n" + content_txt).strip() if final_reply and final_reply != content_txt else content_txt
                 break
+
+            if content_txt:
+                final_reply = (final_reply + "\n\n" + content_txt).strip() if final_reply else content_txt
 
             # Keep assistant message tool_calls strictly synchronized with executed tool_call_ids
             exec_calls = tool_calls[:10]
-            msg["tool_calls"] = exec_calls
-            messages.append(msg)
+            messages.append({
+                "role": "assistant",
+                "content": content_txt or None,
+                "tool_calls": exec_calls,
+            })
 
             for tc in exec_calls:
                 fn = tc.get("function") or {}
@@ -1512,11 +1819,13 @@ async def stream_studio_agent(
                     targs = {}
 
                 yield sse("tool_start", {"id": tc_id, "name": tname, "args": targs})
+                t0 = time.perf_counter()
                 out_json, summary, ui_action = await _execute_studio_tool_async(
                     tname, targs, wb, live_blocks, client, endpoint, headers, llm_model
                 )
+                duration_ms = int((time.perf_counter() - t0) * 1000)
 
-                ev = {"id": tc_id, "name": tname, "summary": summary, "ok": '"error"' not in out_json}
+                ev = {"id": tc_id, "name": tname, "summary": summary, "ok": '"error"' not in out_json, "duration_ms": duration_ms}
                 tool_events.append(ev)
                 yield sse("tool_result", ev)
 
@@ -1526,7 +1835,7 @@ async def stream_studio_agent(
 
                 messages.append({"role": "tool", "tool_call_id": tc_id, "content": out_json})
 
-            yield sse("status", {"text": "整合结果并组织回复..."})
+            yield sse("status", {"text": f"{llm_model} 整合工具结果中..."})
 
         if not final_reply:
             if ui_actions:
@@ -1535,12 +1844,11 @@ async def stream_studio_agent(
                 final_reply = "⚠️ 本轮模型内部推理消耗了全部输出上限导致正文被截断，未执行实际修改。建议将大批量任务分批处理（例如每次 15~25 位画师）后重试。"
             else:
                 final_reply = "⚠️ 模型未返回有效正文（未对工作台做出修改），请重试或稍微精简指令。"
+            for i in range(0, len(final_reply), 24):
+                yield sse("delta", {"text": final_reply[i : i + 24]})
 
         clean_reply, quick_replies = _extract_quick_replies(final_reply)
-        # Emit reply smoothly in readable chunks so UI renders live progressively
-        chunk_size = 24
-        for i in range(0, len(clean_reply), chunk_size):
-            yield sse("delta", {"text": clean_reply[i : i + chunk_size]})
+        elapsed_ms = int((time.perf_counter() - stream_start_ts) * 1000)
 
         append_agent_message(sid, "assistant", clean_reply, tool_events=tool_events, ui_actions=ui_actions)
         yield sse(
@@ -1552,6 +1860,9 @@ async def stream_studio_agent(
                 "tool_events": tool_events,
                 "ui_actions": ui_actions,
                 "quick_replies": quick_replies,
+                "usage": last_usage,
+                "context_budget": context_budget,
+                "elapsed_ms": elapsed_ms,
             },
         )
     except Exception as exc:

@@ -18,6 +18,11 @@ const agentState = {
   streaming: false,
   abortController: null,
   undoSnapshots: {},
+  queuedMessage: "",
+  activePromptText: "",
+  sessionLoadSeq: 0,
+  rafRenderPending: false,
+  busyOps: new Set(),
 };
 
 function initStudioAgentWindow(bootstrapData = {}) {
@@ -279,17 +284,19 @@ function collectLiveWorkbenchState() {
     model: state.currentModel || "nai-diffusion-5-full",
     model_short: state.models?.[state.currentModel]?.short_name || "V5 Full",
     prompt_mode: state.promptWorkspaceMode || "classic",
-    action: state.workbenchAction || "generate",
+    action: state.action || "generate",
     width: state.width || 832,
     height: state.height || 1216,
     steps: state.steps || 28,
     scale: state.scale || 5.0,
-    cfg_rescale: state.cfgRescale || 0.0,
+    cfg_rescale: state.cfg_rescale || 0.0,
     sampler: state.sampler || "k_euler_ancestral",
     scheduler: state.scheduler || "karras",
     seed: Number(document.getElementById("seed-input")?.value || 0),
     opus_free_guard: state.config?.opus_free_guard !== false,
     stage_has_image: hasStage,
+    stage_image_url: hasStage ? state.stageImageUrl || "" : "",
+    stage_image_b64: hasStage && !state.stageImageUrl && state.stageImageB64 ? state.stageImageB64 : "",
     blocks: { artist, character, lighting, negative },
     prompt: document.getElementById("prompt-input")?.value || "",
     uc: document.getElementById("uc-input")?.value || "",
@@ -311,7 +318,7 @@ function refreshAgentLiveStrip() {
   const nCnt = parsePromptSegments(document.getElementById("block-negative-input")?.value || document.getElementById("uc-input")?.value || "").length;
   const mShort = state.models?.[state.currentModel]?.short_name || "V5 Full";
   const actMap = { generate: "文生图", img2img: "图生图", infill: "重绘", outpaint: "扩图" };
-  telEl.textContent = `${mShort} (${actMap[state.workbenchAction] || "文生图"}) · 画${aCnt} / 人${cCnt} / 光${lCnt} / 负${nCnt}`;
+  telEl.textContent = `${mShort} (${actMap[state.action] || "文生图"}) · 画${aCnt} / 人${cCnt} / 光${lCnt} / 负${nCnt}`;
 
   const issueCnt = state.lastLintResult?.issue_count || 0;
   if (topDot) {
@@ -418,9 +425,9 @@ function applyAgentUiAction(action) {
       if (el) el.textContent = state.scale.toFixed(1);
     }
     if (typeof p.cfg_rescale === "number") {
-      state.cfgRescale = Math.max(0.0, Math.min(1.0, Number(p.cfg_rescale)));
+      state.cfg_rescale = Math.max(0.0, Math.min(1.0, Number(p.cfg_rescale)));
       const el = document.getElementById("rescale-val");
-      if (el) el.textContent = state.cfgRescale.toFixed(2);
+      if (el) el.textContent = state.cfg_rescale.toFixed(2);
     }
     if (p.sampler) selectSampler(p.sampler);
     if (p.scheduler) selectScheduler(p.scheduler);
@@ -440,6 +447,7 @@ function applyAgentUiAction(action) {
     if (typeof p.batch_count === "number") {
       setBatchCount(p.batch_count);
     }
+    if (typeof updateStageInfoPill === "function") updateStageInfoPill();
     updateCostEstimate();
     refreshAgentLiveStrip();
     return { summary: action.summary };
@@ -470,6 +478,7 @@ function applyAgentUiAction(action) {
         if (cEl) cEl.value = card.prompt || "";
         flashPromptBlockCard("character");
         syncStructuredToClassic();
+        refreshAgentLiveStrip();
       }
       return { snapId, added: parsePromptSegments(card.prompt || "").slice(0, 6), removed: [], summary: action.summary };
     }
@@ -722,28 +731,52 @@ function renderDiffActionCard(uiAct) {
   `;
 }
 
-function renderToolTimelineHtml(events, isActiveTurn = false) {
+function _fmtDurationMs(ms) {
+  if (typeof ms !== "number" || ms <= 0) return "";
+  return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`;
+}
+
+function renderToolTimelineHtml(events, activeTools = [], isActiveTurn = false, existingOpen = null) {
   const list = Array.isArray(events) ? events : [];
-  if (!list.length && !isActiveTurn) return "";
-  const count = list.length;
-  const latest = count ? (list[count - 1].summary || list[count - 1].name) : "分析当前工作台上下文...";
+  const runningList = Array.isArray(activeTools) ? activeTools : [];
+  if (!list.length && !runningList.length && !isActiveTurn) return "";
+  const count = list.length + runningList.length;
+  const activeStep = runningList[runningList.length - 1];
+  const latest = activeStep
+    ? `执行 ${activeStep.name}...`
+    : list.length
+    ? list[list.length - 1].summary || list[list.length - 1].name
+    : "分析当前工作台上下文...";
   const label = isActiveTurn
     ? `<span class="inline-flex items-center gap-1.5 min-w-0"><span class="agent-thinking-dots text-[var(--text-secondary)]" aria-hidden="true"><span></span><span></span><span></span></span><span class="truncate">${escapeHtml(latest)}</span></span>`
-    : `<span class="truncate">已执行 ${count} 项步骤 · ${escapeHtml(latest)}</span>`;
+    : `<span class="truncate">已执行 ${list.length} 项步骤 · ${escapeHtml(latest)}</span>`;
 
-  const stepsHtml = list
-    .map(
-      t => `
+  const doneStepsHtml = list
+    .map(t => {
+      const dur = _fmtDurationMs(t.duration_ms);
+      return `
       <div class="agent-timeline-step ${t.ok !== false ? "is-ok" : ""}">
         <span class="truncate">${escapeHtml(t.summary || t.name)}</span>
-        <span class="text-[10.5px] ${t.ok !== false ? "text-[var(--text-muted)]" : "text-[var(--status-warning)]"} shrink-0">${t.ok !== false ? "完成" : "提示"}</span>
+        <span class="text-[10.5px] ${t.ok !== false ? "text-[var(--text-muted)]" : "text-[var(--status-warning)]"} shrink-0">${dur ? `${dur} · ` : ""}${t.ok !== false ? "完成" : "提示"}</span>
+      </div>
+    `;
+    })
+    .join("");
+
+  const runningStepsHtml = runningList
+    .map(
+      t => `
+      <div class="agent-timeline-step is-running">
+        <span class="truncate">${escapeHtml(t.name)}...</span>
+        <span class="text-[10.5px] text-[var(--status-warning)] shrink-0">运行中</span>
       </div>
     `
     )
     .join("");
 
+  const isOpen = existingOpen !== null ? existingOpen : isActiveTurn;
   return `
-    <details class="agent-timeline" ${isActiveTurn ? "open" : ""}>
+    <details class="agent-timeline" ${isOpen ? "open" : ""}>
       <summary>
         <div class="flex items-center gap-1.5 min-w-0">
           <svg class="w-3.5 h-3.5 agent-timeline-chevron text-[var(--text-muted)] shrink-0 stroke-current fill-none" stroke-width="1.8" viewBox="0 0 16 16" aria-hidden="true"><use href="#ic-chevron-right"/></svg>
@@ -751,8 +784,67 @@ function renderToolTimelineHtml(events, isActiveTurn = false) {
         </div>
         ${count ? `<span class="font-mono text-[10.5px] text-[var(--text-muted)] shrink-0">${count}</span>` : ""}
       </summary>
-      ${stepsHtml ? `<div class="agent-timeline-steps">${stepsHtml}</div>` : ""}
+      ${doneStepsHtml || runningStepsHtml ? `<div class="agent-timeline-steps">${doneStepsHtml}${runningStepsHtml}</div>` : ""}
     </details>
+  `;
+}
+
+function renderReasoningBlockHtml(reasoning, isActiveTurn = false, hasContent = false, existingOpen = null) {
+  const txt = String(reasoning || "").trim();
+  if (!txt) return "";
+  const isOpen = existingOpen !== null ? existingOpen : isActiveTurn && !hasContent;
+  return `
+    <details class="agent-reasoning" ${isOpen ? "open" : ""}>
+      <summary>
+        ${isActiveTurn && !hasContent ? '<span class="agent-thinking-dots" aria-hidden="true"><span></span><span></span><span></span></span>' : ""}
+        <span>思考过程 (${txt.length} 字)</span>
+      </summary>
+      <div class="agent-reasoning-body custom-scroll">${escapeHtml(txt)}</div>
+    </details>
+  `;
+}
+
+function renderUsageFooterHtml(m) {
+  const parts = [];
+  if (m.usage && (m.usage.prompt_tokens || m.usage.total_tokens)) {
+    const used = Number(m.usage.total_tokens || m.usage.prompt_tokens || 0);
+    const budget = Number(m.context_budget || 100000);
+    const usedK = used >= 1000 ? `${(used / 1000).toFixed(1)}K` : `${used}`;
+    const budgetK = `${Math.round(budget / 1000)}K`;
+    parts.push(`${usedK} / ${budgetK} tokens`);
+  }
+  if (m.elapsed_ms) {
+    parts.push(_fmtDurationMs(m.elapsed_ms));
+  }
+  if (!parts.length) return "";
+  return `<div class="agent-usage-footer">${escapeHtml(parts.join(" · "))}</div>`;
+}
+
+function renderSingleMessageInner(m, idx, totalLen, domState = {}) {
+  if (m.role === "user") {
+    return escapeHtml(m.content);
+  }
+  const isStreamingThis = agentState.streaming && idx === totalLen - 1;
+  const timelineHtml = renderToolTimelineHtml(
+    m.tool_events,
+    isStreamingThis ? m._activeTools || [] : [],
+    isStreamingThis && !m.content,
+    domState.timelineOpen ?? null
+  );
+  const reasoningHtml = renderReasoningBlockHtml(
+    m.reasoning,
+    isStreamingThis,
+    Boolean(m.content),
+    domState.reasoningOpen ?? null
+  );
+  const actionsHtml = (m.ui_actions || []).map(a => renderDiffActionCard(a)).join("");
+  const usageHtml = !isStreamingThis ? renderUsageFooterHtml(m) : "";
+  return `
+    ${reasoningHtml}
+    ${timelineHtml}
+    ${actionsHtml}
+    ${m.content ? `<div>${formatAgentMarkdown(m.content)}</div>` : ""}
+    ${usageHtml}
   `;
 }
 
@@ -765,6 +857,33 @@ function scrollAgentToBottomIfNear(force = false) {
   }
 }
 
+function scheduleActiveAssistantRender(forceScroll = false) {
+  if (agentState.rafRenderPending) return;
+  agentState.rafRenderPending = true;
+  requestAnimationFrame(() => {
+    agentState.rafRenderPending = false;
+    const box = document.getElementById("agent-messages");
+    if (!box || !agentState.messages.length) return;
+    const lastIdx = agentState.messages.length - 1;
+    const el = box.querySelector(`[data-agent-msg-idx="${lastIdx}"]`);
+    const m = agentState.messages[lastIdx];
+    if (!el || !m || m.role !== "assistant") {
+      renderAgentMessages(forceScroll);
+      return;
+    }
+    const existingTimeline = el.querySelector("details.agent-timeline");
+    const existingReasoning = el.querySelector("details.agent-reasoning");
+    const domState = {
+      timelineOpen: existingTimeline ? existingTimeline.open : null,
+      reasoningOpen: existingReasoning ? existingReasoning.open : null,
+    };
+    el.innerHTML = renderSingleMessageInner(m, lastIdx, agentState.messages.length, domState);
+    const rBody = el.querySelector(".agent-reasoning-body");
+    if (rBody) rBody.scrollTop = rBody.scrollHeight;
+    scrollAgentToBottomIfNear(forceScroll);
+  });
+}
+
 function renderAgentMessages(forceScroll = false) {
   const box = document.getElementById("agent-messages");
   if (!box) return;
@@ -775,11 +894,11 @@ function renderAgentMessages(forceScroll = false) {
         <div class="space-y-1.5">
           <div class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/[0.04] border border-[var(--border-hairline)] text-[10.5px] font-mono text-[var(--text-muted)]">
             <span class="w-1.5 h-1.5 rounded-full bg-[var(--status-success)]"></span>
-            NAI V5 · 19 Tools · 8 Skills
+            NAI V5 · 21 Tools · 8 Skills · 100K Ctx
           </div>
           <div class="font-semibold text-[15px] tracking-[-0.01em] text-[var(--text-primary)]">Studio Agent 创作副驾</div>
           <p class="text-[12.5px] text-[var(--text-muted)] leading-relaxed">
-            实时感知四区块提示词与画布状态：说大白话改 Tag、导演构思、调用专业 Skill，以及直接管理画师库、混搭方案与作品图库。
+            支持实时流式思考、多模态画布与图库审阅、100K 长上下文，可直译大白话改 Tag、导演构思、管画师库与作品图库。
           </p>
         </div>
         <div class="grid grid-cols-1 gap-2">
@@ -791,13 +910,13 @@ function renderAgentMessages(forceScroll = false) {
             <div class="text-[12.5px] font-medium text-[var(--text-primary)]">大白话实时转译 Danbooru / V5 标签</div>
             <div class="text-[11.5px] text-[var(--text-muted)]">精准增量写入对应区块，支持一键撤回 Diff</div>
           </button>
-          <button type="button" onclick="quickSendAgent('帮我把当前提示词里的画师搭配保存为混搭方案，再看看我图库里最近收藏了哪些好图')" class="spring-btn group p-3 rounded-[11px] ui-card hover:border-[var(--border-hover)] text-left space-y-0.5 transition-colors">
-            <div class="text-[12.5px] font-medium text-[var(--text-primary)]">对话管理画师库与作品图库</div>
-            <div class="text-[11.5px] text-[var(--text-muted)]">新增/收藏画师、0点补预览、存混搭、回载历史配方</div>
+          <button type="button" onclick="quickSendAgent('帮我看一下当前中央画布里的图像哪里还可以优化，直接帮我改一版提示词或切到合适的模式')" class="spring-btn group p-3 rounded-[11px] ui-card hover:border-[var(--border-hover)] text-left space-y-0.5 transition-colors">
+            <div class="text-[12.5px] font-medium text-[var(--text-primary)]">多模态视觉看图诊断与修图</div>
+            <div class="text-[11.5px] text-[var(--text-muted)]">直接看懂画布构图/手部/光影问题并联动重绘与改词</div>
           </button>
-          <button type="button" onclick="quickSendAgent('请审阅我当前的提示词和参数，看看有没有语法冲突、权重过载或能提升画质感的地方')" class="spring-btn group p-3 rounded-[11px] ui-card hover:border-[var(--border-hover)] text-left space-y-0.5 transition-colors">
-            <div class="text-[12.5px] font-medium text-[var(--text-primary)]">V5 专业体检与 Director 操控</div>
-            <div class="text-[11.5px] text-[var(--text-muted)]">检查负权重/多人互动语法，并可直接执行线稿与改表情</div>
+          <button type="button" onclick="quickSendAgent('帮我盘点画师库分类，看看近期图库里哪些图最值得收藏与复刻')" class="spring-btn group p-3 rounded-[11px] ui-card hover:border-[var(--border-hover)] text-left space-y-0.5 transition-colors">
+            <div class="text-[12.5px] font-medium text-[var(--text-primary)]">批量整理画师库与作品图库</div>
+            <div class="text-[11.5px] text-[var(--text-muted)]">联网查 Danbooru、看预览打标签、0点补预览与载回配方</div>
           </button>
         </div>
       </div>
@@ -805,23 +924,13 @@ function renderAgentMessages(forceScroll = false) {
     return;
   }
 
-  const lastIdx = agentState.messages.length - 1;
+  const totalLen = agentState.messages.length;
   box.innerHTML = agentState.messages
     .map((m, idx) => {
       if (m.role === "user") {
-        return `<div class="agent-msg-user">${escapeHtml(m.content)}</div>`;
+        return `<div data-agent-msg-idx="${idx}" class="agent-msg-user">${escapeHtml(m.content)}</div>`;
       }
-      const isStreamingThis = agentState.streaming && idx === lastIdx && !m.content;
-      const timelineHtml = renderToolTimelineHtml(m.tool_events, isStreamingThis);
-      const actionsHtml = (m.ui_actions || []).map(a => renderDiffActionCard(a)).join("");
-
-      return `
-        <div class="agent-msg-assistant space-y-2">
-          ${timelineHtml}
-          ${actionsHtml}
-          ${m.content ? `<div>${formatAgentMarkdown(m.content)}</div>` : ""}
-        </div>
-      `;
+      return `<div data-agent-msg-idx="${idx}" class="agent-msg-assistant space-y-2">${renderSingleMessageInner(m, idx, totalLen)}</div>`;
     })
     .join("");
 
@@ -848,15 +957,40 @@ function renderQuickReplies(options = []) {
     .join("");
 }
 
+function renderQueuedPromptChip() {
+  const bar = document.getElementById("agent-queue-chip");
+  const txt = document.getElementById("agent-queue-chip-text");
+  if (!bar) return;
+  const q = (agentState.queuedMessage || "").trim();
+  bar.classList.toggle("hidden", !q);
+  if (txt && q) txt.textContent = `排队下一条: ${q}`;
+}
+
+function clearQueuedAgentPrompt() {
+  agentState.queuedMessage = "";
+  renderQueuedPromptChip();
+}
+
 function quickSendAgent(text) {
+  const clean = String(text || "").trim();
+  if (!clean) return;
   if (!agentState.open) toggleAgentWindow(true);
   switchAgentPane("chat");
-  const inp = document.getElementById("agent-input");
-  if (inp) inp.value = text;
-  sendAgentMessage();
+  if (agentState.streaming) {
+    if (clean === agentState.activePromptText || clean === agentState.queuedMessage) {
+      showToast("当前指令正在处理或已排队");
+      return;
+    }
+    agentState.queuedMessage = clean;
+    renderQueuedPromptChip();
+    showToast("已加入下一条队列，将在本轮结束后自动发送");
+    return;
+  }
+  sendAgentMessage(clean);
 }
 
 function abortAgentStream() {
+  clearQueuedAgentPrompt();
   if (agentState.abortController) {
     agentState.abortController.abort();
   }
@@ -889,37 +1023,59 @@ function openAgentSlashQuick() {
   handleAgentInputChange();
 }
 
-async function sendAgentMessage() {
-  if (agentState.streaming) return;
+async function sendAgentMessage(overrideText = null) {
   const inp = document.getElementById("agent-input");
-  const raw = (inp?.value || "").trim();
+  const raw = typeof overrideText === "string" ? overrideText.trim() : (inp?.value || "").trim();
   if (!raw) return;
-  if (inp) {
+
+  if (agentState.streaming) {
+    if (raw !== agentState.activePromptText && raw !== agentState.queuedMessage) {
+      agentState.queuedMessage = raw;
+      if (typeof overrideText !== "string" && inp) {
+        inp.value = "";
+        autoGrowAgentInput();
+      }
+      renderQueuedPromptChip();
+      showToast("已加入下一条队列，将在本轮完成后自动执行");
+    }
+    return;
+  }
+
+  if (typeof overrideText !== "string" && inp) {
     inp.value = "";
     autoGrowAgentInput();
   }
   hideSlashMenu();
   renderQuickReplies([]);
 
+  agentState.activePromptText = raw;
   agentState.messages.push({ role: "user", content: raw });
-  const assistantMsg = { role: "assistant", content: "", tool_events: [], ui_actions: [] };
+  const assistantMsg = {
+    role: "assistant",
+    content: "",
+    reasoning: "",
+    tool_events: [],
+    _activeTools: [],
+    ui_actions: [],
+  };
   agentState.messages.push(assistantMsg);
 
   agentState.streaming = true;
-  agentState.abortController = new AbortController();
+  const myAbort = new AbortController();
+  agentState.abortController = myAbort;
   renderAgentMessages(true);
 
   const sendBtn = document.getElementById("agent-send-btn");
   const stopBtn = document.getElementById("agent-stop-btn");
   sendBtn?.classList.add("hidden");
   stopBtn?.classList.remove("hidden");
-  setAgentStreamStatus("思考中...", true);
+  setAgentStreamStatus("连接推理流...", true);
   refreshAgentLiveStrip();
 
   try {
     const res = await fetch("/api/agent/chat/stream", {
       method: "POST",
-      signal: agentState.abortController.signal,
+      signal: myAbort.signal,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         message: raw,
@@ -961,20 +1117,32 @@ async function sendAgentMessage() {
     }
   } catch (err) {
     if (err?.name === "AbortError") {
+      assistantMsg._activeTools = [];
       assistantMsg.content += (assistantMsg.content ? "\n\n" : "") + "*[已停止生成]*";
     } else {
+      assistantMsg._activeTools = [];
       assistantMsg.content = `请求失败：${err.message || "未知错误"}`;
       showToast(err.message || "Agent 请求失败");
     }
-    renderAgentMessages(true);
+    scheduleActiveAssistantRender(true);
   } finally {
-    agentState.streaming = false;
-    agentState.abortController = null;
-    sendBtn?.classList.remove("hidden");
-    stopBtn?.classList.add("hidden");
-    setAgentStreamStatus("", false);
-    renderAgentMessages();
-    refreshAgentLiveStrip();
+    if (agentState.abortController === myAbort) {
+      agentState.streaming = false;
+      agentState.abortController = null;
+      agentState.activePromptText = "";
+      assistantMsg._activeTools = [];
+      sendBtn?.classList.remove("hidden");
+      stopBtn?.classList.add("hidden");
+      setAgentStreamStatus("", false);
+      scheduleActiveAssistantRender();
+      refreshAgentLiveStrip();
+      const nextQueued = (agentState.queuedMessage || "").trim();
+      if (nextQueued) {
+        agentState.queuedMessage = "";
+        renderQueuedPromptChip();
+        setTimeout(() => sendAgentMessage(nextQueued), 60);
+      }
+    }
   }
 }
 
@@ -988,13 +1156,29 @@ function handleAgentSseEvent(ev, assistantMsg) {
     setAgentStreamStatus(ev.text || "处理中...", true);
     return;
   }
+  if (ev.type === "reasoning_delta") {
+    assistantMsg.reasoning = (assistantMsg.reasoning || "") + (ev.text || "");
+    setAgentStreamStatus("正在深度思考...", true);
+    scheduleActiveAssistantRender();
+    return;
+  }
   if (ev.type === "tool_start") {
-    setAgentStreamStatus(`调用 ${ev.name}...`, true);
+    assistantMsg._activeTools = assistantMsg._activeTools || [];
+    assistantMsg._activeTools.push({ id: ev.id, name: ev.name });
+    setAgentStreamStatus(`执行 ${ev.name}...`, true);
+    scheduleActiveAssistantRender();
     return;
   }
   if (ev.type === "tool_result") {
-    assistantMsg.tool_events.push({ id: ev.id, name: ev.name, summary: ev.summary, ok: ev.ok });
-    renderAgentMessages();
+    assistantMsg._activeTools = (assistantMsg._activeTools || []).filter(t => t.id !== ev.id && t.name !== ev.name);
+    assistantMsg.tool_events.push({
+      id: ev.id,
+      name: ev.name,
+      summary: ev.summary,
+      ok: ev.ok,
+      duration_ms: ev.duration_ms,
+    });
+    scheduleActiveAssistantRender();
     return;
   }
   if (ev.type === "ui_action") {
@@ -1002,23 +1186,31 @@ function handleAgentSseEvent(ev, assistantMsg) {
     const applied = applyAgentUiAction(actObj);
     const enriched = { ...actObj, _snapId: applied?.snapId || "" };
     assistantMsg.ui_actions.push(enriched);
-    renderAgentMessages();
+    scheduleActiveAssistantRender();
     return;
   }
   if (ev.type === "delta") {
     assistantMsg.content += ev.text || "";
-    renderAgentMessages();
+    setAgentStreamStatus("生成回复中...", true);
+    scheduleActiveAssistantRender();
     return;
   }
   if (ev.type === "done") {
-    if (ev.reply && !assistantMsg.content) assistantMsg.content = ev.reply;
-    renderAgentMessages(true);
+    assistantMsg._activeTools = [];
+    if (typeof ev.reply === "string" && ev.reply.trim()) {
+      assistantMsg.content = ev.reply;
+    }
+    if (ev.usage) assistantMsg.usage = ev.usage;
+    if (ev.context_budget) assistantMsg.context_budget = ev.context_budget;
+    if (ev.elapsed_ms) assistantMsg.elapsed_ms = ev.elapsed_ms;
+    scheduleActiveAssistantRender(true);
     renderQuickReplies(ev.quick_replies || []);
     return;
   }
   if (ev.type === "error") {
+    assistantMsg._activeTools = [];
     assistantMsg.content = `错误：${ev.message || "Agent 执行失败"}`;
-    renderAgentMessages(true);
+    scheduleActiveAssistantRender(true);
   }
 }
 
@@ -1087,11 +1279,22 @@ function handleAgentInputKeydown(e) {
 
 // ================= Persistent Sessions Management =================
 async function startNewAgentSession() {
+  clearQueuedAgentPrompt();
+  if (agentState.abortController) {
+    agentState.abortController.abort();
+    agentState.streaming = false;
+    agentState.abortController = null;
+  }
+  agentState.sessionLoadSeq += 1;
   agentState.sessionId = null;
   agentState.messages = [];
+  document.getElementById("agent-send-btn")?.classList.remove("hidden");
+  document.getElementById("agent-stop-btn")?.classList.add("hidden");
+  setAgentStreamStatus("", false);
   renderQuickReplies([]);
   renderAgentMessages();
   switchAgentPane("chat");
+  refreshAgentLiveStrip();
   document.getElementById("agent-input")?.focus();
 }
 
@@ -1128,9 +1331,20 @@ function renderAgentSessionsList() {
 }
 
 async function loadAgentSession(sessionId, switchToChat = true) {
+  const mySeq = ++agentState.sessionLoadSeq;
+  clearQueuedAgentPrompt();
+  if (agentState.abortController) {
+    agentState.abortController.abort();
+    agentState.streaming = false;
+    agentState.abortController = null;
+    document.getElementById("agent-send-btn")?.classList.remove("hidden");
+    document.getElementById("agent-stop-btn")?.classList.add("hidden");
+    setAgentStreamStatus("", false);
+  }
   try {
     const res = await fetch(`/api/agent/sessions/${encodeURIComponent(sessionId)}`);
     const data = await res.json();
+    if (mySeq !== agentState.sessionLoadSeq) return;
     if (res.ok && data.session) {
       agentState.sessionId = data.session.id;
       agentState.messages = Array.isArray(data.session.messages) ? data.session.messages : [];
@@ -1145,6 +1359,9 @@ async function loadAgentSession(sessionId, switchToChat = true) {
 }
 
 async function deleteAgentSessionById(sessionId) {
+  const lockKey = `del_sess_${sessionId}`;
+  if (agentState.busyOps.has(lockKey)) return;
+  agentState.busyOps.add(lockKey);
   try {
     await fetch(`/api/agent/sessions/${encodeURIComponent(sessionId)}`, { method: "DELETE" });
     agentState.sessions = agentState.sessions.filter(x => x.id !== sessionId);
@@ -1154,7 +1371,10 @@ async function deleteAgentSessionById(sessionId) {
       renderAgentMessages();
     }
     renderAgentSessionsList();
-  } catch (e) {}
+  } catch (e) {
+  } finally {
+    agentState.busyOps.delete(lockKey);
+  }
 }
 
 // ================= Progressive Disclosure SKILL.md Manager =================
@@ -1280,6 +1500,7 @@ function closeSkillEditor() {
 }
 
 async function saveEditingSkill() {
+  if (agentState.busyOps.has("save_skill")) return;
   const name = document.getElementById("skill-edit-name")?.value.trim() || "";
   const title = document.getElementById("skill-edit-title")?.value.trim() || "";
   const description = document.getElementById("skill-edit-desc")?.value.trim() || "";
@@ -1289,6 +1510,7 @@ async function saveEditingSkill() {
     showToast("请填写 Skill 标识名称与 Markdown 正文");
     return;
   }
+  agentState.busyOps.add("save_skill");
   try {
     const res = await fetch("/api/agent/skills", {
       method: "POST",
@@ -1302,11 +1524,14 @@ async function saveEditingSkill() {
     await fetchAndRenderAgentSkills();
   } catch (err) {
     showToast(err.message || "保存 Skill 失败");
+  } finally {
+    agentState.busyOps.delete("save_skill");
   }
 }
 
 async function deleteEditingSkill() {
-  if (!agentState.editingSkillSlug) return;
+  if (!agentState.editingSkillSlug || agentState.busyOps.has("del_skill")) return;
+  agentState.busyOps.add("del_skill");
   try {
     const res = await fetch(`/api/agent/skills/${encodeURIComponent(agentState.editingSkillSlug)}`, {
       method: "DELETE",
@@ -1320,5 +1545,7 @@ async function deleteEditingSkill() {
     await fetchAndRenderAgentSkills();
   } catch (err) {
     showToast(err.message || "删除 Skill 失败");
+  } finally {
+    agentState.busyOps.delete("del_skill");
   }
 }
