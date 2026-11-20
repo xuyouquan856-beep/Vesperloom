@@ -54,19 +54,19 @@ async def _post_nai_with_retry(
     op_label: str = "图像生成",
 ) -> httpx.Response:
     last_exc: Optional[Exception] = None
-    for attempt in range(2):
+    for attempt in range(3):
         try:
             r = await client.post(url, headers=headers, json=payload)
         except httpx.TimeoutException as exc:
             last_exc = exc
-            if attempt == 0:
-                await asyncio.sleep(1.5)
+            if attempt < 2:
+                await asyncio.sleep(2.0 * (attempt + 1))
                 continue
             raise NaiApiError(504, f"{op_label}连接 NovelAI 超时 (90s)，请检查网络后重试。")
         except httpx.TransportError as exc:
             last_exc = exc
-            if attempt == 0:
-                await asyncio.sleep(1.5)
+            if attempt < 2:
+                await asyncio.sleep(2.0 * (attempt + 1))
                 continue
             raise NaiApiError(502, f"{op_label}网络传输异常: {exc}")
 
@@ -74,8 +74,8 @@ async def _post_nai_with_retry(
             return r
 
         detail = _extract_nai_error_detail(r)
-        if r.status_code in (429, 502, 503, 504) and attempt == 0:
-            await asyncio.sleep(2.0 if r.status_code == 429 else 1.5)
+        if r.status_code in (429, 502, 503, 504) and attempt < 2:
+            await asyncio.sleep((4.0 if r.status_code == 429 else 2.0) * (attempt + 1))
             continue
 
         if r.status_code in (401, 403):
@@ -849,7 +849,14 @@ async def generate_artist_preview_card(artist_id: int, tag: str, sample_tags: st
     if not clean_tag.startswith("artist:"):
         clean_tag = f"artist:{clean_tag}"
 
-    base_sample = sample_tags.strip() or "1girl, solo, silver hair, blue eyes, serafuku, sunset, backlighting, detailed eyes, wind"
+    benchmark_subject = "1girl, solo, silver hair, blue eyes, serafuku, sunset, backlighting, detailed eyes, wind"
+    raw_sample = sample_tags.strip()
+    if not raw_sample:
+        base_sample = benchmark_subject
+    elif any(k in raw_sample.lower() for k in ("1girl", "1boy", "girl", "boy", "solo")):
+        base_sample = raw_sample
+    else:
+        base_sample = f"{benchmark_subject}, {raw_sample}"
     full_prompt = f"{clean_tag}, {base_sample}, masterpiece, best quality, very aesthetic, absurdres"
     uc = "lowres, artistic error, worst quality, bad quality, jpeg artifacts, very displeasing, bad anatomy, bad hands, missing fingers, extra digit, fewer digits, watermark, text"
 
