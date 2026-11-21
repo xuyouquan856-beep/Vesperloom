@@ -6,7 +6,7 @@
   <title>NAI Studio — 个人创作工作台</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23111318'/%3E%3Cpath d='M20 44V20l24 24V20' stroke='%23ffffff' stroke-width='6' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E" />
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="/static/styles.css?v=p2-19" />
+  <link rel="stylesheet" href="/static/styles.css?v=p2-21" />
 </head>
 <body class="lg:h-screen min-h-screen flex flex-col lg:overflow-hidden overflow-y-auto">
 
@@ -59,6 +59,9 @@
       <symbol id="ic-layers" viewBox="0 0 16 16"><path d="M8 2.3 13.5 5.4 8 8.5 2.5 5.4 8 2.3Z"/><path d="M2.5 8.5 8 11.6l5.5-3.1"/><path d="M2.5 11.2 8 14.3l5.5-3.1"/></symbol>
       <symbol id="ic-chevron-right" viewBox="0 0 16 16"><path d="M6 4l4 4-4 4"/></symbol>
       <symbol id="ic-back" viewBox="0 0 16 16"><path d="M9.8 3.8 5.6 8l4.2 4.2"/></symbol>
+      <symbol id="ic-dock-right" viewBox="0 0 16 16"><rect x="2" y="2.5" width="12" height="11" rx="1.5"/><path d="M9.5 2.5v11"/><rect x="9.5" y="2.5" width="4.5" height="11" rx="1" fill="currentColor" fill-opacity="0.22" stroke="none"/></symbol>
+      <symbol id="ic-float-win" viewBox="0 0 16 16"><rect x="2" y="3" width="9" height="8" rx="1.5" opacity="0.45"/><rect x="5" y="5.5" width="9" height="8" rx="1.5"/></symbol>
+      <symbol id="ic-sparkles" viewBox="0 0 16 16"><path d="M8 2l1.2 3.3L12.5 6.5 9.2 7.7 8 11 6.8 7.7 3.5 6.5 6.8 5.3 8 2Z"/><path d="M12.5 11v2.5M11.25 12.25h2.5"/></symbol>
     </defs>
   </svg>
 
@@ -98,35 +101,36 @@
       </div>
     </div>
 
-    <!-- 右：Opus 保护 + 账号遥测 + 外观与主题 + 历史栏开关 -->
-    <div class="flex items-center gap-2 text-[12px] relative shrink-0">
-      <button id="opus-guard-pill" onclick="toggleOpusGuard()" class="spring-btn inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] ui-chip whitespace-nowrap" title="Opus 0点数免费保护锁：开启后自动拦截任何会消耗付费点数的参数">
-        <svg class="ui-ic text-[var(--status-success)]" aria-hidden="true"><use href="#ic-shield"/></svg>
-        <span id="opus-guard-label">Opus 免费保护: 开</span>
-      </button>
+    <!-- 右：精简一体状态舱 + Agent 副驾 + 降噪图标工具 -->
+    <div class="flex items-center gap-1.5 text-[12px] relative shrink-0">
+      <div class="inline-flex items-center rounded-[7px] ui-chip p-0.5 gap-0.5">
+        <button id="opus-guard-pill" onclick="toggleOpusGuard()" class="spring-btn inline-flex items-center gap-1.5 px-2 py-0.5 rounded-[5px] hover:bg-[var(--surface-well-hover)] whitespace-nowrap" title="Opus 0点数免费保护锁：开启后自动拦截任何会消耗付费点数的参数">
+          <svg class="ui-ic text-[var(--status-success)]" aria-hidden="true"><use href="#ic-shield"/></svg>
+          <span id="opus-guard-label" class="text-[11.5px] font-medium">Opus 保护: 开</span>
+        </button>
+        <span class="h-3.5 w-px bg-[var(--border-hairline)] hidden xl:inline-block"></span>
+        <button onclick="refreshAccountStatus(true)" class="spring-btn hidden xl:inline-flex items-center gap-1.5 px-2 py-0.5 rounded-[5px] hover:bg-[var(--surface-well-hover)] font-mono text-[11px] whitespace-nowrap" title="点击同步 NovelAI 账号与 V5 周配额状态">
+          <span id="account-tier-badge" class="font-semibold text-[var(--text-primary)]">Opus</span>
+          <span class="opacity-30">·</span>
+          <span id="v5-quota-badge" class="text-[var(--text-secondary)]">V5 94%</span>
+          <span class="opacity-30">·</span>
+          <span class="text-[var(--text-muted)]">Anlas <strong id="anlas-display" class="text-[var(--text-primary)]">0</strong></span>
+        </button>
+      </div>
 
-      <button onclick="refreshAccountStatus(true)" class="spring-btn hidden xl:inline-flex items-center gap-2 px-2.5 py-1 rounded-[6px] ui-chip font-mono text-[11.5px] whitespace-nowrap" title="点击同步 NovelAI 账号与 V5 周配额状态">
-        <span id="account-tier-badge" class="font-semibold text-[var(--text-primary)]">Opus</span>
-        <span class="opacity-35">|</span>
-        <span id="v5-quota-badge" class="text-[var(--text-secondary)]">V5 剩余 94%</span>
-        <span class="opacity-35">|</span>
-        <span>Anlas <strong id="anlas-display" class="text-[var(--text-primary)]">0</strong></span>
-      </button>
-
-      <button id="toggle-agent-btn" type="button" onclick="toggleAgentWindow()" aria-pressed="false" class="spring-btn inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] ui-btn font-medium whitespace-nowrap" title="打开/收起悬浮 AI Agent 创作助手 (Alt+A)">
+      <button id="toggle-agent-btn" type="button" onclick="toggleAgentWindow()" aria-pressed="false" class="spring-btn inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] ui-btn-accent font-medium whitespace-nowrap" title="打开/收起 AI Agent 创作副驾 (Alt+A)">
         <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-agent"/></svg>
         <span>Agent</span>
         <span id="agent-topbar-dot" class="hidden w-1.5 h-1.5 rounded-full bg-[var(--status-success)]"></span>
       </button>
 
-      <button id="bg-toggle-btn" onclick="toggleBgMenu()" class="spring-btn inline-flex items-center gap-1.5 px-2 py-1 rounded-[6px] ui-btn whitespace-nowrap" title="画布底色与浮层通透度设置">
-        <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-sliders"/></svg>
-        <span class="hidden md:inline">外观</span>
+      <button id="bg-toggle-btn" onclick="toggleBgMenu()" aria-label="工作台外观定制" class="spring-btn w-7 h-7 rounded-[6px] ui-btn-ghost flex items-center justify-center text-[var(--text-secondary)]" title="工作台外观与画布底色定制">
+        <svg class="ui-ic" aria-hidden="true"><use href="#ic-sliders"/></svg>
       </button>
 
-      <button onclick="toggleTheme()" class="spring-btn inline-flex items-center gap-1.5 px-2 py-1 rounded-[6px] ui-btn text-[var(--text-secondary)] whitespace-nowrap" title="一键切换深色暗房 / 浅色制图模式">
-        <svg id="theme-icon" class="ui-ic-sm ui-ic" aria-hidden="true"><use id="theme-icon-use" href="#ic-sun"/></svg>
-        <span id="theme-label" class="hidden sm:inline">浅色模式</span>
+      <button onclick="toggleTheme()" aria-label="切换深浅色主题" class="spring-btn w-7 h-7 rounded-[6px] ui-btn-ghost flex items-center justify-center text-[var(--text-secondary)]" title="一键切换深色暗房 / 浅色制图模式">
+        <svg id="theme-icon" class="ui-ic" aria-hidden="true"><use id="theme-icon-use" href="#ic-sun"/></svg>
+        <span id="theme-label" class="sr-only">浅色模式</span>
       </button>
 
       <div id="topbar-right-toggle-wrap" class="flex items-center pl-1 border-l border-[var(--border-hairline)] shrink-0">
@@ -239,31 +243,40 @@
         <div class="grid grid-cols-5 gap-1" id="resolution-buttons"></div>
       </div>
 
-      <!-- 2. 左栏子标签切换器：分流减压，避免信息堆叠 -->
+      <!-- 2. 左栏子标签切换器：分流减压，柔和浮起胶囊（告别纯黑纯白硬块） -->
       <div class="px-3.5 py-2 border-b border-[var(--border-hairline)] shrink-0">
         <div class="ui-segmented rounded-[8px] p-0.5 grid grid-cols-3 gap-0.5 text-[12px]" role="tablist">
-          <button type="button" data-inspector="prompts" onclick="switchInspectorTab('prompts')" class="inspector-tab-btn py-1 rounded-[6px] font-medium bg-[var(--cta-bg)] text-[var(--cta-fg)] transition-colors">提示词</button>
-          <button type="button" data-inspector="sampling" onclick="switchInspectorTab('sampling')" class="inspector-tab-btn py-1 rounded-[6px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">采样与种子</button>
-          <button type="button" data-inspector="refs" onclick="switchInspectorTab('refs')" class="inspector-tab-btn py-1 rounded-[6px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">角色与参考 <span id="left-refs-badge" class="hidden font-mono text-[11px] opacity-85"></span></button>
+          <button type="button" data-inspector="prompts" onclick="switchInspectorTab('prompts')" class="inspector-tab-btn py-1 rounded-[6px] font-medium seg-pill-active transition-all">提示词</button>
+          <button type="button" data-inspector="sampling" onclick="switchInspectorTab('sampling')" class="inspector-tab-btn py-1 rounded-[6px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all">采样与种子</button>
+          <button type="button" data-inspector="refs" onclick="switchInspectorTab('refs')" class="inspector-tab-btn py-1 rounded-[6px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all">角色与参考 <span id="left-refs-badge" class="hidden font-mono text-[11px] opacity-85"></span></button>
         </div>
       </div>
 
       <!-- 3. 左栏检视内容区 -->
       <div class="flex-1 min-h-0 overflow-y-auto custom-scroll p-3.5">
 
-        <!-- 分栏 A：双模式提示词工坊（经典官网切换 / 四区块 AI 导演） + 偏好开关 -->
+        <!-- 分栏 A：双模式提示词工坊（支持工作台内联一键互切经典 / 四区块） -->
         <div id="inspector-pane-prompts" class="space-y-3">
+
+          <!-- 内联模式切换头：无需跳去设置页即可一键互切「经典」与「四区块」 -->
+          <div class="flex items-center justify-between gap-2 pb-1.5 border-b border-[var(--border-hairline)]">
+            <span class="text-[11.5px] font-medium text-[var(--text-muted)]">编辑器视图</span>
+            <div class="ui-segmented rounded-[6px] p-0.5 inline-flex items-center gap-0.5 text-[11.5px]">
+              <button type="button" id="wb-mode-pill-classic" onclick="setPromptWorkspaceMode('classic', true)" class="px-2 py-0.5 rounded-[4px] font-medium seg-pill-active transition-all">经典正/负</button>
+              <button type="button" id="wb-mode-pill-structured" onclick="setPromptWorkspaceMode('structured', true)" class="px-2 py-0.5 rounded-[4px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all">四区块导演</button>
+            </div>
+          </div>
 
           <!-- 模式 1：经典官网正/负向提示词互切工坊 -->
           <div id="prompt-mode-classic" class="space-y-3">
             <!-- 正/负向互斥切换条 + 语法规范状态 -->
             <div class="flex items-center justify-between gap-1.5">
               <div class="ui-segmented rounded-[7px] p-0.5 inline-flex items-center gap-0.5 text-[12px] min-w-0" role="tablist">
-                <button type="button" data-prompt-side="pos" onclick="switchPromptSide('pos')" class="prompt-side-btn px-2 py-1 rounded-[5px] font-medium bg-[var(--cta-bg)] text-[var(--cta-fg)] transition-colors inline-flex items-center gap-1 whitespace-nowrap">
+                <button type="button" data-prompt-side="pos" onclick="switchPromptSide('pos')" class="prompt-side-btn px-2.5 py-1 rounded-[5px] font-medium seg-pill-active transition-all inline-flex items-center gap-1 whitespace-nowrap">
                   <span>正向</span>
                   <span id="prompt-token-count" class="text-[11px] font-mono opacity-80">0</span>
                 </button>
-                <button type="button" data-prompt-side="uc" onclick="switchPromptSide('uc')" class="prompt-side-btn px-2 py-1 rounded-[5px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors inline-flex items-center gap-1 whitespace-nowrap">
+                <button type="button" data-prompt-side="uc" onclick="switchPromptSide('uc')" class="prompt-side-btn px-2.5 py-1 rounded-[5px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all inline-flex items-center gap-1 whitespace-nowrap">
                   <span>负面</span>
                   <span id="uc-token-count" class="text-[11px] font-mono opacity-75">0</span>
                 </button>
@@ -410,67 +423,82 @@
             </div>
           </div>
 
-          <!-- 模式 2：纯粹多段式四区块提示词工坊（可在设置与经典模式互切；Agent 独立悬浮协作） -->
-          <div id="prompt-mode-structured" class="hidden space-y-2.5">
-            <div class="flex items-center justify-between gap-2 text-[11.5px]">
+          <!-- 模式 2：纯粹多段式四区块提示词工坊（去套娃边框，采用一体多轨式分区） -->
+          <div id="prompt-mode-structured" class="hidden space-y-2">
+            <div class="flex items-center justify-between gap-2 text-[11.5px] pb-1">
               <div class="inline-flex items-center gap-1.5 min-w-0">
-                <span class="px-2 py-0.5 rounded-[5px] ui-badge text-[var(--text-primary)] font-medium whitespace-nowrap">四区块提示词</span>
-                <span id="structured-total-count" class="font-mono text-[11px] text-[var(--text-muted)]">0 tags</span>
+                <span class="text-[var(--text-secondary)] font-medium">四轨语义解耦</span>
+                <span id="structured-total-count" class="px-1.5 py-0.5 rounded-[4px] ui-badge font-mono text-[10.5px] text-[var(--text-muted)]">0 tags</span>
               </div>
               <div class="flex items-center gap-1.5 shrink-0">
-                <button id="structured-lint-pill" type="button" onclick="openAgentForPromptReview()" class="spring-btn inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-[5px] ui-btn text-[var(--status-success)]" title="点击打开 Agent 审阅当前四区块提示词">
-                  <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-check"/></svg>
-                  <span id="structured-lint-label">规范</span>
+                <button id="structured-lint-pill" type="button" onclick="openAgentForPromptReview()" class="spring-btn inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-[5px] ui-btn-accent" title="点击打开 Agent 审阅当前四区块提示词">
+                  <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-sparkles"/></svg>
+                  <span id="structured-lint-label">Agent 审阅</span>
                 </button>
-                <button type="button" onclick="switchTab('settings')" class="text-[var(--text-muted)] hover:text-[var(--text-primary)] underline-offset-2 hover:underline whitespace-nowrap" title="前往设置切换经典官网模式">切换模式</button>
               </div>
             </div>
 
             <!-- 区块 1：画师串 -->
-            <div id="block-card-artist" class="rounded-[8px] ui-subgroup p-2.5 space-y-1.5">
+            <div id="block-card-artist" class="rounded-[8px] py-1.5 space-y-1.5">
               <div class="flex items-center justify-between gap-1 text-[12px]">
-                <span class="font-semibold text-[var(--text-primary)]">1. 画师串 <span id="block-artist-count" class="font-mono text-[11px] text-[var(--text-muted)]">0</span></span>
+                <div class="inline-flex items-center gap-1.5">
+                  <span class="px-1.5 py-0.2 rounded-[4px] bg-[var(--accent-primary-tint)] text-[var(--accent-primary)] font-mono text-[10.5px] font-semibold">01</span>
+                  <span class="font-medium text-[var(--text-primary)]">画师串</span>
+                  <span id="block-artist-count" class="font-mono text-[11px] text-[var(--text-muted)]">0</span>
+                </div>
                 <div class="flex items-center gap-1">
-                  <button type="button" onclick="switchTab('artists')" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn text-[11px]">画师库 →</button>
+                  <button type="button" onclick="switchTab('artists')" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn-ghost text-[11px] text-[var(--accent-primary)]">画师库 →</button>
                   <button type="button" onclick="clearStructuredBlock('artist')" class="spring-btn px-1.5 py-0.5 rounded-[5px] ui-btn-ghost text-[11px] text-[var(--text-muted)] hover:text-[var(--status-danger)]">清空</button>
                 </div>
               </div>
-              <textarea id="block-artist-input" rows="2" oninput="syncStructuredToClassic()" spellcheck="false" placeholder="如：0.85::artist:rella::, 0.7::artist:ciloranko::" class="custom-scroll prompt-block-input w-full ui-well rounded-[6px] px-2.5 py-1.5 resize-y focus:outline-none placeholder:text-[var(--placeholder)]"></textarea>
+              <textarea id="block-artist-input" rows="2" oninput="syncStructuredToClassic()" spellcheck="false" placeholder="如：0.85::artist:rella::, 0.7::artist:ciloranko::" class="custom-scroll prompt-block-input w-full ui-well rounded-[7px] px-2.5 py-1.5 resize-y focus:outline-none placeholder:text-[var(--placeholder)]"></textarea>
             </div>
 
             <!-- 区块 2：人物相关 -->
-            <div id="block-card-character" class="rounded-[8px] ui-subgroup p-2.5 space-y-1.5">
+            <div id="block-card-character" class="rounded-[8px] pt-2 border-t border-[var(--border-hairline)] space-y-1.5">
               <div class="flex items-center justify-between gap-1 text-[12px]">
-                <span class="font-semibold text-[var(--text-primary)]">2. 人物相关 <span id="block-character-count" class="font-mono text-[11px] text-[var(--text-muted)]">0</span></span>
+                <div class="inline-flex items-center gap-1.5">
+                  <span class="px-1.5 py-0.2 rounded-[4px] bg-[var(--accent-primary-tint)] text-[var(--accent-primary)] font-mono text-[10.5px] font-semibold">02</span>
+                  <span class="font-medium text-[var(--text-primary)]">主体与角色</span>
+                  <span id="block-character-count" class="font-mono text-[11px] text-[var(--text-muted)]">0</span>
+                </div>
                 <div class="flex items-center gap-1">
-                  <button type="button" onclick="switchInspectorTab('refs')" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn text-[11px]">OC / 角色</button>
+                  <button type="button" onclick="switchInspectorTab('refs')" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn-ghost text-[11px]">OC / 分控</button>
                   <button type="button" onclick="clearStructuredBlock('character')" class="spring-btn px-1.5 py-0.5 rounded-[5px] ui-btn-ghost text-[11px] text-[var(--text-muted)] hover:text-[var(--status-danger)]">清空</button>
                 </div>
               </div>
-              <textarea id="block-character-input" rows="4" oninput="syncStructuredToClassic()" spellcheck="false" placeholder="人数、角色/OC、发色瞳色、表情眼神、动作交互、服饰配饰..." class="custom-scroll prompt-block-input w-full ui-well rounded-[6px] px-2.5 py-1.5 resize-y focus:outline-none placeholder:text-[var(--placeholder)]"></textarea>
+              <textarea id="block-character-input" rows="4" oninput="syncStructuredToClassic()" spellcheck="false" placeholder="人数、角色/OC、发色瞳色、表情眼神、动作交互、服饰配饰..." class="custom-scroll prompt-block-input w-full ui-well rounded-[7px] px-2.5 py-1.5 resize-y focus:outline-none placeholder:text-[var(--placeholder)]"></textarea>
             </div>
 
             <!-- 区块 3：光影与场景 -->
-            <div id="block-card-lighting" class="rounded-[8px] ui-subgroup p-2.5 space-y-1.5">
+            <div id="block-card-lighting" class="rounded-[8px] pt-2 border-t border-[var(--border-hairline)] space-y-1.5">
               <div class="flex items-center justify-between gap-1 text-[12px]">
-                <span class="font-semibold text-[var(--text-primary)]">3. 光影与场景 <span id="block-lighting-count" class="font-mono text-[11px] text-[var(--text-muted)]">0</span></span>
+                <div class="inline-flex items-center gap-1.5">
+                  <span class="px-1.5 py-0.2 rounded-[4px] bg-[var(--accent-primary-tint)] text-[var(--accent-primary)] font-mono text-[10.5px] font-semibold">03</span>
+                  <span class="font-medium text-[var(--text-primary)]">光影与场景</span>
+                  <span id="block-lighting-count" class="font-mono text-[11px] text-[var(--text-muted)]">0</span>
+                </div>
                 <div class="flex items-center gap-1">
                   <button type="button" onclick="clearStructuredBlock('lighting')" class="spring-btn px-1.5 py-0.5 rounded-[5px] ui-btn-ghost text-[11px] text-[var(--text-muted)] hover:text-[var(--status-danger)]">清空</button>
                 </div>
               </div>
-              <textarea id="block-lighting-input" rows="3" oninput="syncStructuredToClassic()" spellcheck="false" placeholder="镜头景别、环境地点、时段天气、光影氛围、美学质量词..." class="custom-scroll prompt-block-input w-full ui-well rounded-[6px] px-2.5 py-1.5 resize-y focus:outline-none placeholder:text-[var(--placeholder)]"></textarea>
+              <textarea id="block-lighting-input" rows="3" oninput="syncStructuredToClassic()" spellcheck="false" placeholder="镜头景别、环境地点、时段天气、光影氛围、美学质量词..." class="custom-scroll prompt-block-input w-full ui-well rounded-[7px] px-2.5 py-1.5 resize-y focus:outline-none placeholder:text-[var(--placeholder)]"></textarea>
             </div>
 
             <!-- 区块 4：负面提示词 -->
-            <div id="block-card-negative" class="rounded-[8px] ui-subgroup p-2.5 space-y-1.5">
+            <div id="block-card-negative" class="rounded-[8px] pt-2 border-t border-[var(--border-hairline)] space-y-1.5">
               <div class="flex items-center justify-between gap-1 text-[12px]">
-                <span class="font-semibold text-[var(--text-primary)]">4. 负面提示词 <span id="block-negative-count" class="font-mono text-[11px] text-[var(--text-muted)]">0</span></span>
+                <div class="inline-flex items-center gap-1.5">
+                  <span class="px-1.5 py-0.2 rounded-[4px] ui-badge font-mono text-[10.5px] font-semibold text-[var(--text-muted)]">04</span>
+                  <span class="font-medium text-[var(--text-primary)]">负面规避 (UC)</span>
+                  <span id="block-negative-count" class="font-mono text-[11px] text-[var(--text-muted)]">0</span>
+                </div>
                 <div class="flex items-center gap-1">
-                  <button type="button" onclick="selectUcPreset('heavy');syncClassicToStructured()" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn text-[11px]">强力预设</button>
+                  <button type="button" onclick="selectUcPreset('heavy');syncClassicToStructured()" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn-ghost text-[11px]">强力预设</button>
                   <button type="button" onclick="clearStructuredBlock('negative')" class="spring-btn px-1.5 py-0.5 rounded-[5px] ui-btn-ghost text-[11px] text-[var(--text-muted)] hover:text-[var(--status-danger)]">清空</button>
                 </div>
               </div>
-              <textarea id="block-negative-input" rows="3" oninput="syncStructuredToClassic()" spellcheck="false" placeholder="lowres, bad anatomy, bad hands, blurry..." class="custom-scroll prompt-block-input w-full ui-well rounded-[6px] px-2.5 py-1.5 resize-y focus:outline-none placeholder:text-[var(--placeholder)]"></textarea>
+              <textarea id="block-negative-input" rows="2" oninput="syncStructuredToClassic()" spellcheck="false" placeholder="lowres, bad anatomy, bad hands, blurry..." class="custom-scroll prompt-block-input w-full ui-well rounded-[7px] px-2.5 py-1.5 resize-y focus:outline-none placeholder:text-[var(--placeholder)]"></textarea>
             </div>
           </div>
 
@@ -607,6 +635,37 @@
                 <span class="text-[12px]">Decrisp</span>
               </div>
             </div>
+
+            <!-- 采样风味快捷预设（消除下半区留白，提供高频专业调校一键直达） -->
+            <div class="space-y-2 pt-3 border-t border-[var(--border-hairline)]">
+              <div class="flex items-center justify-between text-[12px] text-[var(--text-muted)]">
+                <span>官方推荐采样方案</span>
+                <span class="font-mono text-[10.5px]">0 Anlas</span>
+              </div>
+              <div class="grid grid-cols-1 gap-1.5">
+                <button type="button" onclick="applyQuickSamplingPreset('standard')" class="spring-btn p-2.5 rounded-[8px] ui-subgroup hover:bg-[var(--surface-well-hover)] text-left flex items-center justify-between gap-2 transition-colors">
+                  <div>
+                    <div class="text-[12px] font-medium text-[var(--text-primary)]">标准平衡 · Euler Ancestral</div>
+                    <div class="text-[11px] text-[var(--text-muted)]">28 步 · CFG 5.0 · Karras（最稳健通用方案）</div>
+                  </div>
+                  <span class="font-mono text-[10.5px] px-1.5 py-0.5 rounded-[4px] ui-badge text-[var(--status-success)]">默认</span>
+                </button>
+                <button type="button" onclick="applyQuickSamplingPreset('detail')" class="spring-btn p-2.5 rounded-[8px] ui-subgroup hover:bg-[var(--surface-well-hover)] text-left flex items-center justify-between gap-2 transition-colors">
+                  <div>
+                    <div class="text-[12px] font-medium text-[var(--text-primary)]">细腻笔触 · DPM++ 2S Ancestral</div>
+                    <div class="text-[11px] text-[var(--text-muted)]">28 步 · CFG 5.5 · Rescale 0.15（适合厚涂与复杂背景）</div>
+                  </div>
+                  <span class="font-mono text-[10.5px] px-1.5 py-0.5 rounded-[4px] ui-badge text-[var(--text-secondary)]">细腻</span>
+                </button>
+                <button type="button" onclick="applyQuickSamplingPreset('soft')" class="spring-btn p-2.5 rounded-[8px] ui-subgroup hover:bg-[var(--surface-well-hover)] text-left flex items-center justify-between gap-2 transition-colors">
+                  <div>
+                    <div class="text-[12px] font-medium text-[var(--text-primary)]">清透水彩 · 防过曝低引导</div>
+                    <div class="text-[11px] text-[var(--text-muted)]">28 步 · CFG 4.5 · Rescale 0.20（保留通透高光层次）</div>
+                  </div>
+                  <span class="font-mono text-[10.5px] px-1.5 py-0.5 rounded-[4px] ui-badge text-[var(--text-secondary)]">通透</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -732,7 +791,7 @@
       <div class="absolute top-3 left-3 right-3 z-20 flex items-center justify-between gap-2 pointer-events-none">
         <div class="pointer-events-auto studio-hud rounded-[8px] px-1.5 py-1 flex items-center gap-1.5 min-w-0">
           <button id="stage-info-pill" type="button" onclick="switchInspectorTab('sampling')" class="spring-btn h-7 px-2 rounded-[5px] hover:bg-[var(--surface-well-hover)] text-[11.5px] text-[var(--text-secondary)] font-mono truncate cursor-pointer" title="点击快速跳转至采样与步数参数">
-            V5 Full · 832×1216 · Steps 28
+            V5 Full · 832×1216 · 28步
           </button>
           <span id="stage-mode-pill" class="px-2 py-0.5 rounded-[5px] bg-[var(--accent-tint)] text-[var(--text-primary)] text-[11px] font-medium whitespace-nowrap shrink-0">
             模式：文生图
@@ -760,7 +819,7 @@
           </button>
           <button id="immersion-btn" type="button" onclick="toggleImmersionMode()" aria-pressed="false" class="spring-btn h-7 px-2 rounded-[5px] ui-btn-ghost inline-flex items-center gap-1.5 text-[12px] whitespace-nowrap" title="隐藏左右面板专注看图 (Esc 退出)">
             <svg class="ui-ic" aria-hidden="true"><use href="#ic-maximize"/></svg>
-            <span id="immersion-btn-label" class="hidden lg:inline">沉浸</span>
+            <span id="immersion-btn-label" class="hidden xl:inline">沉浸</span>
           </button>
 
           <span class="h-3.5 w-px bg-[var(--border-hairline)] mx-1 shrink-0"></span>
@@ -784,14 +843,21 @@
         <div id="stage-pan-wrap" class="relative w-full h-full flex items-center justify-center overflow-hidden">
           <div id="artwork-stage" class="relative flex items-center justify-center max-w-full max-h-full transition-transform duration-75">
             <img id="stage-img" alt="" onerror="window.handleStageImageError && handleStageImageError()" ondblclick="openLightbox()" class="hidden max-h-[calc(100vh-204px)] max-w-full rounded-[8px] object-contain" />
-            <div id="stage-empty" class="text-center space-y-3 p-8">
-              <div class="inline-flex items-center justify-center w-12 h-12 rounded-[12px] ui-badge text-[var(--text-secondary)]">
+            <div id="stage-empty" class="text-center max-w-[360px] rounded-[16px] border border-dashed border-[var(--border-control)] bg-[var(--surface-subgroup)] p-7 space-y-4">
+              <div class="inline-flex items-center justify-center w-11 h-11 rounded-[12px] bg-[var(--accent-primary-tint)] text-[var(--accent-primary)]">
                 <svg class="ui-ic ui-ic-lg" aria-hidden="true"><use href="#ic-image"/></svg>
               </div>
-              <div class="flex items-center justify-center gap-2 ui-body font-medium text-[var(--text-secondary)]">
-                <span>按 <kbd class="px-2 py-0.5 rounded-[6px] ui-badge font-mono text-[12px] text-[var(--text-primary)]">Ctrl+Enter</kbd> 或点击「生成图片」</span>
-                <button type="button" class="ui-info-btn" title="支持拖入 PNG 读取参数，或按 Ctrl+V 粘贴剪贴板图像进图生图" aria-label="画布快捷操作说明">
-                  <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-info"/></svg>
+              <div class="space-y-1">
+                <div class="ui-section text-[var(--text-primary)]">暗房画布就绪</div>
+                <p class="text-[12px] text-[var(--text-muted)] leading-relaxed">
+                  按 <kbd class="px-1.5 py-0.5 rounded-[4px] ui-badge font-mono text-[11px] text-[var(--text-primary)]">Ctrl+Enter</kbd> 立即渲染，或拖入本地 PNG 自动解析提示词与参数
+                </p>
+              </div>
+              <div class="flex items-center justify-center gap-2 flex-wrap pt-1">
+                <button type="button" onclick="triggerGenerate()" class="liquid-cta spring-btn px-3 py-1 rounded-[6px] text-[12px] font-semibold">立即生成</button>
+                <button type="button" onclick="toggleAgentWindow(true)" class="spring-btn inline-flex items-center gap-1 px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">
+                  <svg class="ui-ic-sm ui-ic text-[var(--accent-primary)]" aria-hidden="true"><use href="#ic-agent"/></svg>
+                  <span>Agent 构思</span>
                 </button>
               </div>
             </div>
@@ -902,15 +968,30 @@
           <button onclick="setWorkbenchAction('generate')" class="spring-btn px-2 py-1 rounded-[6px] ui-btn text-[12px]">退出</button>
         </div>
 
-        <!-- 纯净画布模式与图像处理工具条（不再混入主生成按钮） -->
-        <div class="pointer-events-auto studio-hud rounded-[10px] px-2 py-1 flex items-center justify-center gap-1 flex-wrap">
-          <button id="act-btn-generate" onclick="setWorkbenchAction('generate')" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn-ghost is-active text-[12px] whitespace-nowrap">文生图</button>
-          <button id="act-btn-img2img" onclick="setWorkbenchAction('img2img')" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn-ghost text-[12px] whitespace-nowrap">图生图</button>
-          <button id="act-btn-infill" onclick="setWorkbenchAction('infill')" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn-ghost text-[12px] whitespace-nowrap">局部重绘</button>
-          <button id="act-btn-outpaint" onclick="setWorkbenchAction('outpaint')" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn-ghost text-[12px] whitespace-nowrap">扩图</button>
+        <!-- 纯净画布模式与图像处理悬浮胶囊岛（Floating Glass Pill） -->
+        <div class="pointer-events-auto studio-hud rounded-[12px] px-2 py-1 flex items-center justify-center gap-1 flex-wrap">
+          <button id="act-btn-generate" onclick="setWorkbenchAction('generate')" class="spring-btn inline-flex items-center gap-1 px-2.5 py-1 rounded-[7px] ui-btn-ghost is-active text-[12px] whitespace-nowrap">
+            <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-sparkles"/></svg>
+            <span>文生图</span>
+          </button>
+          <button id="act-btn-img2img" onclick="setWorkbenchAction('img2img')" class="spring-btn inline-flex items-center gap-1 px-2.5 py-1 rounded-[7px] ui-btn-ghost text-[12px] whitespace-nowrap">
+            <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-image"/></svg>
+            <span>图生图</span>
+          </button>
+          <button id="act-btn-infill" onclick="setWorkbenchAction('infill')" class="spring-btn inline-flex items-center gap-1 px-2.5 py-1 rounded-[7px] ui-btn-ghost text-[12px] whitespace-nowrap">
+            <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-brush"/></svg>
+            <span>局部重绘</span>
+          </button>
+          <button id="act-btn-outpaint" onclick="setWorkbenchAction('outpaint')" class="spring-btn inline-flex items-center gap-1 px-2.5 py-1 rounded-[7px] ui-btn-ghost text-[12px] whitespace-nowrap">
+            <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-crop"/></svg>
+            <span>扩图</span>
+          </button>
           <span class="h-3.5 w-px bg-[var(--border-hairline)] mx-0.5 shrink-0"></span>
           <div class="relative">
-            <button onclick="toggleDirectorMenu()" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn-ghost text-[12px] whitespace-nowrap" title="对当前画布执行线稿/上色/表情等后处理">Director ▾</button>
+            <button onclick="toggleDirectorMenu()" class="spring-btn inline-flex items-center gap-1 px-2.5 py-1 rounded-[7px] ui-btn-ghost text-[12px] whitespace-nowrap" title="对当前画布执行线稿/上色/表情等后处理">
+              <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-compass"/></svg>
+              <span>Director ▾</span>
+            </button>
             <div id="director-menu" class="hidden absolute bottom-10 left-0 w-56 liquid-popover rounded-[10px] p-1 space-y-1 z-50 text-[13px]">
               <div class="px-2 py-1 text-[12px] text-[var(--text-muted)] border-b border-[var(--border-hairline)]">对当前画布执行 Director 处理</div>
               <button onclick="runDirectorTool('lineart')" class="ui-menu-item w-full flex justify-between items-center px-3 py-1.5">
@@ -960,8 +1041,8 @@
   </main>
 
   <!-- ================= TAB 2: 画师图鉴 & 混搭调音台 ================= -->
-  <main id="view-artists" class="hidden relative z-10 flex-1 min-h-0 flex flex-col lg:flex-row">
-    <section class="flex-1 studio-canvas-grid flex flex-col min-h-0">
+  <main id="view-artists" class="hidden relative z-10 flex-1 min-h-0 min-w-0 flex flex-col lg:flex-row overflow-hidden">
+    <section class="flex-1 min-w-0 studio-canvas-grid flex flex-col min-h-0">
       <div class="relative z-30 studio-panel px-4 py-3 border-b border-[var(--border-hairline)] flex flex-col gap-2 shrink-0">
         <div class="flex flex-wrap items-center justify-between gap-2.5">
           <div class="flex items-center gap-1.5 flex-wrap" id="artist-cat-pills"></div>
@@ -988,7 +1069,7 @@
             <button onclick="openArtistModal()" class="liquid-cta spring-btn px-3 py-1 rounded-[6px] text-[12.5px] font-semibold">+ 新增画师</button>
           </div>
         </div>
-        <div id="artist-style-tag-pills" class="flex items-center gap-1.5 flex-wrap text-[11.5px]"></div>
+        <div id="artist-style-tag-pills" class="flex items-center gap-1.5 overflow-x-auto no-scrollbar whitespace-nowrap text-[11.5px] py-0.5"></div>
       </div>
 
       <div class="flex-1 min-h-0 overflow-y-auto custom-scroll p-4">
@@ -996,7 +1077,7 @@
       </div>
     </section>
 
-    <aside class="lg:w-[372px] studio-panel border-t lg:border-t-0 lg:border-l border-[var(--border-hairline)] p-4 flex flex-col justify-between min-h-0 shrink-0 gap-3">
+    <aside class="lg:w-[344px] xl:w-[372px] min-w-0 studio-panel border-t lg:border-t-0 lg:border-l border-[var(--border-hairline)] p-4 flex flex-col justify-between min-h-0 shrink-0 gap-3">
       <div class="space-y-3 flex-1 min-h-0 overflow-y-auto custom-scroll pr-1">
         <div class="flex items-center justify-between pb-2.5 border-b border-[var(--border-hairline)]">
           <div class="inline-flex items-center gap-1.5">
@@ -1107,154 +1188,184 @@
     </div>
   </main>
 
-  <!-- ================= TAB 4: 设置与原生 MCP Agent 控制台 ================= -->
-  <main id="view-settings" class="hidden relative z-10 flex-1 min-h-0 studio-canvas-grid p-5 overflow-y-auto custom-scroll">
-    <div class="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-5">
+  <!-- ================= TAB 4: 设置与原生 MCP Agent 控制台（桌面级左导右栏架构） ================= -->
+  <main id="view-settings" class="hidden relative z-10 flex-1 min-h-0 studio-canvas-grid p-4 sm:p-6 overflow-y-auto custom-scroll">
+    <div class="max-w-5xl mx-auto flex flex-col lg:flex-row gap-6 items-start">
 
-      <div class="min-w-0 md:col-span-2 studio-panel rounded-[12px] border border-[var(--border-hairline)] p-5 space-y-4">
-        <div class="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-[var(--border-hairline)]">
-          <div>
-            <h3 class="ui-title">工作台提示词模式 & LLM 智能导演 Agent</h3>
-            <p class="text-[12px] text-[var(--text-muted)] mt-0.5">切换工作台提示词窗口样式，并接入 OpenAI 兼容大模型驱动知识检索与四区块自动生成。</p>
-          </div>
-          <span id="settings-llm-status-pill" class="px-2 py-0.5 rounded-[6px] ui-badge text-[var(--text-secondary)] text-[12px] font-mono shrink-0">未测试</span>
-        </div>
+      <!-- 左侧轻量章节锚点栏 -->
+      <aside class="w-full lg:w-52 studio-panel rounded-[12px] border border-[var(--border-hairline)] p-3 space-y-1 shrink-0 lg:sticky lg:top-0">
+        <div class="px-2.5 py-1.5 text-[11px] font-mono uppercase tracking-wider text-[var(--text-muted)]">Preferences</div>
+        <a href="#sec-settings-agent" class="flex items-center gap-2 px-2.5 py-1.5 rounded-[7px] text-[12.5px] font-medium text-[var(--text-primary)] bg-[var(--surface-subgroup)]">
+          <svg class="ui-ic-sm ui-ic text-[var(--accent-primary)]" aria-hidden="true"><use href="#ic-agent"/></svg>
+          <span>提示词模式与 LLM</span>
+        </a>
+        <a href="#sec-settings-nai" class="flex items-center gap-2 px-2.5 py-1.5 rounded-[7px] text-[12.5px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subgroup)] transition-colors">
+          <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-shield"/></svg>
+          <span>NovelAI 接口与存储</span>
+        </a>
+        <a href="#sec-settings-mcp" class="flex items-center gap-2 px-2.5 py-1.5 rounded-[7px] text-[12.5px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subgroup)] transition-colors">
+          <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-layers"/></svg>
+          <span>原生 MCP 控制台</span>
+        </a>
+      </aside>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <!-- 左列：工作台窗口切换 + Knowledge Switch -->
-          <div class="space-y-3.5">
-            <div class="space-y-2">
-              <div class="text-[12.5px] font-medium">工作台提示词窗口模式</div>
-              <div class="grid grid-cols-2 gap-2">
-                <button type="button" id="mode-btn-classic" onclick="setPromptWorkspaceMode('classic', true)" class="spring-btn p-3 rounded-[9px] ui-btn text-left space-y-1">
-                  <div class="font-semibold text-[13px]">经典官网模式</div>
-                  <div class="text-[11.5px] text-[var(--text-muted)] leading-snug">正/负面切换，高密度词条胶囊、权重语法与静音标红。</div>
-                </button>
-                <button type="button" id="mode-btn-structured" onclick="setPromptWorkspaceMode('structured', true)" class="spring-btn p-3 rounded-[9px] ui-btn text-left space-y-1">
-                  <div class="font-semibold text-[13px]">四区块多段式</div>
-                  <div class="text-[11.5px] text-[var(--text-muted)] leading-snug">画师串 / 人物 / 光影 / 负面清晰分区，与悬浮 Agent 实时联动。</div>
-                </button>
-              </div>
+      <!-- 右侧单栏聚焦配置区 -->
+      <div class="flex-1 min-w-0 w-full space-y-5">
+
+        <div id="sec-settings-agent" class="min-w-0 studio-panel rounded-[12px] border border-[var(--border-hairline)] p-5 space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-[var(--border-hairline)]">
+            <div>
+              <h3 class="ui-title">工作台提示词模式 & LLM 智能导演 Agent</h3>
+              <p class="text-[12px] text-[var(--text-muted)] mt-0.5">切换工作台提示词窗口样式，并接入 OpenAI 兼容大模型驱动知识检索与四区块自动生成。</p>
             </div>
-
-            <div class="rounded-[8px] ui-subgroup p-3 flex items-center justify-between gap-2">
-              <div>
-                <div class="text-[13px] font-medium">启用内置 NAI 知识检索 Agent</div>
-                <div class="text-[11.5px] text-[var(--text-muted)]">生成前自动检索画师库、Danbooru 词库、V5/V4.5 规则并执行语法校验。</div>
-              </div>
-              <div id="settings-llm-agent-switch" role="switch" tabindex="0" aria-checked="true" onclick="toggleLlmKnowledgeAgent()" class="glass-switch on shrink-0"></div>
-            </div>
+            <span id="settings-llm-status-pill" class="px-2.5 py-0.5 rounded-[6px] ui-badge text-[var(--text-secondary)] text-[12px] font-mono shrink-0">未测试</span>
           </div>
 
-          <!-- 右列：LLM API 与模型配置 -->
-          <div class="space-y-2.5">
-            <div class="space-y-1">
-              <label class="text-[12.5px] font-medium">LLM API Base URL (OpenAI 兼容)</label>
-              <input id="settings-llm-url" type="text" placeholder="https://maas.qianwenaiapi.com/compatible-mode/v1" class="w-full ui-well rounded-[6px] px-3 py-1.5 font-mono text-[12.5px]" />
-            </div>
-            <div class="space-y-1">
-              <label class="text-[12.5px] font-medium">LLM API Key</label>
-              <input id="settings-llm-key" type="password" placeholder="sk-..." class="w-full ui-well rounded-[6px] px-3 py-1.5 font-mono text-[12.5px]" />
-            </div>
-            <div class="space-y-1">
-              <div class="flex items-center justify-between">
-                <label class="text-[12.5px] font-medium">推理模型 (Model ID)</label>
-                <button type="button" onclick="refreshLlmModels()" class="spring-btn text-[11.5px] px-2 py-0.5 rounded-[5px] ui-btn">拉取模型列表</button>
-              </div>
-              <div class="flex gap-2">
-                <div class="relative flex-1" id="llm-model-select-wrap">
-                  <button type="button" onclick="toggleGlassSelect('llm-model-select')" id="llm-model-select-trigger" class="glass-select-trigger !py-1.5 !px-2.5 !text-[12.5px]">
-                    <span id="llm-model-select-label" class="truncate font-mono">qwen4-max</span>
-                    <span class="glass-select-chevron">▾</span>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <!-- 左列：工作台窗口切换 + Knowledge Switch -->
+            <div class="space-y-3.5">
+              <div class="space-y-2">
+                <div class="text-[12.5px] font-medium">工作台提示词窗口模式（亦可在工作台左栏顶部一键切换）</div>
+                <div class="grid grid-cols-2 gap-2">
+                  <button type="button" id="mode-btn-classic" onclick="setPromptWorkspaceMode('classic', true)" class="spring-btn p-3 rounded-[9px] ui-btn text-left space-y-1">
+                    <div class="font-semibold text-[13px]">经典官网模式</div>
+                    <div class="text-[11.5px] text-[var(--text-muted)] leading-snug">正/负面切换，高密度词条胶囊、权重语法与静音标红。</div>
                   </button>
+                  <button type="button" id="mode-btn-structured" onclick="setPromptWorkspaceMode('structured', true)" class="spring-btn p-3 rounded-[9px] ui-btn text-left space-y-1">
+                    <div class="font-semibold text-[13px]">四区块多段式</div>
+                    <div class="text-[11.5px] text-[var(--text-muted)] leading-snug">画师串 / 人物 / 光影 / 负面四轨分区，与 Agent 实时联动。</div>
+                  </button>
+                </div>
+              </div>
+
+              <div class="rounded-[8px] ui-subgroup p-3 flex items-center justify-between gap-2">
+                <div>
+                  <div class="text-[13px] font-medium">启用内置 NAI 知识检索 Agent</div>
+                  <div class="text-[11.5px] text-[var(--text-muted)]">生成前自动检索画师库、Danbooru 词库、V5/V4.5 规则并执行语法校验。</div>
+                </div>
+                <div id="settings-llm-agent-switch" role="switch" tabindex="0" aria-checked="true" onclick="toggleLlmKnowledgeAgent()" class="glass-switch on shrink-0"></div>
+              </div>
+            </div>
+
+            <!-- 右列：LLM API 与一体化 Combobox 模型配置 -->
+            <div class="space-y-2.5">
+              <div class="space-y-1">
+                <label class="text-[12.5px] font-medium">LLM API Base URL (OpenAI 兼容)</label>
+                <input id="settings-llm-url" type="text" placeholder="https://maas.qianwenaiapi.com/compatible-mode/v1" class="w-full ui-well rounded-[6px] px-3 py-1.5 font-mono text-[12.5px]" />
+              </div>
+              <div class="space-y-1">
+                <label class="text-[12.5px] font-medium">LLM API Key</label>
+                <input id="settings-llm-key" type="password" placeholder="sk-..." class="w-full ui-well rounded-[6px] px-3 py-1.5 font-mono text-[12.5px]" />
+              </div>
+              <div class="space-y-1">
+                <div class="flex items-center justify-between">
+                  <label class="text-[12.5px] font-medium">推理模型 (Model ID · 支持下拉或直接输入)</label>
+                  <button type="button" onclick="refreshLlmModels()" class="spring-btn text-[11.5px] px-2 py-0.5 rounded-[5px] ui-btn">拉取模型列表</button>
+                </div>
+                <!-- 一体化 Combobox：消除并排两个重复 qwen4-max 输入框 -->
+                <div class="relative" id="llm-model-select-wrap">
+                  <div class="flex items-center ui-well rounded-[6px] pr-1">
+                    <input id="settings-llm-model-custom" type="text" placeholder="输入或选择模型 ID，如 qwen4-max" oninput="state.config.llm_model = this.value.trim() || state.config.llm_model" class="flex-1 min-w-0 bg-transparent px-3 py-1.5 font-mono text-[12.5px] focus:outline-none" />
+                    <button type="button" onclick="toggleGlassSelect('llm-model-select')" id="llm-model-select-trigger" class="spring-btn px-2 py-1 rounded-[5px] hover:bg-[var(--surface-well-hover)] text-[var(--text-secondary)] flex items-center gap-1 shrink-0" title="展开可用模型列表">
+                      <span id="llm-model-select-label" class="sr-only">qwen4-max</span>
+                      <span class="text-[11px] text-[var(--text-muted)]">列表</span>
+                      <span class="glass-select-chevron">▾</span>
+                    </button>
+                  </div>
                   <div id="llm-model-select-menu" class="glass-select-menu liquid-popover hidden custom-scroll"></div>
                 </div>
-                <input id="settings-llm-model-custom" type="text" placeholder="或手动输入模型名" class="w-40 ui-well rounded-[6px] px-2.5 py-1.5 font-mono text-[12px]" />
               </div>
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-0.5">
-              <div>
-                <div class="flex items-center justify-between gap-1 mb-1">
-                  <label class="text-[12px] text-[var(--text-secondary)]">上下文预算 (Tokens)</label>
-                  <div class="inline-flex gap-1 text-[10.5px] font-mono">
-                    <button type="button" onclick="applyLlmContextPreset(32000)" class="px-1.5 py-0.5 rounded-[4px] ui-btn">32K</button>
-                    <button type="button" onclick="applyLlmContextPreset(100000)" class="px-1.5 py-0.5 rounded-[4px] ui-btn">100K</button>
-                    <button type="button" onclick="applyLlmContextPreset(256000)" class="px-1.5 py-0.5 rounded-[4px] ui-btn">256K</button>
-                    <button type="button" onclick="applyLlmContextPreset(1000000)" class="px-1.5 py-0.5 rounded-[4px] ui-btn">1M</button>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div class="space-y-1">
+                  <div class="flex items-center justify-between gap-1 flex-wrap">
+                    <label class="text-[12px] text-[var(--text-secondary)] whitespace-nowrap">上下文预算 (Tokens)</label>
+                    <div class="inline-flex gap-1 text-[10.5px] font-mono">
+                      <button type="button" onclick="applyLlmContextPreset(32000)" class="px-1.5 py-0.5 rounded-[4px] ui-btn">32K</button>
+                      <button type="button" onclick="applyLlmContextPreset(100000)" class="px-1.5 py-0.5 rounded-[4px] ui-btn">100K</button>
+                      <button type="button" onclick="applyLlmContextPreset(256000)" class="px-1.5 py-0.5 rounded-[4px] ui-btn">256K</button>
+                      <button type="button" onclick="applyLlmContextPreset(1000000)" class="px-1.5 py-0.5 rounded-[4px] ui-btn">1M</button>
+                    </div>
                   </div>
+                  <input id="settings-llm-context" type="number" min="8000" max="1000000" step="8000" value="100000" class="w-full ui-well rounded-[6px] px-2.5 py-1.5 font-mono text-[12px]" />
                 </div>
-                <input id="settings-llm-context" type="number" min="8000" max="1000000" step="8000" value="100000" class="w-full ui-well rounded-[6px] px-2.5 py-1.5 font-mono text-[12px]" />
+                <div class="space-y-1">
+                  <div class="flex items-center justify-between gap-1 flex-wrap">
+                    <label class="text-[12px] text-[var(--text-secondary)] whitespace-nowrap">单轮最大输出</label>
+                    <span class="text-[10.5px] text-[var(--text-muted)] font-mono">自动降级兼容</span>
+                  </div>
+                  <input id="settings-llm-max-output" type="number" min="2048" max="128000" step="2048" value="100000" class="w-full ui-well rounded-[6px] px-2.5 py-1.5 font-mono text-[12px]" />
+                </div>
               </div>
-              <div>
-                <div class="flex items-center justify-between gap-1 mb-1">
-                  <label class="text-[12px] text-[var(--text-secondary)]">单轮最大输出 (含思考链)</label>
-                  <span class="text-[10.5px] text-[var(--text-muted)] font-mono">自动降级兼容</span>
-                </div>
-                <input id="settings-llm-max-output" type="number" min="2048" max="128000" step="2048" value="100000" class="w-full ui-well rounded-[6px] px-2.5 py-1.5 font-mono text-[12px]" />
+              <div class="flex flex-wrap gap-2 pt-1.5">
+                <button type="button" onclick="saveLlmSettings()" class="liquid-cta spring-btn px-4 py-1.5 rounded-[6px] text-[12.5px] font-semibold">保存 AI 配置</button>
+                <button type="button" onclick="testLlmConnection()" class="spring-btn px-3 py-1.5 rounded-[6px] ui-btn text-[12.5px]">测试模型连通性</button>
               </div>
             </div>
-            <div class="flex flex-wrap gap-2 pt-1">
-              <button type="button" onclick="saveLlmSettings()" class="liquid-cta spring-btn px-4 py-1.5 rounded-[6px] text-[12.5px] font-semibold">保存 AI 配置</button>
-              <button type="button" onclick="testLlmConnection()" class="spring-btn px-3 py-1.5 rounded-[6px] ui-btn text-[12.5px]">测试模型连通性</button>
-            </div>
           </div>
         </div>
-      </div>
 
-      <div class="min-w-0 studio-panel rounded-[12px] border border-[var(--border-hairline)] p-5 space-y-4">
-        <div class="flex items-center justify-between gap-2 pb-3 border-b border-[var(--border-hairline)]">
-          <div class="inline-flex items-center gap-1.5">
-            <h3 class="ui-title">官方接口与存储设置</h3>
-            <button type="button" class="ui-info-btn" title="直连 https://image.novelai.net 官方集群，所有图片与数据库均存于非 C 盘目录" aria-label="接口与存储说明">
-              <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-info"/></svg>
-            </button>
-          </div>
-          <span id="settings-conn-pill" class="px-2 py-0.5 rounded-[6px] ui-badge text-[var(--status-success)] text-[12px] font-mono shrink-0">已连接 Opus</span>
-        </div>
-
-        <div class="space-y-1.5">
-          <div class="inline-flex items-center gap-1">
-            <label class="text-[12.5px] font-medium">Persistent API Token (pst-...)</label>
-            <button type="button" class="ui-info-btn" title="支持随时更换并验证连接" aria-label="Token说明">
-              <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-info"/></svg>
-            </button>
-          </div>
-          <input id="settings-token-input" type="password" placeholder="pst-..." class="w-full ui-well rounded-[6px] px-3 py-2 font-mono text-[13px]" />
-        </div>
-
-        <div class="space-y-1.5">
-          <label class="text-[12.5px] font-medium">存储目录（非 C 盘）</label>
-          <input id="settings-output-dir" type="text" value="D:\NAI-Studio\outputs" class="w-full ui-well rounded-[6px] px-3 py-2 font-mono text-[13px]" />
-          <div id="settings-storage-detail" class="text-[12px] text-[var(--status-success)] font-mono">当前位于 D: 盘 · C 盘占用：0 Bytes</div>
-        </div>
-
-        <div class="rounded-[8px] ui-subgroup p-3">
-          <div class="flex items-center justify-between gap-2">
-            <div class="inline-flex items-center gap-1">
-              <span class="text-[13px] font-medium">Opus 0点数免费生图保护锁</span>
-              <button type="button" class="ui-info-btn" title="自动限制步数 ≤ 28、像素 ≤ 1024²、单次 1 张" aria-label="Opus保护锁说明">
+        <div id="sec-settings-nai" class="min-w-0 studio-panel rounded-[12px] border border-[var(--border-hairline)] p-5 space-y-4">
+          <div class="flex items-center justify-between gap-2 pb-3 border-b border-[var(--border-hairline)]">
+            <div class="inline-flex items-center gap-1.5">
+              <h3 class="ui-title">NovelAI 官方接口与存储设置</h3>
+              <button type="button" class="ui-info-btn" title="直连 https://image.novelai.net 官方集群，所有图片与数据库均存于非 C 盘目录" aria-label="接口与存储说明">
                 <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-info"/></svg>
               </button>
             </div>
-            <div id="settings-opus-switch" role="switch" tabindex="0" aria-checked="true" onclick="toggleOpusGuard()" class="glass-switch on"></div>
+            <span id="settings-conn-pill" class="px-2.5 py-0.5 rounded-[6px] ui-badge text-[var(--status-success)] text-[12px] font-mono shrink-0">已连接 Opus</span>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="space-y-1.5">
+              <div class="inline-flex items-center gap-1">
+                <label class="text-[12.5px] font-medium">Persistent API Token (pst-...)</label>
+                <button type="button" class="ui-info-btn" title="支持随时更换并验证连接" aria-label="Token说明">
+                  <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-info"/></svg>
+                </button>
+              </div>
+              <input id="settings-token-input" type="password" placeholder="pst-..." class="w-full ui-well rounded-[6px] px-3 py-2 font-mono text-[13px]" />
+            </div>
+
+            <div class="space-y-1.5">
+              <label class="text-[12.5px] font-medium">存储目录（非 C 盘）</label>
+              <input id="settings-output-dir" type="text" value="D:\NAI-Studio\outputs" class="w-full ui-well rounded-[6px] px-3 py-2 font-mono text-[13px]" />
+              <div id="settings-storage-detail" class="text-[12px] text-[var(--status-success)] font-mono">当前位于 D: 盘 · C 盘占用：0 Bytes</div>
+            </div>
+          </div>
+
+          <div class="rounded-[8px] ui-subgroup p-3">
+            <div class="flex items-center justify-between gap-2">
+              <div class="inline-flex items-center gap-1">
+                <span class="text-[13px] font-medium">Opus 0点数免费生图保护锁</span>
+                <button type="button" class="ui-info-btn" title="自动限制步数 ≤ 28、像素 ≤ 1024²、单次 1 张" aria-label="Opus保护锁说明">
+                  <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-info"/></svg>
+                </button>
+              </div>
+              <div id="settings-opus-switch" role="switch" tabindex="0" aria-checked="true" onclick="toggleOpusGuard()" class="glass-switch on"></div>
+            </div>
+          </div>
+
+          <div class="flex gap-2 pt-1">
+            <button onclick="saveSettingsConfig()" class="liquid-cta px-4 py-1.5 rounded-[6px] text-[12.5px] font-semibold">保存并验证连接</button>
+            <button onclick="refreshAccountStatus(true)" class="spring-btn px-3 py-1.5 rounded-[6px] ui-btn text-[12.5px]">刷新订阅与算力</button>
           </div>
         </div>
 
-        <div class="flex gap-2 pt-2">
-          <button onclick="saveSettingsConfig()" class="liquid-cta px-4 py-2 rounded-[6px] text-[13px] font-semibold">保存并验证连接</button>
-          <button onclick="refreshAccountStatus(true)" class="spring-btn px-3 py-2 rounded-[6px] ui-btn text-[13px]">刷新订阅与算力</button>
-        </div>
-      </div>
+        <div id="sec-settings-mcp" class="min-w-0 studio-panel rounded-[12px] border border-[var(--border-hairline)] p-5 space-y-4">
+          <div class="flex items-center justify-between gap-2 pb-3 border-b border-[var(--border-hairline)]">
+            <div>
+              <h3 class="ui-title">原生 Agent / MCP Server 控制台</h3>
+              <p class="text-[12px] text-[var(--text-muted)] mt-0.5">JSON-RPC 2.0 MCP Server (<code>D:\NAI-Studio\mcp_server.py</code>)，适配 Claude / Cursor / Antigravity。</p>
+            </div>
+            <button type="button" onclick="copyMcpConfigJson()" class="spring-btn inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] ui-btn text-[12px] shrink-0">
+              <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-copy"/></svg>
+              <span>复制 JSON</span>
+            </button>
+          </div>
 
-      <div class="min-w-0 studio-panel rounded-[12px] border border-[var(--border-hairline)] p-6 space-y-5">
-        <div class="pb-3 border-b border-[var(--border-hairline)]">
-          <h3 class="ui-title">原生 Agent / MCP Server 控制台</h3>
-          <p class="text-[12px] text-[var(--text-muted)] mt-1">JSON-RPC 2.0 MCP Server (<code>D:\NAI-Studio\mcp_server.py</code>)，适配 Claude / Cursor / Antigravity。</p>
-        </div>
-
-        <div class="space-y-1.5">
-          <div class="text-[12px] text-[var(--text-muted)]">MCP 客户端配置片段</div>
-          <pre class="selectable-text p-3 rounded-[8px] ui-well font-mono text-[11.5px] overflow-x-auto custom-scroll leading-relaxed">{
+          <div class="space-y-1.5">
+            <div class="text-[12px] text-[var(--text-muted)]">MCP 客户端配置片段</div>
+            <pre id="mcp-config-pre" class="selectable-text p-3 rounded-[8px] ui-well font-mono text-[11.5px] overflow-x-auto whitespace-pre-wrap break-all custom-scroll leading-relaxed">{
   "mcpServers": {
     "nai-studio": {
       "command": "C:\\Users\\21815\\AppData\\Local\\Python\\bin\\python.exe",
@@ -1262,24 +1373,25 @@
     }
   }
 }</pre>
-        </div>
-
-        <div class="space-y-2.5 pt-2 border-t border-[var(--border-hairline)]">
-          <div class="text-[12.5px] font-medium">实测 MCP 工具调用</div>
-          <div class="flex flex-wrap gap-1.5">
-            <button onclick="runMcpTest('nai_account_status', {})" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">查询账号状态</button>
-            <button onclick="runMcpTest('nai_lint_and_format_prompt', {prompt: '1girl, (silver_hair:1.2), {[{rooftop}]}，{sunset|night}', model: 'nai-diffusion-5-full'})" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">测试语法规范器</button>
-            <button onclick="runMcpTest('nai_search_tags', {query: '水手服'})" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">测试中文搜标签</button>
-            <button onclick="runMcpTest('nai_list_artists', {category: '厚涂光影'})" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">查询画师库</button>
-            <button onclick="runMcpTest('nai_query_gallery', {limit: 3})" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">查询本地图库</button>
-            <button onclick="runMcpTest('nai_inspect_png', {})" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">读取最新图参数</button>
-            <button onclick="runMcpTest('nai_manage_oc_cards', {action: 'list'})" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">查询 OC 角色</button>
-            <button onclick="runMcpTest('nai_sync_gallery', {})" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">同步磁盘图库</button>
           </div>
-          <pre id="mcp-test-output" class="selectable-text p-3 rounded-[8px] ui-well font-mono text-[12px] max-h-48 overflow-y-auto custom-scroll">点击上方按钮实测 MCP 工具返回结果...</pre>
-        </div>
-      </div>
 
+          <div class="space-y-2.5 pt-2 border-t border-[var(--border-hairline)]">
+            <div class="text-[12.5px] font-medium">实测 MCP 工具调用</div>
+            <div class="flex flex-wrap gap-1.5">
+              <button onclick="runMcpTest('nai_account_status', {})" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">查询账号状态</button>
+              <button onclick="runMcpTest('nai_lint_and_format_prompt', {prompt: '1girl, (silver_hair:1.2), {[{rooftop}]}，{sunset|night}', model: 'nai-diffusion-5-full'})" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">测试语法规范器</button>
+              <button onclick="runMcpTest('nai_search_tags', {query: '水手服'})" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">测试中文搜标签</button>
+              <button onclick="runMcpTest('nai_list_artists', {category: '厚涂光影'})" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">查询画师库</button>
+              <button onclick="runMcpTest('nai_query_gallery', {limit: 3})" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">查询本地图库</button>
+              <button onclick="runMcpTest('nai_inspect_png', {})" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">读取最新图参数</button>
+              <button onclick="runMcpTest('nai_manage_oc_cards', {action: 'list'})" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">查询 OC 角色</button>
+              <button onclick="runMcpTest('nai_sync_gallery', {})" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">同步磁盘图库</button>
+            </div>
+            <pre id="mcp-test-output" class="selectable-text p-3 rounded-[8px] ui-well font-mono text-[12px] max-h-48 overflow-y-auto custom-scroll">点击上方按钮实测 MCP 工具返回结果...</pre>
+          </div>
+        </div>
+
+      </div>
     </div>
   </main>
 
@@ -1402,24 +1514,24 @@
           <div id="ad-style-tags" class="flex flex-wrap gap-1.5"></div>
         </div>
 
-        <div id="ad-weight-wrap" class="ui-well rounded-[8px] px-3 py-2 flex items-center justify-between gap-2 text-[12px]">
-          <span class="text-[var(--text-muted)] shrink-0">推荐权重</span>
-          <span id="ad-weight" class="font-mono text-[var(--text-primary)] selectable-text text-right"></span>
+        <div id="ad-weight-wrap" class="rounded-[8px] bg-[var(--accent-primary-tint)] px-3 py-2 flex items-center justify-between gap-2 text-[12px]">
+          <span class="text-[var(--text-secondary)] font-medium shrink-0">推荐配比权重</span>
+          <span id="ad-weight" class="font-mono font-semibold text-[var(--text-primary)] selectable-text text-right"></span>
         </div>
 
-        <div class="space-y-1">
-          <div class="ui-label">核心画风概览</div>
-          <div id="ad-desc" class="ui-well rounded-[8px] p-2.5 text-[12.5px] leading-relaxed whitespace-pre-wrap selectable-text"></div>
+        <div class="space-y-1 pt-1 border-t border-[var(--border-hairline)]">
+          <div class="text-[11.5px] font-medium text-[var(--text-muted)]">核心画风定位</div>
+          <div id="ad-desc" class="text-[13px] font-medium text-[var(--text-primary)] leading-relaxed whitespace-pre-wrap selectable-text"></div>
         </div>
 
-        <div class="space-y-1">
-          <div class="ui-label">完整档案与 Agent 选型笔记</div>
-          <div id="ad-notes" class="ui-well rounded-[8px] p-3 text-[12.5px] leading-relaxed whitespace-pre-wrap selectable-text"></div>
+        <div class="space-y-1.5 pt-2 border-t border-[var(--border-hairline)]">
+          <div class="text-[11.5px] font-medium text-[var(--text-muted)]">完整档案与 V4.5 / V5 实测混搭笔记</div>
+          <div id="ad-notes" class="rounded-[8px] ui-subgroup p-3 text-[12.5px] text-[var(--text-secondary)] leading-[1.68] whitespace-pre-wrap selectable-text"></div>
         </div>
 
-        <div id="ad-sample-wrap" class="space-y-1 hidden">
-          <div class="ui-label">高频伴生视觉标签 / 预览基准词</div>
-          <div id="ad-sample" class="ui-well rounded-[8px] p-2.5 font-mono text-[11.5px] leading-relaxed whitespace-pre-wrap selectable-text text-[var(--text-secondary)]"></div>
+        <div id="ad-sample-wrap" class="space-y-1 pt-1 border-t border-[var(--border-hairline)] hidden">
+          <div class="text-[11.5px] font-medium text-[var(--text-muted)]">高频伴生视觉标签</div>
+          <div id="ad-sample" class="rounded-[8px] ui-subgroup p-2.5 font-mono text-[11.5px] leading-relaxed whitespace-pre-wrap selectable-text text-[var(--text-secondary)]"></div>
         </div>
 
         <div id="ad-urls-wrap" class="space-y-1 hidden">
@@ -1756,6 +1868,9 @@
           <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-layers"/></svg>
         </button>
         <span class="h-3.5 w-px bg-[var(--border-hairline)] mx-1"></span>
+        <button type="button" onclick="toggleAgentDockMode()" id="agent-dock-btn" class="agent-icon-btn hidden lg:inline-flex" title="切换右侧停靠抽屉 / 独立悬浮窗">
+          <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use id="agent-dock-icon-use" href="#ic-dock-right"/></svg>
+        </button>
         <button type="button" onclick="toggleMinimizeAgentWindow()" id="agent-min-btn" class="agent-icon-btn" title="最小化 / 展开">
           <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-minus"/></svg>
         </button>
@@ -1827,7 +1942,7 @@
             </button>
             <span class="text-[12.5px] font-semibold text-[var(--text-primary)]">历史会话</span>
           </div>
-          <button type="button" onclick="startNewAgentSession()" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[11.5px]">+ 新对话</button>
+          <span class="text-[11px] text-[var(--text-muted)]">点击载入上下文</span>
         </div>
         <div id="agent-sessions-list" class="space-y-1.5"></div>
       </div>
@@ -1842,17 +1957,22 @@
               </button>
               <span class="text-[12.5px] font-semibold text-[var(--text-primary)] truncate">SKILL.md 专业技能库</span>
             </div>
-            <button type="button" onclick="openSkillEditor()" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[11.5px] shrink-0">+ 新建</button>
+            <button type="button" onclick="openSkillEditor()" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn-accent text-[11.5px] font-medium shrink-0">+ 新建技能</button>
           </div>
           <div id="agent-skills-list" class="space-y-2"></div>
         </div>
 
-        <div id="agent-skill-editor" class="hidden flex-1 min-h-0 overflow-y-auto custom-scroll p-3.5 space-y-2.5">
-          <div class="flex items-center justify-between pb-1.5 border-b border-[var(--border-hairline)]">
-            <span id="skill-editor-heading" class="font-semibold text-[12.5px]">新建自定义 Skill</span>
-            <button type="button" onclick="closeSkillEditor()" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn text-[11.5px]">返回列表</button>
+        <div id="agent-skill-editor" class="hidden flex-1 min-h-0 flex flex-col overflow-hidden p-3.5 gap-2.5">
+          <div class="flex items-center justify-between pb-1.5 border-b border-[var(--border-hairline)] shrink-0">
+            <div class="flex items-center gap-1.5 min-w-0">
+              <button type="button" onclick="closeSkillEditor()" class="agent-icon-btn shrink-0" title="返回技能列表">
+                <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-back"/></svg>
+              </button>
+              <span id="skill-editor-heading" class="font-semibold text-[12.5px] truncate">新建自定义 Skill</span>
+            </div>
+            <span class="text-[11px] font-mono text-[var(--text-muted)]">Markdown</span>
           </div>
-          <div class="grid grid-cols-2 gap-2">
+          <div class="grid grid-cols-2 gap-2 shrink-0">
             <div>
               <label class="block text-[11px] text-[var(--text-muted)] mb-0.5">Skill 标识 (slug)</label>
               <input id="skill-edit-name" type="text" placeholder="如：cyberpunk-director" class="w-full ui-well rounded-[6px] px-2.5 py-1 font-mono text-[12px]" />
@@ -1862,19 +1982,19 @@
               <input id="skill-edit-title" type="text" placeholder="如：赛博夜景导演手册" class="w-full ui-well rounded-[6px] px-2.5 py-1 text-[12px]" />
             </div>
           </div>
-          <div>
+          <div class="shrink-0">
             <label class="block text-[11px] text-[var(--text-muted)] mb-0.5">简短描述（供 Agent 发现阶段按需加载）</label>
             <input id="skill-edit-desc" type="text" placeholder="何时应该读取并使用本技能..." class="w-full ui-well rounded-[6px] px-2.5 py-1 text-[12px]" />
           </div>
-          <div>
+          <div class="shrink-0">
             <label class="block text-[11px] text-[var(--text-muted)] mb-0.5">触发关键词（逗号分隔）</label>
             <input id="skill-edit-triggers" type="text" placeholder="赛博, 夜景, 霓虹, 雨天" class="w-full ui-well rounded-[6px] px-2.5 py-1 text-[12px]" />
           </div>
-          <div>
-            <label class="block text-[11px] text-[var(--text-muted)] mb-0.5">SKILL.md 正文指令（支持 Markdown）</label>
-            <textarea id="skill-edit-content" rows="9" placeholder="# 技能操作规范&#10;1. ..." class="custom-scroll w-full ui-well rounded-[6px] px-2.5 py-1.5 font-mono text-[11.5px] leading-relaxed resize-y"></textarea>
+          <div class="flex-1 min-h-0 flex flex-col">
+            <label class="block text-[11px] text-[var(--text-muted)] mb-0.5 shrink-0">SKILL.md 正文指令（支持 Markdown）</label>
+            <textarea id="skill-edit-content" rows="9" placeholder="# 技能操作规范&#10;1. ..." class="custom-scroll flex-1 min-h-[140px] w-full ui-well rounded-[6px] px-2.5 py-1.5 font-mono text-[11.5px] leading-relaxed resize-none"></textarea>
           </div>
-          <div class="flex items-center justify-between pt-1">
+          <div class="flex items-center justify-between pt-2 border-t border-[var(--border-hairline)] shrink-0 mt-auto">
             <button id="skill-delete-btn" type="button" onclick="deleteEditingSkill()" class="hidden spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[var(--status-danger)] text-[12px]">删除 Skill</button>
             <button type="button" onclick="saveEditingSkill()" class="liquid-cta spring-btn px-3.5 py-1 rounded-[6px] text-[12px] font-semibold ml-auto">保存 SKILL.md</button>
           </div>
@@ -1888,7 +2008,7 @@
 
   <div id="studio-tooltip" role="tooltip" aria-hidden="true"></div>
 
-  <script src="/static/app.js?v=p2-19"></script>
-  <script src="/static/agent_window.js?v=p2-19"></script>
+  <script src="/static/app.js?v=p2-21"></script>
+  <script src="/static/agent_window.js?v=p2-21"></script>
 </body>
 </html>

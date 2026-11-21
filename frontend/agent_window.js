@@ -8,6 +8,7 @@ const AGENT_WIN_STORAGE_KEY = "nai_studio_agent_win_v1";
 const agentState = {
   open: false,
   minimized: false,
+  docked: true,
   activePane: "chat",
   sessionId: null,
   sessions: [],
@@ -67,6 +68,37 @@ function renderAgentModelPill() {
   if (pill) pill.textContent = state.config?.llm_model || "qwen4-max";
 }
 
+function syncAgentDockClasses() {
+  const win = document.getElementById("agent-window");
+  const dockBtn = document.getElementById("agent-dock-btn");
+  const dockIcon = document.getElementById("agent-dock-icon-use");
+  if (!win) return;
+  const isDocked = Boolean(agentState.docked);
+  win.classList.toggle("is-docked", isDocked);
+  document.body.classList.toggle("agent-docked-open", Boolean(agentState.open && isDocked));
+  if (dockBtn) {
+    dockBtn.classList.toggle("is-active", isDocked);
+    dockBtn.setAttribute("title", isDocked ? "切换为独立可移动悬浮窗" : "停靠至右侧边栏（不遮挡画布）");
+  }
+  if (dockIcon) {
+    dockIcon.setAttribute("href", isDocked ? "#ic-float-win" : "#ic-dock-right");
+  }
+}
+
+function toggleAgentDockMode(force) {
+  const next = typeof force === "boolean" ? force : !agentState.docked;
+  agentState.docked = next;
+  if (next && agentState.minimized) {
+    toggleMinimizeAgentWindow(false);
+  }
+  syncAgentDockClasses();
+  if (!next && agentState.open) {
+    clampAgentWindowToViewport();
+  }
+  saveAgentWindowGeometry();
+  window.dispatchEvent(new Event("resize"));
+}
+
 function toggleAgentWindow(force) {
   const win = document.getElementById("agent-window");
   const btn = document.getElementById("toggle-agent-btn");
@@ -78,15 +110,21 @@ function toggleAgentWindow(force) {
     btn.classList.toggle("is-active", next);
     btn.setAttribute("aria-pressed", String(next));
   }
+  syncAgentDockClasses();
   if (next) {
-    clampAgentWindowToViewport();
+    if (!agentState.docked) clampAgentWindowToViewport();
     renderAgentModelPill();
     refreshAgentLiveStrip();
     setTimeout(() => document.getElementById("agent-input")?.focus(), 40);
   }
+  window.dispatchEvent(new Event("resize"));
 }
 
 function toggleMinimizeAgentWindow(force) {
+  if (agentState.docked) {
+    toggleAgentWindow(false);
+    return;
+  }
   const win = document.getElementById("agent-window");
   const body = document.getElementById("agent-body-wrap");
   const grip = document.getElementById("agent-resize-handle");
@@ -111,6 +149,8 @@ function switchAgentPane(pane = "chat") {
   ["chat", "sessions", "skills"].forEach(p => {
     document.getElementById(`agent-pane-${p}`)?.classList.toggle("hidden", p !== pane);
   });
+  // Context telemetry strip is ONLY shown in chat view, never cluttering sessions or skills
+  document.getElementById("agent-live-strip")?.classList.toggle("hidden", pane !== "chat");
   document.querySelectorAll(".agent-icon-btn[data-agent-tab]").forEach(btn => {
     const act = btn.dataset.agentTab === pane;
     btn.classList.toggle("is-active", act);
@@ -129,6 +169,11 @@ function restoreAgentWindowGeometry() {
   if (!win) return;
   try {
     const saved = JSON.parse(localStorage.getItem(AGENT_WIN_STORAGE_KEY) || "{}");
+    if (typeof saved.docked === "boolean") {
+      agentState.docked = saved.docked;
+    } else {
+      agentState.docked = true;
+    }
     if (typeof saved.width === "number" && saved.width >= 340) win.style.width = `${saved.width}px`;
     if (typeof saved.height === "number" && saved.height >= 420) win.style.height = `${saved.height}px`;
     if (typeof saved.left === "number" && typeof saved.top === "number") {
@@ -138,22 +183,23 @@ function restoreAgentWindowGeometry() {
       win.style.top = `${saved.top}px`;
     }
   } catch (e) {}
+  syncAgentDockClasses();
 }
 
 function saveAgentWindowGeometry() {
   const win = document.getElementById("agent-window");
-  if (!win || win.classList.contains("hidden")) return;
-  const rect = win.getBoundingClientRect();
+  if (!win) return;
   try {
-    localStorage.setItem(
-      AGENT_WIN_STORAGE_KEY,
-      JSON.stringify({
-        left: Math.round(rect.left),
-        top: Math.round(rect.top),
-        width: Math.round(rect.width),
-        height: Math.round(rect.height),
-      })
-    );
+    const prev = JSON.parse(localStorage.getItem(AGENT_WIN_STORAGE_KEY) || "{}");
+    const patch = { ...prev, docked: Boolean(agentState.docked) };
+    if (!win.classList.contains("hidden") && !agentState.docked) {
+      const rect = win.getBoundingClientRect();
+      patch.left = Math.round(rect.left);
+      patch.top = Math.round(rect.top);
+      patch.width = Math.round(rect.width);
+      patch.height = Math.round(rect.height);
+    }
+    localStorage.setItem(AGENT_WIN_STORAGE_KEY, JSON.stringify(patch));
   } catch (e) {}
 }
 
@@ -188,7 +234,7 @@ function setupAgentWindowDragAndResize() {
   let origTop = 0;
 
   bar.addEventListener("pointerdown", e => {
-    if (e.button !== 0 || e.target.closest("button")) return;
+    if (agentState.docked || e.button !== 0 || e.target.closest("button")) return;
     dragging = true;
     const rect = win.getBoundingClientRect();
     startX = e.clientX;
@@ -710,13 +756,13 @@ function renderDiffActionCard(uiAct) {
   const snapId = uiAct._snapId || "";
   if (uiAct.type === "patch_prompt_blocks" || added.length || removed.length) {
     return `
-      <div class="agent-diff-box mt-1.5">
+      <div class="agent-diff-box mt-1">
         <div class="flex items-center justify-between gap-2">
           <div class="flex items-center gap-1.5 min-w-0">
             <span class="w-1.5 h-1.5 rounded-full bg-[var(--status-success)] shrink-0"></span>
-            <span class="font-medium text-[var(--text-primary)] truncate">${escapeHtml(uiAct.summary || "已更新提示词")}</span>
+            <span class="font-semibold text-[12px] text-[var(--text-primary)] truncate">${escapeHtml(uiAct.summary || "已同步更新工作台提示词")}</span>
           </div>
-          ${snapId ? `<button type="button" onclick="undoAgentPromptPatch('${escapeHtml(snapId)}')" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn text-[11px] shrink-0">撤回</button>` : ""}
+          ${snapId ? `<button type="button" onclick="undoAgentPromptPatch('${escapeHtml(snapId)}')" class="spring-btn inline-flex items-center gap-1 px-2 py-0.5 rounded-[5px] ui-btn text-[11px] font-medium text-[var(--text-primary)] shrink-0" title="一键回滚本次提示词修改"><svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-undo"/></svg><span>一键撤回</span></button>` : ""}
         </div>
         ${added.length ? `<div class="agent-diff-line-add">+ ${escapeHtml(added.join(", "))}</div>` : ""}
         ${removed.length ? `<div class="agent-diff-line-del">− ${escapeHtml(removed.join(", "))}</div>` : ""}
@@ -724,8 +770,8 @@ function renderDiffActionCard(uiAct) {
     `;
   }
   return `
-    <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[8px] border border-[var(--border-hairline)] bg-white/[0.025] text-[11.5px] text-[var(--text-secondary)] mt-1">
-      <svg class="w-3 h-3 text-[var(--status-success)] shrink-0 stroke-current fill-none" stroke-width="2" viewBox="0 0 16 16" aria-hidden="true"><use href="#ic-check"/></svg>
+    <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[8px] border border-[var(--border-hairline)] bg-[var(--surface-subgroup)] text-[11.5px] font-medium text-[var(--text-primary)] mt-1">
+      <svg class="w-3.5 h-3.5 text-[var(--status-success)] shrink-0 stroke-current fill-none" stroke-width="2" viewBox="0 0 16 16" aria-hidden="true"><use href="#ic-check"/></svg>
       <span>${escapeHtml(uiAct.summary || uiAct.type)}</span>
     </div>
   `;
@@ -890,33 +936,45 @@ function renderAgentMessages(forceScroll = false) {
 
   if (!agentState.messages.length) {
     box.innerHTML = `
-      <div class="py-5 px-0.5 space-y-4">
+      <div class="py-4 px-0.5 space-y-4">
         <div class="space-y-1.5">
-          <div class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/[0.04] border border-[var(--border-hairline)] text-[10.5px] font-mono text-[var(--text-muted)]">
-            <span class="w-1.5 h-1.5 rounded-full bg-[var(--status-success)]"></span>
-            NAI V5 · 21 Tools · 8 Skills · 100K Ctx
+          <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[var(--accent-primary-tint)] text-[11px] font-medium text-[var(--accent-primary)]">
+            <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-sparkles"/></svg>
+            <span>视觉创作导演 · 实时联动工作台</span>
           </div>
-          <div class="font-semibold text-[15px] tracking-[-0.01em] text-[var(--text-primary)]">Studio Agent 创作副驾</div>
-          <p class="text-[12.5px] text-[var(--text-muted)] leading-relaxed">
-            支持实时流式思考、多模态画布与图库审阅、100K 长上下文，可直译大白话改 Tag、导演构思、管画师库与作品图库。
+          <div class="font-semibold text-[15px] tracking-[-0.01em] text-[var(--text-primary)]">想画什么样的画面？</div>
+          <p class="text-[12px] text-[var(--text-muted)] leading-relaxed">
+            直接用日常语言描述角色、光影或画风偏好，我会检索本地画师库与 Danbooru 词表，实时同步至工作台并支持一键撤回。
           </p>
         </div>
-        <div class="grid grid-cols-1 gap-2">
-          <button type="button" onclick="quickSendAgent('我现在没什么灵感，帮我构思 3 个风格反差鲜明的二次元画面方向吧')" class="spring-btn group p-3 rounded-[11px] ui-card hover:border-[var(--border-hover)] text-left space-y-0.5 transition-colors">
-            <div class="text-[12.5px] font-medium text-[var(--text-primary)]">没灵感？导演互动构思</div>
-            <div class="text-[11.5px] text-[var(--text-muted)]">通过简短对话敲定角色、构图与三层光影氛围</div>
+        <div class="grid grid-cols-2 gap-2">
+          <button type="button" onclick="quickSendAgent('我现在没什么灵感，帮我构思 3 个风格反差鲜明的二次元画面方向吧')" class="spring-btn group p-3 rounded-[11px] ui-card text-left space-y-1.5 transition-all">
+            <div class="w-7 h-7 rounded-[7px] bg-[var(--accent-primary-tint)] text-[var(--accent-primary)] flex items-center justify-center">
+              <svg class="ui-ic" aria-hidden="true"><use href="#ic-sparkles"/></svg>
+            </div>
+            <div class="text-[12.5px] font-semibold text-[var(--text-primary)]">导演灵感访谈</div>
+            <div class="text-[11px] text-[var(--text-muted)] leading-snug">提供 3 组反差视觉提案，一键拍板落地四区块</div>
           </button>
-          <button type="button" onclick="quickSendAgent('给当前提示词加上微风吹起发丝、黄昏丁达尔逆光和梦幻散景光斑')" class="spring-btn group p-3 rounded-[11px] ui-card hover:border-[var(--border-hover)] text-left space-y-0.5 transition-colors">
-            <div class="text-[12.5px] font-medium text-[var(--text-primary)]">大白话实时转译 Danbooru / V5 标签</div>
-            <div class="text-[11.5px] text-[var(--text-muted)]">精准增量写入对应区块，支持一键撤回 Diff</div>
+          <button type="button" onclick="quickSendAgent('给当前提示词加上微风吹起发丝、黄昏丁达尔逆光和梦幻散景光斑')" class="spring-btn group p-3 rounded-[11px] ui-card text-left space-y-1.5 transition-all">
+            <div class="w-7 h-7 rounded-[7px] bg-[var(--status-success-tint)] text-[var(--status-success)] flex items-center justify-center">
+              <svg class="ui-ic" aria-hidden="true"><use href="#ic-edit"/></svg>
+            </div>
+            <div class="text-[12.5px] font-semibold text-[var(--text-primary)]">大白话转译改词</div>
+            <div class="text-[11px] text-[var(--text-muted)] leading-snug">自然语言秒转 V5/Danbooru 标签并增量写入</div>
           </button>
-          <button type="button" onclick="quickSendAgent('帮我看一下当前中央画布里的图像哪里还可以优化，直接帮我改一版提示词或切到合适的模式')" class="spring-btn group p-3 rounded-[11px] ui-card hover:border-[var(--border-hover)] text-left space-y-0.5 transition-colors">
-            <div class="text-[12.5px] font-medium text-[var(--text-primary)]">多模态视觉看图诊断与修图</div>
-            <div class="text-[11.5px] text-[var(--text-muted)]">直接看懂画布构图/手部/光影问题并联动重绘与改词</div>
+          <button type="button" onclick="quickSendAgent('帮我看一下当前中央画布里的图像哪里还可以优化，直接帮我改一版提示词或切到合适的模式')" class="spring-btn group p-3 rounded-[11px] ui-card text-left space-y-1.5 transition-all">
+            <div class="w-7 h-7 rounded-[7px] bg-[var(--status-warning-tint)] text-[var(--status-warning)] flex items-center justify-center">
+              <svg class="ui-ic" aria-hidden="true"><use href="#ic-image"/></svg>
+            </div>
+            <div class="text-[12.5px] font-semibold text-[var(--text-primary)]">看图诊断与修图</div>
+            <div class="text-[11px] text-[var(--text-muted)] leading-snug">多模态审阅当前画布构图/光影并联动调优</div>
           </button>
-          <button type="button" onclick="quickSendAgent('帮我盘点画师库分类，看看近期图库里哪些图最值得收藏与复刻')" class="spring-btn group p-3 rounded-[11px] ui-card hover:border-[var(--border-hover)] text-left space-y-0.5 transition-colors">
-            <div class="text-[12.5px] font-medium text-[var(--text-primary)]">批量整理画师库与作品图库</div>
-            <div class="text-[11.5px] text-[var(--text-muted)]">联网查 Danbooru、看预览打标签、0点补预览与载回配方</div>
+          <button type="button" onclick="quickSendAgent('从我的本地画师库里挑 3 套不同氛围的高熟度画师混搭方案，告诉我各自特点')" class="spring-btn group p-3 rounded-[11px] ui-card text-left space-y-1.5 transition-all">
+            <div class="w-7 h-7 rounded-[7px] bg-[var(--accent-primary-tint)] text-[var(--accent-primary)] flex items-center justify-center">
+              <svg class="ui-ic" aria-hidden="true"><use href="#ic-layers"/></svg>
+            </div>
+            <div class="text-[12.5px] font-semibold text-[var(--text-primary)]">画师检索与混搭</div>
+            <div class="text-[11px] text-[var(--text-muted)] leading-snug">按多维风格标签与熟度科学配比黄金权重</div>
           </button>
         </div>
       </div>
@@ -1307,6 +1365,30 @@ async function fetchAndRenderAgentSessions() {
   renderAgentSessionsList();
 }
 
+function formatAgentSessionTime(rawTs) {
+  if (!rawTs) return "近期对话";
+  let d = null;
+  if (typeof rawTs === "number" || /^\d+(?:\.\d+)?$/.test(String(rawTs).trim())) {
+    const num = Number(rawTs);
+    d = new Date(num > 1e12 ? num : num * 1000);
+  } else {
+    const str = String(rawTs).trim();
+    d = new Date(str.includes("T") ? str : str.replace(" ", "T") + "Z");
+  }
+  if (!d || Number.isNaN(d.getTime())) return String(rawTs).slice(0, 16);
+  const now = new Date();
+  const diffMin = Math.floor((now - d) / 60000);
+  if (diffMin >= 0 && diffMin < 1) return "刚刚";
+  if (diffMin >= 1 && diffMin < 60) return `${diffMin} 分钟前`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr >= 1 && diffHr < 24) return `${diffHr} 小时前`;
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${m}-${day} ${hh}:${mm}`;
+}
+
 function renderAgentSessionsList() {
   const wrap = document.getElementById("agent-sessions-list");
   if (!wrap) return;
@@ -1316,14 +1398,22 @@ function renderAgentSessionsList() {
   }
   wrap.innerHTML = agentState.sessions
     .map(s => {
-      const act = s.id === agentState.sessionId ? "border-[var(--border-focus)]" : "";
+      const isCur = s.id === agentState.sessionId;
+      const act = isCur ? "border-[var(--accent-primary)] bg-[var(--accent-primary-tint)]" : "";
+      const timeLabel = formatAgentSessionTime(s.updated_at || s.created_at);
+      const msgCnt = typeof s.message_count === "number" ? ` · ${s.message_count} 条消息` : "";
       return `
-        <div class="p-2.5 rounded-[9px] ui-card flex items-center justify-between gap-2 ${act}">
-          <button type="button" onclick="loadAgentSession('${escapeHtml(s.id)}', true)" class="flex-1 min-w-0 text-left">
-            <div class="text-[12.5px] font-medium text-[var(--text-primary)] truncate">${escapeHtml(s.title || "新创作对话")}</div>
-            <div class="text-[11px] font-mono text-[var(--text-muted)]">${escapeHtml(s.id)}</div>
+        <div class="group p-2.5 rounded-[9px] ui-card flex items-center justify-between gap-2 ${act}">
+          <button type="button" onclick="loadAgentSession('${escapeHtml(s.id)}', true)" class="flex-1 min-w-0 text-left space-y-0.5">
+            <div class="flex items-center gap-1.5">
+              ${isCur ? `<span class="w-1.5 h-1.5 rounded-full bg-[var(--accent-primary)] shrink-0"></span>` : ""}
+              <span class="text-[12.5px] font-medium text-[var(--text-primary)] truncate">${escapeHtml(s.title || "新创作对话")}</span>
+            </div>
+            <div class="text-[11px] text-[var(--text-muted)]">${escapeHtml(timeLabel)}${escapeHtml(msgCnt)}</div>
           </button>
-          <button type="button" onclick="deleteAgentSessionById('${escapeHtml(s.id)}')" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn text-[11px] text-[var(--status-danger)] shrink-0">删除</button>
+          <button type="button" onclick="deleteAgentSessionById('${escapeHtml(s.id)}')" aria-label="删除会话" title="删除会话" class="spring-btn w-7 h-7 rounded-[6px] ui-btn-ghost flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--status-danger)] opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+            <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-trash"/></svg>
+          </button>
         </div>
       `;
     })
@@ -1423,18 +1513,20 @@ function renderAgentSkillsList() {
     .map(s => {
       const pinned = agentState.pinnedSkills.includes(s.name);
       return `
-        <div class="p-3 rounded-[10px] ui-card space-y-1.5">
+        <div onclick="openSkillEditor('${escapeHtml(s.name)}')" class="group p-3 rounded-[10px] ui-card space-y-1.5 cursor-pointer">
           <div class="flex items-center justify-between gap-2">
-            <div class="min-w-0">
-              <div class="text-[12.5px] font-semibold text-[var(--text-primary)] truncate">${escapeHtml(s.title)}</div>
-              <div class="text-[11px] font-mono text-[var(--text-muted)]">/${escapeHtml(s.name)} · ${s.builtin ? "内置核心" : "自定义"}</div>
+            <div class="min-w-0 flex items-center gap-2">
+              <span class="text-[12.5px] font-semibold text-[var(--text-primary)] group-hover:text-[var(--accent-primary)] transition-colors truncate">${escapeHtml(s.title)}</span>
+              <span class="px-1.5 py-0.2 rounded-[4px] ui-badge font-mono text-[10px] text-[var(--text-muted)] shrink-0">/${escapeHtml(s.name)}</span>
             </div>
-            <div class="flex items-center gap-1 shrink-0">
-              <button type="button" onclick="togglePinSkill('${escapeHtml(s.name)}')" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn text-[11px] ${pinned ? "is-active" : ""}">${pinned ? "已固定 ✓" : "固定启用"}</button>
-              <button type="button" onclick="openSkillEditor('${escapeHtml(s.name)}')" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn text-[11px]">查看/编辑</button>
+            <div class="flex items-center gap-1 shrink-0" onclick="event.stopPropagation()">
+              <button type="button" onclick="togglePinSkill('${escapeHtml(s.name)}')" class="spring-btn inline-flex items-center gap-1 px-2 py-0.5 rounded-[5px] ui-btn text-[11px] ${pinned ? "is-active" : "text-[var(--text-secondary)]"}" title="${pinned ? "已挂载至对话上下文，点击取消" : "固定挂载至每轮对话"}">
+                <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-pin"/></svg>
+                <span>${pinned ? "已挂载" : "挂载"}</span>
+              </button>
             </div>
           </div>
-          <p class="text-[11.5px] text-[var(--text-secondary)] leading-relaxed">${escapeHtml(s.description)}</p>
+          <p class="text-[11.5px] text-[var(--text-muted)] leading-relaxed line-clamp-2">${escapeHtml(s.description)}</p>
         </div>
       `;
     })

@@ -455,8 +455,8 @@ function switchInspectorTab(tab) {
   document.querySelectorAll(".inspector-tab-btn").forEach(btn => {
     const act = btn.dataset.inspector === tab;
     btn.className = act
-      ? "inspector-tab-btn py-1 rounded-[6px] font-medium bg-[var(--cta-bg)] text-[var(--cta-fg)] transition-colors"
-      : "inspector-tab-btn py-1 rounded-[6px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors";
+      ? "inspector-tab-btn py-1 rounded-[6px] font-medium seg-pill-active transition-all"
+      : "inspector-tab-btn py-1 rounded-[6px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all";
   });
 }
 
@@ -468,8 +468,8 @@ function switchPromptSide(side) {
   document.querySelectorAll(".prompt-side-btn").forEach(btn => {
     const act = btn.dataset.promptSide === state.promptSide;
     btn.className = act
-      ? "prompt-side-btn px-2 py-1 rounded-[5px] font-medium bg-[var(--cta-bg)] text-[var(--cta-fg)] transition-colors inline-flex items-center gap-1 whitespace-nowrap"
-      : "prompt-side-btn px-2 py-1 rounded-[5px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors inline-flex items-center gap-1 whitespace-nowrap";
+      ? "prompt-side-btn px-2.5 py-1 rounded-[5px] font-medium seg-pill-active transition-all inline-flex items-center gap-1 whitespace-nowrap"
+      : "prompt-side-btn px-2.5 py-1 rounded-[5px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all inline-flex items-center gap-1 whitespace-nowrap";
   });
   document.getElementById("inline-autocomplete-menu")?.classList.add("hidden");
   document.getElementById("lint-drawer")?.classList.add("hidden");
@@ -505,7 +505,8 @@ function updateActiveTabIndicator(tabOverride = null) {
   const activeBtn = document.querySelector(`.tab-btn[data-tab="${tab}"]`);
   document.querySelectorAll(".tab-btn").forEach(btn => {
     const isAct = btn.dataset.tab === tab;
-    btn.style.color = isAct ? "var(--cta-fg)" : "var(--text-muted)";
+    btn.style.color = isAct ? "var(--text-primary)" : "var(--text-muted)";
+    btn.style.fontWeight = isAct ? "600" : "500";
   });
   if (activeBtn && indicator) {
     indicator.style.width = `${activeBtn.offsetWidth}px`;
@@ -547,22 +548,21 @@ function renderAccountHeader() {
   const connPill = document.getElementById("settings-conn-pill");
 
   if (acc.connected) {
-    if (tierEl) tierEl.textContent = acc.is_opus ? "Opus 订阅" : acc.tier_name;
+    if (tierEl) tierEl.textContent = acc.is_opus ? "Opus" : acc.tier_name;
     if (v5El) {
       const rem = acc.v5_remaining_percent ?? 100;
-      const mins = Math.round((acc.v5_next_percent_seconds || 0) / 60);
-      v5El.textContent = `V5 算力剩余 ${rem}% (${mins}m恢复1%)`;
+      v5El.textContent = `V5 ${rem}%`;
     }
     if (anlasEl) anlasEl.textContent = (acc.anlas ?? 0).toLocaleString();
     if (connPill) {
       connPill.textContent = `已连接 ${acc.is_opus ? "Opus (0点数免费激活)" : acc.tier_name}`;
-      connPill.className = "px-2 py-1 rounded-[6px] ui-badge text-[var(--status-success)] text-[12px] font-mono";
+      connPill.className = "px-2.5 py-0.5 rounded-[6px] ui-badge text-[var(--status-success)] text-[12px] font-mono";
     }
   } else {
     if (tierEl) tierEl.textContent = "未连接";
     if (connPill) {
       connPill.textContent = "连接异常";
-      connPill.className = "px-2 py-1 rounded-[6px] ui-badge text-[var(--status-danger)] text-[12px] font-mono";
+      connPill.className = "px-2.5 py-0.5 rounded-[6px] ui-badge text-[var(--status-danger)] text-[12px] font-mono";
     }
   }
 
@@ -572,10 +572,9 @@ function renderAccountHeader() {
   const label = document.getElementById("opus-guard-label");
   const sw = document.getElementById("settings-opus-switch");
   if (pill && label) {
-    pill.className = "spring-btn inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] ui-chip whitespace-nowrap";
     pill.querySelector("svg")?.setAttribute("class", `ui-ic ${guardOn ? "text-[var(--status-success)]" : "text-[var(--status-warning)]"}`);
     pill.querySelector("use")?.setAttribute("href", guardOn ? "#ic-shield" : "#ic-alert");
-    label.textContent = guardOn ? "Opus 免费保护: 开" : "Opus 免费保护: 关";
+    label.textContent = guardOn ? "Opus 保护: 开" : "Opus 保护: 关";
   }
   if (sw) sw.classList.toggle("on", guardOn);
 }
@@ -636,15 +635,15 @@ function renderModelSelectMenu() {
     .map(m => {
       const active = m.id === state.currentModel ? "active" : "";
       return `
-        <button type="button" onclick="selectModel('${m.id}')" class="glass-select-option ${active}">
-          <div class="flex flex-col gap-1 min-w-0">
-            <div class="flex items-center gap-2">
-              <span class="px-2 py-0 rounded-[6px] bg-[var(--accent-tint)] border border-[var(--border-control)] text-[12px] font-mono text-[var(--text-primary)]">${m.short_name}</span>
-              <span class="font-semibold truncate">${escapeHtml(m.name)}</span>
+        <button type="button" onclick="selectModel('${m.id}')" class="glass-select-option !flex-col !items-stretch !gap-1.5 ${active}">
+          <div class="flex items-center justify-between gap-2 w-full">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="px-1.5 py-0.5 rounded-[5px] bg-[var(--accent-primary-tint)] text-[var(--accent-primary)] text-[11px] font-mono font-semibold shrink-0">${m.short_name}</span>
+              <span class="font-semibold text-[13px] truncate">${escapeHtml(m.name)}</span>
             </div>
-            <span class="text-[12px] text-[var(--text-muted)] line-clamp-1">${escapeHtml(m.description)}</span>
+            <span class="text-[10.5px] px-1.5 py-0.5 rounded-[4px] ui-badge shrink-0 font-mono text-[var(--status-success)]">${escapeHtml(m.badge)}</span>
           </div>
-          <span class="text-[12px] px-2 py-1 rounded-[6px] ui-badge shrink-0 font-mono text-[var(--status-success)]">${escapeHtml(m.badge)}</span>
+          <div class="text-[11.5px] text-[var(--text-muted)] leading-snug line-clamp-2 w-full">${escapeHtml(m.description)}</div>
         </button>
       `;
     })
@@ -938,6 +937,26 @@ function stepParam(key, delta) {
   updateCostEstimate();
 }
 
+function applyQuickSamplingPreset(presetKey) {
+  const presets = {
+    standard: { sampler: "k_euler_ancestral", scheduler: "karras", steps: 28, scale: 5.0, cfg_rescale: 0.0, label: "标准平衡 (Euler A · 28步 · CFG 5.0)" },
+    detail: { sampler: "k_dpmpp_2s_ancestral", scheduler: "karras", steps: 28, scale: 5.5, cfg_rescale: 0.15, label: "细腻笔触 (DPM++ 2S · CFG 5.5 · Rescale 0.15)" },
+    soft: { sampler: "k_euler_ancestral", scheduler: "karras", steps: 28, scale: 4.5, cfg_rescale: 0.2, label: "清透水彩 (Euler A · CFG 4.5 · Rescale 0.20)" },
+  };
+  const p = presets[presetKey] || presets.standard;
+  state.steps = p.steps;
+  state.scale = p.scale;
+  state.cfg_rescale = p.cfg_rescale;
+  document.getElementById("steps-val").textContent = String(state.steps);
+  document.getElementById("scale-val").textContent = state.scale.toFixed(1);
+  document.getElementById("rescale-val").textContent = state.cfg_rescale.toFixed(2);
+  selectSampler(p.sampler);
+  selectScheduler(p.scheduler);
+  updateStageInfoPill();
+  updateCostEstimate();
+  showToast(`已应用采样预设：${p.label}`);
+}
+
 function updateSeedLockBtn() {
   const btn = document.getElementById("lock-seed-btn");
   if (!btn) return;
@@ -996,7 +1015,7 @@ function updateStageInfoPill() {
   const spec = state.models[state.currentModel];
   const shortName = spec ? spec.short_name : "V5 Full";
   const el = document.getElementById("stage-info-pill");
-  if (el) el.textContent = `${shortName} · ${state.width}×${state.height} · Steps ${state.steps}`;
+  if (el) el.textContent = `${shortName} · ${state.width}×${state.height} · ${state.steps}步`;
 }
 
 let _costTimer = null;
@@ -2422,21 +2441,29 @@ function renderWorkbenchHistory() {
     .map(item => {
       const isActive = Number(state.stageItemId) === Number(item.id);
       return `
-      <div data-id="${item.id}" class="history-film-item rounded-[8px] p-2 space-y-1.5 ${isActive ? "is-active-stage" : ""}">
+      <div data-id="${item.id}" class="history-film-item group rounded-[9px] p-2 transition-all ${isActive ? "is-active-stage" : ""}">
         <div class="flex gap-2.5 cursor-pointer" onclick="setStageFromGalleryItem(state.gallery.find(x=>x.id===${item.id}), false)">
-          <img src="${item.image_url}" alt="" onerror="this.onerror=null;this.style.opacity='0.28';" class="w-12 h-16 rounded-[5px] object-cover object-top shrink-0 border border-[var(--border-hairline)] bg-[var(--bg-canvas-well)]" />
+          <div class="relative w-13 h-16 rounded-[6px] overflow-hidden shrink-0 artwork-inner-frame bg-[var(--bg-canvas-well)]">
+            <img src="${item.image_url}" alt="" onerror="this.onerror=null;this.style.opacity='0.28';" class="w-12 h-16 object-cover object-top" />
+          </div>
           <div class="min-w-0 flex-1 flex flex-col justify-between py-0.5">
             <div class="flex items-center justify-between gap-1">
-              <span class="text-[11px] px-1.5 py-0.5 rounded-[4px] ui-badge text-[var(--text-primary)] font-mono truncate">${escapeHtml(item.model_short)}</span>
-              <span class="text-[11px] font-mono text-[var(--text-muted)]">#${item.seed}</span>
+              <span class="text-[10.5px] px-1.5 py-0.2 rounded-[4px] ui-badge text-[var(--text-secondary)] font-mono truncate">${escapeHtml(item.model_short)}</span>
+              <span class="text-[10.5px] font-mono text-[var(--text-muted)]">#${item.seed}</span>
             </div>
-            <p class="text-[11.5px] text-[var(--text-secondary)] line-clamp-2 font-mono leading-snug">${escapeHtml(item.prompt)}</p>
+            <p class="text-[11.5px] text-[var(--text-secondary)] line-clamp-1 font-mono leading-snug">${escapeHtml(item.prompt)}</p>
+            <div class="flex items-center justify-between gap-1 pt-0.5 ${isActive ? "opacity-100" : "opacity-65 group-hover:opacity-100"} transition-opacity">
+              <button type="button" onclick="event.stopPropagation();setStageFromGalleryItem(state.gallery.find(x=>x.id===${item.id}), true)" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn-ghost text-[11px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-well-hover)]" title="载入此图的提示词与采样参数">载入配方</button>
+              <div class="flex items-center gap-0.5">
+                <button type="button" onclick="event.stopPropagation();sendGalleryItemToI2I(${item.id})" class="spring-btn w-6 h-6 rounded-[5px] ui-btn-ghost flex items-center justify-center" title="设为图生图底图">
+                  ${uiIcon("image", "ui-ic-sm")}
+                </button>
+                <button type="button" onclick="event.stopPropagation();rerollGalleryItem(${item.id})" class="spring-btn w-6 h-6 rounded-[5px] ui-btn-ghost flex items-center justify-center" title="保留参数并用新随机种子重新生成">
+                  ${uiIcon("refresh", "ui-ic-sm")}
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
-        <div class="grid grid-cols-3 gap-1 text-[11.5px]">
-          <button onclick="setStageFromGalleryItem(state.gallery.find(x=>x.id===${item.id}), true)" class="spring-btn py-0.5 rounded-[5px] ui-btn" title="加载此图的提示词与采样参数">载入参数</button>
-          <button onclick="sendGalleryItemToI2I(${item.id})" class="spring-btn py-0.5 rounded-[5px] ui-btn" title="设为图生图底图">图生图</button>
-          <button onclick="rerollGalleryItem(${item.id})" class="spring-btn py-0.5 rounded-[5px] ui-btn" title="保留参数并用新随机种子重新生成">重生成</button>
         </div>
       </div>
     `;
@@ -2712,19 +2739,33 @@ function renderArtistStyleTagPills() {
     });
   });
   if (!counts.size) {
-    wrap.innerHTML = `<span class="text-[var(--text-muted)]">多维标签：暂无（可通过右侧 Agent 或编辑画师补充 style_tags，避免单一分类误导）</span>`;
+    wrap.innerHTML = `<span class="text-[var(--text-muted)]">多维标签：暂无</span>`;
     return;
   }
-  const topTags = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "zh-Hans-CN")).slice(0, 18);
+  const expanded = Boolean(state.artistTagsExpanded);
+  wrap.className = expanded
+    ? "flex items-center gap-1.5 flex-wrap text-[11.5px] py-0.5"
+    : "flex items-center gap-1.5 overflow-x-auto no-scrollbar whitespace-nowrap text-[11.5px] py-0.5";
+  const allSorted = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "zh-Hans-CN"));
+  const shownTags = expanded ? allSorted.slice(0, 28) : allSorted.slice(0, 12);
   const tagBtn = (tag, label, cnt) => {
     const active = state.artistTagFilter === tag ? "is-active" : "";
-    return `<button type="button" onclick="filterArtistsByStyleTag('${escapeHtml(tag).replace(/'/g, "\\'")}')" class="artist-cat-btn spring-btn px-2 py-0.5 rounded-[5px] ui-btn text-[11px] ${active}">${escapeHtml(label)}${cnt !== null ? ` <span class="font-mono opacity-65">${cnt}</span>` : ""}</button>`;
+    return `<button type="button" onclick="filterArtistsByStyleTag('${escapeHtml(tag).replace(/'/g, "\\'")}')" class="artist-cat-btn spring-btn px-2 py-0.5 rounded-[5px] ui-btn text-[11px] shrink-0 ${active}">${escapeHtml(label)}${cnt !== null ? ` <span class="font-mono opacity-65">${cnt}</span>` : ""}</button>`;
   };
+  const expandBtn = allSorted.length > 12
+    ? `<button type="button" onclick="toggleArtistTagsExpand()" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn-ghost text-[11px] text-[var(--accent-primary)] shrink-0">${expanded ? "收起 ▴" : `全部标签 (${allSorted.length}) ▾`}</button>`
+    : "";
   wrap.innerHTML = [
-    `<span class="text-[var(--text-muted)] shrink-0 mr-0.5">多维风格标签:</span>`,
-    tagBtn("all", "不限标签", null),
-    ...topTags.map(([tag, cnt]) => tagBtn(tag, tag, cnt)),
+    `<span class="text-[var(--text-muted)] shrink-0 mr-0.5">风格维度:</span>`,
+    tagBtn("all", "不限", null),
+    ...shownTags.map(([tag, cnt]) => tagBtn(tag, tag, cnt)),
+    expandBtn,
   ].join("");
+}
+
+function toggleArtistTagsExpand() {
+  state.artistTagsExpanded = !state.artistTagsExpanded;
+  renderArtistStyleTagPills();
 }
 
 function filterArtistsByStyleTag(tag) {
@@ -2860,11 +2901,11 @@ function renderArtistsGrid() {
     .map(a => {
       const hasPreview = Boolean(a.preview_url);
       const isGeneratingPrev = state.artistPreviewInFlight.has(a.id);
-      const postBadge = formatPostCountBadge(a.post_count);
+      const postCount = Number(a.post_count || 0);
       const styleTags = Array.isArray(a.style_tags) ? a.style_tags : [];
-      const shownTags = styleTags.slice(0, 4);
+      const shownTags = styleTags.slice(0, 2);
       const extraTagCnt = Math.max(0, styleTags.length - shownTags.length);
-      const fullSummary = a.notes || a.desc || "暂无描述";
+      const shortDesc = a.desc || a.notes || "暂无画风描述";
       const previewHtml = hasPreview
         ? `<img src="${a.preview_url}" alt="${escapeHtml(a.name)}" loading="lazy" decoding="async" onclick="openArtistDetailModal(${a.id})" onerror="this.onerror=null;this.classList.add('hidden');this.nextElementSibling?.classList.remove('hidden');" class="w-full h-full object-cover object-top transition-opacity duration-150 group-hover:opacity-95 cursor-pointer" />
            <div onclick="openArtistDetailModal(${a.id})" class="hidden w-full h-full ui-stage-well flex flex-col items-center justify-center p-4 text-center cursor-pointer">
@@ -2875,42 +2916,43 @@ function renderArtistsGrid() {
         : `<div onclick="openArtistDetailModal(${a.id})" class="w-full h-full ui-stage-well flex flex-col items-center justify-center p-4 text-center border-b border-[var(--border-hairline)] cursor-pointer">
              <div class="ui-title text-[var(--text-primary)]">${escapeHtml(a.name)}</div>
              <div class="text-[12px] font-mono text-[var(--text-secondary)] mt-1">${escapeHtml(a.tag)}</div>
-             <div class="mt-3 text-[11.5px] px-2.5 py-1 rounded-[6px] ui-badge text-[var(--text-muted)]">点击「生成预览」制作示例图</div>
+             <div class="mt-3 text-[11.5px] px-2.5 py-1 rounded-[6px] ui-badge text-[var(--text-muted)]">点击生成标准预览图</div>
            </div>`;
 
       return `
-        <div class="studio-grid-card rounded-[10px] ui-card overflow-hidden flex flex-col group">
-          <div class="relative shrink-0 aspect-[4/5] overflow-hidden bg-[var(--bg-canvas-well)]">
+        <div class="studio-grid-card rounded-[11px] ui-card overflow-hidden flex flex-col group">
+          <div class="relative shrink-0 aspect-[4/5] overflow-hidden bg-[var(--bg-canvas-well)] artwork-inner-frame">
             ${previewHtml}
-            <div class="absolute top-2 left-2 flex flex-col items-start gap-1 pointer-events-none max-w-[72%]">
-              <span class="px-2 py-0.5 rounded-[5px] studio-hud text-[11px] font-medium truncate max-w-full">${escapeHtml(a.category)}</span>
-              ${postBadge ? `<span class="px-1.5 py-0.5 rounded-[5px] studio-hud text-[10.5px] font-mono opacity-90">${escapeHtml(postBadge)}</span>` : ""}
-            </div>
-            <div class="absolute top-2 right-2 flex items-center gap-1">
-              <button onclick="openArtistDetailModal(${a.id})" aria-label="画师完整档案" title="查看完整档案与说明" class="spring-btn px-2 h-7 rounded-[6px] studio-hud flex items-center justify-center text-[11px] font-medium text-[var(--text-primary)] opacity-85 group-hover:opacity-100 transition-opacity">档案</button>
-              <button onclick="openArtistModal(${a.id})" aria-label="编辑画师" title="编辑或删除画师" class="spring-btn w-7 h-7 rounded-[6px] studio-hud flex items-center justify-center text-[var(--text-secondary)] opacity-75 group-hover:opacity-100 transition-opacity">
-                ${uiIcon("edit", "ui-ic-sm")}
-              </button>
-              <button onclick="toggleArtistFav(${a.id})" aria-label="收藏画师" title="${a.favorite ? "取消收藏" : "收藏画师"}" class="spring-btn w-7 h-7 rounded-[6px] studio-hud flex items-center justify-center ${a.favorite ? "text-[var(--status-warning)]" : "text-[var(--text-muted)]"}">
-                ${uiIcon("star")}
-              </button>
+            <!-- 把画面还给画作：顶部仅保留右上角轻量收藏标，编辑/重绘收进底部与详情 -->
+            <button onclick="toggleArtistFav(${a.id})" aria-label="收藏画师" title="${a.favorite ? "取消收藏" : "收藏画师"}" class="spring-btn absolute top-2 right-2 w-7 h-7 rounded-[7px] studio-hud flex items-center justify-center ${a.favorite ? "text-[var(--status-warning)] opacity-100" : "text-[var(--text-muted)] opacity-0 group-hover:opacity-100"} transition-opacity">
+              ${uiIcon("star")}
+            </button>
+            <div class="absolute bottom-2 left-2 right-2 flex items-center justify-between gap-1 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
+              <span class="px-2 py-0.5 rounded-[5px] studio-hud text-[10.5px] font-medium truncate">${escapeHtml(a.category)}</span>
+              ${postCount > 0 ? `<span class="px-1.5 py-0.5 rounded-[5px] studio-hud text-[10px] font-mono">${postCount}帖</span>` : ""}
             </div>
           </div>
           <div class="p-3 space-y-2 flex-1 flex flex-col justify-between">
             <div class="space-y-1.5">
-              <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center justify-between gap-1.5">
                 <button type="button" onclick="openArtistDetailModal(${a.id})" class="ui-section truncate text-left hover:text-[var(--accent-primary)] transition-colors" title="点击查看完整档案">${escapeHtml(a.name)}</button>
-                <button type="button" onclick="copyArtistTag(${a.id})" title="点击复制画师 Tag" class="selectable-text text-[11px] font-mono text-[var(--text-secondary)] hover:text-[var(--text-primary)] truncate max-w-[52%] text-right">${escapeHtml(a.tag)}</button>
+                <button type="button" onclick="copyArtistTag(${a.id})" title="点击复制画师 Tag" class="selectable-text text-[11px] font-mono text-[var(--text-muted)] hover:text-[var(--text-primary)] truncate max-w-[48%] text-right">${escapeHtml(a.tag.replace(/^artist:/i, ""))}</button>
               </div>
-              ${a.weight_hint ? `<div class="text-[11px] font-mono text-[var(--accent-primary)] truncate" title="${escapeHtml(a.weight_hint)}">权重建议: ${escapeHtml(a.weight_hint)}</div>` : ""}
-              ${shownTags.length ? `<div class="flex flex-wrap gap-1">${shownTags.map(t => `<button type="button" onclick="filterArtistsByStyleTag('${escapeHtml(t).replace(/'/g, "\\'")}')" class="px-1.5 py-0.5 rounded-[4px] ui-badge text-[10.5px] hover:border-[var(--accent-primary)] transition-colors">${escapeHtml(t)}</button>`).join("")}${extraTagCnt > 0 ? `<button type="button" onclick="openArtistDetailModal(${a.id})" class="px-1.5 py-0.5 rounded-[4px] ui-badge text-[10.5px] text-[var(--text-muted)]">+${extraTagCnt}</button>` : ""}</div>` : ""}
-              <p onclick="openArtistDetailModal(${a.id})" title="点击展开完整画师介绍与笔记" class="text-[12px] text-[var(--text-secondary)] line-clamp-3 leading-relaxed cursor-pointer hover:text-[var(--text-primary)] transition-colors">${escapeHtml(fullSummary)}</p>
+              <div class="flex items-center flex-wrap gap-1">
+                ${shownTags.map(t => `<button type="button" onclick="filterArtistsByStyleTag('${escapeHtml(t).replace(/'/g, "\\'")}')" class="px-1.5 py-0.5 rounded-[4px] ui-badge text-[10.5px] text-[var(--text-secondary)] hover:text-[var(--accent-primary)] transition-colors">${escapeHtml(t)}</button>`).join("")}
+                ${extraTagCnt > 0 ? `<button type="button" onclick="openArtistDetailModal(${a.id})" class="px-1.5 py-0.5 rounded-[4px] ui-badge text-[10px] font-mono text-[var(--text-muted)]" title="查看全部 ${styleTags.length} 个风格标签">+${extraTagCnt}</button>` : ""}
+              </div>
+              <p onclick="openArtistDetailModal(${a.id})" title="点击查看完整档案与实测混搭笔记" class="text-[12px] text-[var(--text-muted)] line-clamp-2 leading-snug cursor-pointer hover:text-[var(--text-secondary)] transition-colors">${escapeHtml(shortDesc)}</p>
             </div>
-            <div class="grid grid-cols-2 gap-1.5 pt-1 text-[12px]">
-              <button onclick="useArtistById(${a.id})" class="spring-btn py-1 rounded-[6px] ui-btn font-medium">选用</button>
-              <button onclick="addArtistByIdToMixer(${a.id})" class="spring-btn py-1 rounded-[6px] ui-btn">+ 混合</button>
-              <button onclick="openArtistDetailModal(${a.id})" class="spring-btn py-1 rounded-[6px] ui-btn text-[var(--accent-primary)]">完整档案</button>
-              <button id="gen-card-btn-${a.id}" ${isGeneratingPrev ? "disabled" : ""} onclick="generateArtistCard(${a.id})" class="spring-btn py-1 rounded-[6px] ui-btn text-[var(--status-success)]" title="调用 NovelAI 接口 0点数生成该画师标准预览图">${isGeneratingPrev ? "生成中..." : hasPreview ? "重绘预览" : "生成预览"}</button>
+            <div class="flex items-center gap-1 pt-1.5 border-t border-[var(--border-hairline)] text-[12px]">
+              <button onclick="useArtistById(${a.id})" class="spring-btn flex-1 py-1 rounded-[6px] ui-btn font-medium">选用</button>
+              <button onclick="addArtistByIdToMixer(${a.id})" class="spring-btn flex-1 py-1 rounded-[6px] ui-btn">+ 混合</button>
+              <button onclick="openArtistDetailModal(${a.id})" class="spring-btn w-7 h-7 rounded-[6px] ui-btn-ghost flex items-center justify-center text-[var(--text-secondary)] shrink-0" title="查看完整画师档案与混搭笔记">
+                ${uiIcon("book", "ui-ic-sm")}
+              </button>
+              <button id="gen-card-btn-${a.id}" ${isGeneratingPrev ? "disabled" : ""} onclick="generateArtistCard(${a.id})" class="spring-btn w-7 h-7 rounded-[6px] ui-btn-ghost flex items-center justify-center ${isGeneratingPrev ? "text-[var(--status-warning)] animate-spin" : "text-[var(--text-muted)] hover:text-[var(--status-success)]"} shrink-0" title="${isGeneratingPrev ? "生成预览中..." : hasPreview ? "重绘标准预览图 (0 Anlas)" : "生成标准预览图 (0 Anlas)"}">
+                ${uiIcon("refresh", "ui-ic-sm")}
+              </button>
             </div>
           </div>
         </div>
@@ -3540,9 +3582,22 @@ function renderArtistDetailModal() {
     if (urls.length) {
       uWrap.classList.remove("hidden");
       uEl.innerHTML = urls.map(u => {
-        let host = u;
-        try { host = new URL(u).hostname.replace(/^www\./, ""); } catch {}
-        return `<a href="${escapeHtml(u)}" target="_blank" rel="noopener noreferrer" class="spring-btn inline-flex items-center px-2.5 py-1 rounded-[5px] ui-btn text-[11.5px] font-mono text-[var(--accent-primary)] hover:underline">${escapeHtml(host)}</a>`;
+        let label = u;
+        try {
+          const parsed = new URL(u);
+          const host = parsed.hostname.replace(/^www\./, "");
+          const segs = parsed.pathname.split("/").filter(Boolean);
+          if ((host === "x.com" || host === "twitter.com") && segs.length) {
+            label = segs[0] === "i" && segs[2] ? `X (uid:${segs[2]})` : `X (@${segs[0]})`;
+          } else if (host.includes("pixiv.net") && segs.length) {
+            label = `Pixiv (${segs[segs.length - 1]})`;
+          } else if (segs.length) {
+            label = `${host}/${segs[0]}`;
+          } else {
+            label = host;
+          }
+        } catch {}
+        return `<a href="${escapeHtml(u)}" target="_blank" rel="noopener noreferrer" class="spring-btn inline-flex items-center px-2.5 py-1 rounded-[5px] ui-btn text-[11.5px] font-mono text-[var(--accent-primary)] hover:underline" title="${escapeHtml(u)}">${escapeHtml(label)} ↗</a>`;
       }).join("");
     } else {
       uWrap.classList.add("hidden");
@@ -3910,46 +3965,54 @@ async function renderFullGallery(reloadFromServer = false) {
       const ringCls = selected ? "ring-2 ring-[var(--text-primary)]" : "";
       if (isCompact) {
         return `
-          <div class="studio-grid-card-compact rounded-[7px] ui-card overflow-hidden flex flex-col group ${ringCls}">
-            <div class="relative shrink-0 overflow-hidden bg-[var(--bg-canvas-well)] aspect-square flex items-center justify-center">
-              <img src="${it.image_url}" alt="" loading="lazy" decoding="async" onerror="this.onerror=null;this.style.opacity='0.22';" class="w-full h-full object-cover object-top transition-opacity duration-150 group-hover:opacity-90 cursor-pointer" onclick="openGalleryDetailModal(${it.id})" />
-              <button type="button" onclick="toggleSelectGalleryItem(${it.id}, event)" aria-label="选择作品" class="spring-btn absolute top-1.5 left-1.5 w-5 h-5 rounded-[4px] studio-hud flex items-center justify-center text-[10px] font-bold ${selected ? "bg-[var(--text-primary)] text-[var(--cta-fg)] opacity-100" : "opacity-0 group-hover:opacity-100"} transition-opacity">
+          <div class="studio-grid-card-compact rounded-[8px] ui-card overflow-hidden flex flex-col group ${ringCls}">
+            <div class="relative shrink-0 overflow-hidden bg-[var(--bg-canvas-well)] aspect-[3/4] artwork-inner-frame flex items-center justify-center">
+              <img src="${it.image_url}" alt="" loading="lazy" decoding="async" onerror="this.onerror=null;this.style.opacity='0.22';" class="w-full h-full object-cover object-top transition-opacity duration-150 group-hover:opacity-92 cursor-pointer" onclick="openGalleryDetailModal(${it.id})" />
+              <button type="button" onclick="toggleSelectGalleryItem(${it.id}, event)" aria-label="选择作品" class="spring-btn absolute top-1.5 left-1.5 w-5 h-5 rounded-[5px] studio-hud flex items-center justify-center text-[10px] font-bold ${selected ? "bg-[var(--text-primary)] text-[var(--cta-fg)] opacity-100" : "opacity-0 group-hover:opacity-100"} transition-opacity">
                 ${selected ? "✓" : ""}
               </button>
-              <button onclick="toggleGalleryFav(${it.id})" aria-label="收藏作品" class="spring-btn absolute top-1.5 right-1.5 w-5 h-5 rounded-[4px] studio-hud flex items-center justify-center ${it.favorite ? "text-[var(--status-warning)] opacity-100" : "text-[var(--text-muted)] opacity-0 group-hover:opacity-100"} transition-opacity">
+              <button onclick="toggleGalleryFav(${it.id})" aria-label="收藏作品" class="spring-btn absolute top-1.5 right-1.5 w-5 h-5 rounded-[5px] studio-hud flex items-center justify-center ${it.favorite ? "text-[var(--status-warning)] opacity-100" : "text-[var(--text-muted)] opacity-0 group-hover:opacity-100"} transition-opacity">
                 ${uiIcon("star", "ui-ic-sm")}
               </button>
-              <span class="absolute bottom-1 left-1 px-1.5 py-0.5 rounded-[4px] studio-hud text-[10px] font-mono text-[var(--text-primary)] pointer-events-none">#${it.seed}</span>
+              <span class="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded-[4px] studio-hud text-[10px] font-mono text-[var(--text-primary)] pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">#${it.seed}</span>
             </div>
           </div>
         `;
       }
-      const footerHtml = `<div class="p-3 space-y-2">
-             <div class="flex items-center justify-between text-[12px] font-mono text-[var(--text-muted)]">
-               <span>Seed #${it.seed}</span>
-               <span>${it.width}×${it.height} · ${it.generation_time || 0}s</span>
+      const footerHtml = `<div class="p-3 space-y-2 flex-1 flex flex-col justify-between">
+             <div class="space-y-1.5">
+               <div class="flex items-center justify-between text-[11.5px] font-mono text-[var(--text-muted)]">
+                 <span>Seed #${it.seed}</span>
+                 <span>${it.width}×${it.height} · ${it.generation_time || 0}s</span>
+               </div>
+               ${it.notes ? `<div class="text-[11.5px] px-2 py-0.5 rounded-[5px] bg-[var(--accent-primary-tint)] text-[var(--text-primary)] truncate inline-flex items-center gap-1 max-w-full">${uiIcon("edit", "ui-ic-sm")}<span>${escapeHtml(it.notes)}</span></div>` : ""}
+               <p onclick="openGalleryDetailModal(${it.id})" class="selectable-text text-[12px] font-mono text-[var(--text-secondary)] line-clamp-2 leading-snug min-h-[32px] cursor-pointer hover:text-[var(--text-primary)] transition-colors">${escapeHtml(it.prompt)}</p>
              </div>
-             ${it.notes ? `<div class="text-[11.5px] px-2 py-0.5 rounded-[5px] bg-[var(--accent-tint)] text-[var(--text-primary)] truncate inline-flex items-center gap-1 max-w-full">${uiIcon("edit", "ui-ic-sm")}<span>${escapeHtml(it.notes)}</span></div>` : ""}
-             <p class="selectable-text text-[12px] font-mono text-[var(--text-secondary)] line-clamp-2 leading-snug min-h-[32px]">${escapeHtml(it.prompt)}</p>
-             <div class="grid grid-cols-4 gap-1 pt-1 text-[12px]">
-               <button onclick="loadGalleryItemToWorkbench(${it.id})" class="spring-btn py-1 rounded-[6px] ui-btn" title="加载完整生成参数到工作台">载入</button>
-               <button onclick="openGalleryDetailModal(${it.id})" class="spring-btn py-1 rounded-[6px] ui-btn">详情</button>
-               <a href="${it.image_url}" download="${escapeHtml(it.filename)}" class="spring-btn py-1 rounded-[6px] ui-btn text-center">下载</a>
-               <button onclick="deleteGalleryRecord(${it.id})" class="spring-btn py-1 rounded-[6px] ui-btn text-[var(--status-danger)]">删除</button>
+             <div class="flex items-center gap-1 pt-1.5 border-t border-[var(--border-hairline)] text-[12px]">
+               <button onclick="loadGalleryItemToWorkbench(${it.id})" class="spring-btn flex-1 py-1 rounded-[6px] ui-btn font-medium" title="加载完整生成参数到工作台">载入工作台</button>
+               <button onclick="openGalleryDetailModal(${it.id})" class="spring-btn w-7 h-7 rounded-[6px] ui-btn-ghost flex items-center justify-center shrink-0" title="查看作品详情与备注">
+                 ${uiIcon("expand", "ui-ic-sm")}
+               </button>
+               <a href="${it.image_url}" download="${escapeHtml(it.filename)}" class="spring-btn w-7 h-7 rounded-[6px] ui-btn-ghost flex items-center justify-center shrink-0" title="下载高清 PNG 原图">
+                 ${uiIcon("download", "ui-ic-sm")}
+               </a>
+               <button onclick="deleteGalleryRecord(${it.id})" class="spring-btn w-7 h-7 rounded-[6px] ui-btn-ghost flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--status-danger)] shrink-0" title="删除该作品">
+                 ${uiIcon("trash", "ui-ic-sm")}
+               </button>
              </div>
            </div>`;
 
       return `
-        <div class="studio-grid-card rounded-[10px] ui-card overflow-hidden flex flex-col group ${ringCls}">
-          <div class="relative shrink-0 overflow-hidden bg-[var(--bg-canvas-well)] aspect-[4/5] flex items-center justify-center">
+        <div class="studio-grid-card rounded-[11px] ui-card overflow-hidden flex flex-col group ${ringCls}">
+          <div class="relative shrink-0 overflow-hidden bg-[var(--bg-canvas-well)] aspect-[4/5] artwork-inner-frame flex items-center justify-center">
             <img src="${it.image_url}" alt="" loading="lazy" decoding="async" onerror="this.onerror=null;this.style.opacity='0.22';" class="w-full h-full object-contain transition-opacity duration-150 group-hover:opacity-95 cursor-pointer" onclick="openGalleryDetailModal(${it.id})" />
             <div class="absolute top-2 left-2 flex items-center gap-1.5">
               <button type="button" onclick="toggleSelectGalleryItem(${it.id}, event)" aria-label="选择作品" title="选择（支持 Shift 连选）" class="spring-btn w-6 h-6 rounded-[5px] studio-hud flex items-center justify-center text-[11px] font-bold ${selected ? "bg-[var(--text-primary)] text-[var(--cta-fg)] opacity-100" : "opacity-0 group-hover:opacity-100"} transition-opacity">
                 ${selected ? "✓" : ""}
               </button>
-              <span class="px-2 py-0.5 rounded-[5px] studio-hud text-[11.5px] font-mono text-[var(--text-primary)] pointer-events-none">${escapeHtml(it.model_short)}</span>
+              <span class="px-2 py-0.5 rounded-[5px] studio-hud text-[11px] font-mono text-[var(--text-primary)] pointer-events-none opacity-85">${escapeHtml(it.model_short)}</span>
             </div>
-            <button onclick="toggleGalleryFav(${it.id})" aria-label="收藏作品" class="spring-btn absolute top-2 right-2 w-7 h-7 rounded-[6px] studio-hud flex items-center justify-center ${it.favorite ? "text-[var(--status-warning)]" : "text-[var(--text-muted)]"}">
+            <button onclick="toggleGalleryFav(${it.id})" aria-label="收藏作品" class="spring-btn absolute top-2 right-2 w-7 h-7 rounded-[6px] studio-hud flex items-center justify-center ${it.favorite ? "text-[var(--status-warning)] opacity-100" : "text-[var(--text-muted)] opacity-0 group-hover:opacity-100"} transition-opacity">
               ${uiIcon("star")}
             </button>
           </div>
@@ -4466,6 +4529,30 @@ function updatePromptWorkspaceModeButtons() {
   const mode = state.promptWorkspaceMode === "structured" ? "structured" : "classic";
   document.getElementById("mode-btn-classic")?.classList.toggle("is-active", mode === "classic");
   document.getElementById("mode-btn-structured")?.classList.toggle("is-active", mode === "structured");
+  const wbClassic = document.getElementById("wb-mode-pill-classic");
+  const wbStruct = document.getElementById("wb-mode-pill-structured");
+  if (wbClassic) {
+    wbClassic.className = mode === "classic"
+      ? "px-2 py-0.5 rounded-[4px] font-medium seg-pill-active transition-all"
+      : "px-2 py-0.5 rounded-[4px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all";
+  }
+  if (wbStruct) {
+    wbStruct.className = mode === "structured"
+      ? "px-2 py-0.5 rounded-[4px] font-medium seg-pill-active transition-all"
+      : "px-2 py-0.5 rounded-[4px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all";
+  }
+}
+
+async function copyMcpConfigJson() {
+  const pre = document.getElementById("mcp-config-pre");
+  const txt = pre?.textContent?.trim() || "";
+  if (!txt) return;
+  try {
+    await navigator.clipboard.writeText(txt);
+    showToast("已复制 MCP 客户端配置 JSON");
+  } catch (e) {
+    showToast("请手动选中代码块复制");
+  }
 }
 
 async function setPromptWorkspaceMode(mode, persist = true) {
