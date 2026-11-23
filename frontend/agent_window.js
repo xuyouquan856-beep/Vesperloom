@@ -377,7 +377,7 @@ function refreshAgentLiveStrip() {
       btnEl.className = "spring-btn px-2 py-0.5 rounded-[5px] text-[11px] font-medium text-[var(--status-warning)] bg-[var(--status-warning-tint)] hover:opacity-90 transition-opacity shrink-0 whitespace-nowrap";
     } else {
       btnEl.textContent = "体检";
-      btnEl.className = "spring-btn px-2 py-0.5 rounded-[5px] text-[11px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/[0.06] transition-colors shrink-0 whitespace-nowrap";
+      btnEl.className = "spring-btn px-2 py-0.5 rounded-[5px] text-[11px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--btn-hover-bg)] transition-colors shrink-0 whitespace-nowrap";
     }
   }
 }
@@ -685,7 +685,7 @@ function formatAgentMarkdown(text) {
       } else {
         inCodeBlock = false;
         out.push(
-          `<div class="my-1.5 p-2.5 rounded-[8px] bg-black/25 border border-[var(--border-hairline)] overflow-x-auto"><code class="!bg-transparent !border-0 !p-0 block whitespace-pre-wrap" onclick="copyAgentCodeTag(this)" title="点击复制代码块">${escapeHtml(codeLines.join("\n"))}</code></div>`
+          `<div class="my-1.5 p-2.5 rounded-[8px] bg-[var(--code-block-bg)] border border-[var(--border-hairline)] overflow-x-auto"><code class="!bg-transparent !border-0 !p-0 block whitespace-pre-wrap" onclick="copyAgentCodeTag(this)" title="点击复制代码块">${escapeHtml(codeLines.join("\n"))}</code></div>`
         );
       }
       continue;
@@ -741,7 +741,7 @@ function formatAgentMarkdown(text) {
 
   if (inCodeBlock && codeLines.length) {
     out.push(
-      `<div class="my-1.5 p-2.5 rounded-[8px] bg-black/25 border border-[var(--border-hairline)] overflow-x-auto"><code class="!bg-transparent !border-0 !p-0 block whitespace-pre-wrap" onclick="copyAgentCodeTag(this)" title="点击复制代码块">${escapeHtml(codeLines.join("\n"))}</code></div>`
+      `<div class="my-1.5 p-2.5 rounded-[8px] bg-[var(--code-block-bg)] border border-[var(--border-hairline)] overflow-x-auto"><code class="!bg-transparent !border-0 !p-0 block whitespace-pre-wrap" onclick="copyAgentCodeTag(this)" title="点击复制代码块">${escapeHtml(codeLines.join("\n"))}</code></div>`
     );
   }
   flushTable();
@@ -1488,7 +1488,7 @@ function renderAgentPinnedSkillsBar() {
   bar.innerHTML = agentState.pinnedSkills
     .map(
       name => `
-      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] bg-white/[0.05] border border-[var(--border-hairline)] font-mono text-[10.5px] text-[var(--text-secondary)]">
+      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] bg-[var(--surface-subgroup)] border border-[var(--border-hairline)] font-mono text-[10.5px] text-[var(--text-secondary)]">
         /${escapeHtml(name)}
         <button type="button" onclick="togglePinSkill('${escapeHtml(name)}')" class="opacity-65 hover:opacity-100 text-[var(--text-primary)] leading-none">×</button>
       </span>

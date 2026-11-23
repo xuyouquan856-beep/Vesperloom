@@ -898,7 +898,7 @@ function renderResolutionButtons() {
       const isAct = r.width === state.width && r.height === state.height;
       const cls = isAct
         ? "is-active"
-        : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]";
+        : "text-[var(--text-muted)] hover:text-[var(--text-primary)]";
       return `
         <button type="button" onclick="selectResolution(${r.width}, ${r.height})" class="spring-btn py-1.5 px-1 rounded-[6px] ui-btn text-center ${cls}">
           <div class="text-[12px] leading-tight">${escapeHtml(r.label)}</div>
@@ -1690,7 +1690,7 @@ function renderPreciseRefList() {
   if (!wrap) return;
   updateLeftRefsBadge();
   if (!state.preciseRefs.length) {
-    wrap.innerHTML = `<div class="text-[12px] text-[var(--muted-foreground)]">未添加精准参考图（适合锁定特定角色脸型与服装细节）</div>`;
+    wrap.innerHTML = `<div class="text-[12px] text-[var(--text-muted)]">未添加精准参考图（适合锁定特定角色脸型与服装细节）</div>`;
     return;
   }
   wrap.innerHTML = state.preciseRefs
@@ -2008,8 +2008,8 @@ function setBatchCount(n) {
   document.querySelectorAll(".batch-btn").forEach(b => {
     const active = Number(b.dataset.batch) === state.batchCount;
     b.className = active
-      ? "batch-btn px-2 py-1 rounded-[6px] font-mono bg-[var(--accent-tint)] text-[var(--text-primary)] font-semibold"
-      : "batch-btn px-2 py-1 rounded-[6px] font-mono text-[var(--text-muted)]";
+      ? "batch-btn px-2 py-1 rounded-[6px] font-mono seg-pill-active"
+      : "batch-btn px-2 py-1 rounded-[6px] font-mono text-[var(--text-muted)] hover:text-[var(--text-primary)]";
   });
 }
 
@@ -3169,7 +3169,7 @@ function renderMixer() {
   wrap.dataset.renderKey = renderKey;
 
   if (!state.mixerItems.length) {
-    wrap.innerHTML = `<div class="ui-body text-[var(--muted-foreground)] py-4 text-center">从左侧点击「+ 混合」添加多位画师调配比例</div>`;
+    wrap.innerHTML = `<div class="ui-body text-[var(--text-muted)] py-4 text-center">从左侧点击「+ 混合」添加多位画师调配比例</div>`;
     out.textContent = "尚未添加混合画师";
     return;
   }
@@ -3952,7 +3952,7 @@ async function renderFullGallery(reloadFromServer = false) {
   if (!items.length) {
     grid.innerHTML = `
       <div class="col-span-full py-14 flex flex-col items-center justify-center gap-3 text-center">
-        <div class="ui-body text-[var(--muted-foreground)]">没有匹配的本地图库记录</div>
+        <div class="ui-body text-[var(--text-muted)]">没有匹配的本地图库记录</div>
         <button type="button" onclick="resetGalleryFilters()" class="spring-btn px-3 py-1 rounded-[6px] ui-btn text-[12px]">清空筛选条件</button>
       </div>
     `;
@@ -4716,22 +4716,242 @@ const APPEARANCE_LOCAL_KEY = "nai_studio_appearance_v1";
 
 const APPEARANCE_PRESETS = {
   dark: [
-    { id: "obsidian", name: "曜石暗房", base: "#0a0c10", well: "#06080b", panel: "#0e1117", alt: "#131720", dot: "rgba(255,255,255,0.055)", hex: "#080a0f" },
-    { id: "slate", name: "深海石板", base: "#091016", well: "#060b10", panel: "#0d151c", alt: "#121c25", dot: "rgba(226,236,245,0.06)", hex: "#091319" },
-    { id: "graphite", name: "中性石墨", base: "#101113", well: "#0b0c0e", panel: "#141619", alt: "#1a1c20", dot: "rgba(255,255,255,0.05)", hex: "#121417" },
-    { id: "midnight", name: "午夜靛蓝", base: "#0a0e18", well: "#060912", panel: "#0e1320", alt: "#141a2b", dot: "rgba(220,232,255,0.055)", hex: "#0c1724" },
-    { id: "jade", name: "墨玉青灰", base: "#091311", well: "#050d0b", panel: "#0d1815", alt: "#12201c", dot: "rgba(220,245,235,0.055)", hex: "#0e1d19" },
-    { id: "espresso", name: "暖岩炭棕", base: "#120f0d", well: "#0c0a08", panel: "#161311", alt: "#1e1a17", dot: "rgba(255,244,232,0.05)", hex: "#161311" },
+    {
+      id: "obsidian", name: "曜石暗房", hex: "#080a0f",
+      base: "#0a0c10", well: "#06080b", panel: "#0e1117", alt: "#141923", elevated: "#202736",
+      inputWell: "#080a0e", wellHover: "#151b26", groupHover: "#181e2a", popover: "#151a25",
+      btnBg: "rgba(255,255,255,0.054)", btnHover: "rgba(255,255,255,0.105)", btnBorder: "rgba(255,255,255,0.12)",
+      segmentedBg: "rgba(0,0,0,0.28)", subgroupBg: "rgba(255,255,255,0.036)",
+      borderHairline: "rgba(255,255,255,0.085)", borderControl: "rgba(255,255,255,0.15)", borderHover: "rgba(255,255,255,0.30)",
+      textPrimary: "#f4f5f8", textSecondary: "#b6bfd1", textMuted: "#8893a8", placeholder: "#7a8599",
+      accentPrimary: "#818cf8", accentTint: "rgba(129,140,248,0.16)", accentBorder: "rgba(129,140,248,0.38)",
+      dot: "rgba(255,255,255,0.09)", grid: "rgba(255,255,255,0.055)",
+      spotlight: "radial-gradient(circle at 50% 48%, rgba(255,255,255,0.075) 0%, rgba(0,0,0,0.20) 76%)",
+      hudRgb: "15, 19, 27", agentBg: "rgba(14,17,23,0.94)", composerFade: "rgba(13,16,22,0.96)",
+      composerBg: "rgba(255,255,255,0.045)", codeBg: "rgba(0,0,0,0.30)", inlineCodeBg: "rgba(255,255,255,0.075)",
+    },
+    {
+      id: "slate", name: "深海石板", hex: "#091319",
+      base: "#091016", well: "#060b10", panel: "#0d151c", alt: "#131e28", elevated: "#1c2b38",
+      inputWell: "#070d12", wellHover: "#15222d", groupHover: "#16232f", popover: "#121d27",
+      btnBg: "rgba(214,234,250,0.06)", btnHover: "rgba(214,234,250,0.115)", btnBorder: "rgba(214,234,250,0.135)",
+      segmentedBg: "rgba(4,9,14,0.34)", subgroupBg: "rgba(214,234,250,0.038)",
+      borderHairline: "rgba(214,234,250,0.095)", borderControl: "rgba(214,234,250,0.165)", borderHover: "rgba(214,234,250,0.32)",
+      textPrimary: "#eef4f8", textSecondary: "#b0c4d4", textMuted: "#7e97ab", placeholder: "#6f879b",
+      accentPrimary: "#38bdf8", accentTint: "rgba(56,189,248,0.16)", accentBorder: "rgba(56,189,248,0.38)",
+      dot: "rgba(214,234,250,0.095)", grid: "rgba(214,234,250,0.058)",
+      spotlight: "radial-gradient(circle at 50% 48%, rgba(190,225,255,0.075) 0%, rgba(2,6,12,0.22) 76%)",
+      hudRgb: "13, 21, 28", agentBg: "rgba(12,20,27,0.94)", composerFade: "rgba(11,18,25,0.96)",
+      composerBg: "rgba(214,234,250,0.048)", codeBg: "rgba(3,8,14,0.34)", inlineCodeBg: "rgba(214,234,250,0.08)",
+    },
+    {
+      id: "graphite", name: "中性石墨", hex: "#121417",
+      base: "#101113", well: "#0a0b0d", panel: "#15171a", alt: "#1d2024", elevated: "#282b31",
+      inputWell: "#0d0e10", wellHover: "#22252b", groupHover: "#202328", popover: "#1b1d22",
+      btnBg: "rgba(255,255,255,0.068)", btnHover: "rgba(255,255,255,0.125)", btnBorder: "rgba(255,255,255,0.145)",
+      segmentedBg: "rgba(0,0,0,0.30)", subgroupBg: "rgba(255,255,255,0.04)",
+      borderHairline: "rgba(255,255,255,0.095)", borderControl: "rgba(255,255,255,0.17)", borderHover: "rgba(255,255,255,0.34)",
+      textPrimary: "#f5f5f6", textSecondary: "#c2c5cb", textMuted: "#9297a0", placeholder: "#80858e",
+      accentPrimary: "#93c5fd", accentTint: "rgba(147,197,253,0.16)", accentBorder: "rgba(147,197,253,0.38)",
+      dot: "rgba(255,255,255,0.09)", grid: "rgba(255,255,255,0.056)",
+      spotlight: "radial-gradient(circle at 50% 48%, rgba(255,255,255,0.078) 0%, rgba(0,0,0,0.20) 76%)",
+      hudRgb: "22, 24, 28", agentBg: "rgba(21,23,26,0.95)", composerFade: "rgba(19,21,24,0.97)",
+      composerBg: "rgba(255,255,255,0.05)", codeBg: "rgba(0,0,0,0.32)", inlineCodeBg: "rgba(255,255,255,0.08)",
+    },
+    {
+      id: "midnight", name: "午夜靛蓝", hex: "#0c1724",
+      base: "#0a0e18", well: "#060912", panel: "#0e1422", alt: "#151d30", elevated: "#212c46",
+      inputWell: "#080c16", wellHover: "#182238", groupHover: "#182135", popover: "#131a2b",
+      btnBg: "rgba(215,225,255,0.058)", btnHover: "rgba(215,225,255,0.115)", btnBorder: "rgba(215,225,255,0.13)",
+      segmentedBg: "rgba(4,6,14,0.35)", subgroupBg: "rgba(215,225,255,0.038)",
+      borderHairline: "rgba(215,225,255,0.095)", borderControl: "rgba(215,225,255,0.16)", borderHover: "rgba(215,225,255,0.32)",
+      textPrimary: "#f1f4fb", textSecondary: "#b8c2df", textMuted: "#8794b8", placeholder: "#7784a8",
+      accentPrimary: "#a5b4fc", accentTint: "rgba(165,180,252,0.17)", accentBorder: "rgba(165,180,252,0.40)",
+      dot: "rgba(215,225,255,0.095)", grid: "rgba(215,225,255,0.058)",
+      spotlight: "radial-gradient(circle at 50% 48%, rgba(185,205,255,0.08) 0%, rgba(2,4,12,0.22) 76%)",
+      hudRgb: "14, 20, 34", agentBg: "rgba(13,18,31,0.94)", composerFade: "rgba(12,17,29,0.96)",
+      composerBg: "rgba(215,225,255,0.048)", codeBg: "rgba(3,5,14,0.34)", inlineCodeBg: "rgba(215,225,255,0.08)",
+    },
+    {
+      id: "jade", name: "墨玉青灰", hex: "#0e1d19",
+      base: "#091311", well: "#050d0b", panel: "#0d1815", alt: "#13221e", elevated: "#1c312b",
+      inputWell: "#07100e", wellHover: "#172924", groupHover: "#162722", popover: "#11201c",
+      btnBg: "rgba(210,245,232,0.058)", btnHover: "rgba(210,245,232,0.115)", btnBorder: "rgba(210,245,232,0.135)",
+      segmentedBg: "rgba(3,10,8,0.34)", subgroupBg: "rgba(210,245,232,0.038)",
+      borderHairline: "rgba(210,245,232,0.095)", borderControl: "rgba(210,245,232,0.165)", borderHover: "rgba(210,245,232,0.32)",
+      textPrimary: "#eff6f4", textSecondary: "#b0cac2", textMuted: "#7e9e95", placeholder: "#6f8f86",
+      accentPrimary: "#34d399", accentTint: "rgba(52,211,153,0.16)", accentBorder: "rgba(52,211,153,0.38)",
+      dot: "rgba(205,245,232,0.095)", grid: "rgba(205,245,232,0.056)",
+      spotlight: "radial-gradient(circle at 50% 48%, rgba(180,240,220,0.075) 0%, rgba(2,10,8,0.22) 76%)",
+      hudRgb: "13, 24, 21", agentBg: "rgba(12,22,19,0.94)", composerFade: "rgba(11,20,18,0.96)",
+      composerBg: "rgba(210,245,232,0.048)", codeBg: "rgba(2,9,7,0.34)", inlineCodeBg: "rgba(210,245,232,0.08)",
+    },
+    {
+      id: "espresso", name: "暖岩炭棕", hex: "#161311",
+      base: "#120f0d", well: "#0b0907", panel: "#181411", alt: "#211c18", elevated: "#2e2722",
+      inputWell: "#0e0b09", wellHover: "#26201c", groupHover: "#241f1b", popover: "#1e1916",
+      btnBg: "rgba(255,242,226,0.064)", btnHover: "rgba(255,242,226,0.125)", btnBorder: "rgba(255,242,226,0.145)",
+      segmentedBg: "rgba(8,6,4,0.34)", subgroupBg: "rgba(255,242,226,0.042)",
+      borderHairline: "rgba(255,242,226,0.10)", borderControl: "rgba(255,242,226,0.17)", borderHover: "rgba(255,242,226,0.34)",
+      textPrimary: "#f7f3ee", textSecondary: "#ccc0b4", textMuted: "#9e8f81", placeholder: "#8c7d70",
+      accentPrimary: "#f59e0b", accentTint: "rgba(245,158,11,0.16)", accentBorder: "rgba(245,158,11,0.40)",
+      dot: "rgba(255,240,222,0.095)", grid: "rgba(255,240,222,0.056)",
+      spotlight: "radial-gradient(circle at 50% 48%, rgba(255,236,210,0.078) 0%, rgba(6,4,2,0.22) 76%)",
+      hudRgb: "24, 20, 17", agentBg: "rgba(22,18,16,0.95)", composerFade: "rgba(20,17,14,0.97)",
+      composerBg: "rgba(255,242,226,0.05)", codeBg: "rgba(8,6,4,0.34)", inlineCodeBg: "rgba(255,242,226,0.085)",
+    },
   ],
   light: [
-    { id: "paper", name: "中性制图灰", base: "#eaedf2", well: "#e3e7ee", panel: "#f6f7f9", alt: "#edf0f5", dot: "rgba(15,23,42,0.085)", hex: "#e3e7ee" },
-    { id: "gallery", name: "纯白画廊", base: "#f0f2f5", well: "#eaedf2", panel: "#ffffff", alt: "#f4f6f8", dot: "rgba(15,23,42,0.075)", hex: "#eaedf2" },
-    { id: "cotton", name: "暖调棉纸", base: "#f2efe9", well: "#eae5dc", panel: "#faf8f4", alt: "#f0ece4", dot: "rgba(45,35,20,0.075)", hex: "#eae5dc" },
-    { id: "mist", name: "雾青灰调", base: "#eaf0f2", well: "#e1e9ec", panel: "#f5f8f9", alt: "#eaf0f3", dot: "rgba(15,40,50,0.08)", hex: "#e1e9ec" },
-    { id: "sand", name: "砂岩浅灰", base: "#eeece8", well: "#e5e2dc", panel: "#f7f6f3", alt: "#edeae4", dot: "rgba(35,32,26,0.08)", hex: "#e5e2dc" },
-    { id: "ice", name: "冷调冰蓝", base: "#eaf0f8", well: "#dfe7f2", panel: "#f5f8fc", alt: "#eaf0f7", dot: "rgba(15,35,65,0.08)", hex: "#dfe7f2" },
+    {
+      id: "paper", name: "中性制图灰", hex: "#e3e7ee",
+      base: "#eaedf2", well: "#e3e7ee", panel: "#f6f7f9", alt: "#ebeef4", elevated: "#ffffff",
+      inputWell: "#ffffff", wellHover: "#edf1f7", groupHover: "#e6ebf2", popover: "#ffffff",
+      btnBg: "#ffffff", btnHover: "#eef2f7", btnBorder: "rgba(15,23,42,0.145)",
+      segmentedBg: "rgba(15,23,42,0.068)", subgroupBg: "rgba(15,23,42,0.042)",
+      borderHairline: "rgba(15,23,42,0.105)", borderControl: "rgba(15,23,42,0.175)", borderHover: "rgba(15,23,42,0.32)",
+      textPrimary: "#0f172a", textSecondary: "#334155", textMuted: "#526176", placeholder: "#64748b",
+      accentPrimary: "#4f46e5", accentTint: "rgba(79,70,229,0.11)", accentBorder: "rgba(79,70,229,0.32)",
+      dot: "rgba(15,23,42,0.125)", grid: "rgba(15,23,42,0.075)",
+      spotlight: "radial-gradient(circle at 50% 48%, rgba(255,255,255,0.78) 0%, rgba(15,23,42,0.055) 78%)",
+      hudRgb: "255, 255, 255", agentBg: "rgba(255,255,255,0.97)", composerFade: "rgba(246,247,249,0.98)",
+      composerBg: "#ffffff", codeBg: "rgba(15,23,42,0.055)", inlineCodeBg: "rgba(15,23,42,0.06)",
+    },
+    {
+      id: "gallery", name: "纯白画廊", hex: "#eaedf2",
+      base: "#edf0f5", well: "#e5e9f0", panel: "#ffffff", alt: "#f1f4f9", elevated: "#ffffff",
+      inputWell: "#f5f7fb", wellHover: "#e9eef5", groupHover: "#eaf0f7", popover: "#ffffff",
+      btnBg: "#f2f5f9", btnHover: "#e7ecf3", btnBorder: "rgba(15,23,42,0.175)",
+      segmentedBg: "#e7ecf3", subgroupBg: "rgba(15,23,42,0.048)",
+      borderHairline: "rgba(15,23,42,0.12)", borderControl: "rgba(15,23,42,0.195)", borderHover: "rgba(15,23,42,0.34)",
+      textPrimary: "#0f172a", textSecondary: "#334155", textMuted: "#526176", placeholder: "#64748b",
+      accentPrimary: "#2563eb", accentTint: "rgba(37,99,235,0.11)", accentBorder: "rgba(37,99,235,0.34)",
+      dot: "rgba(15,23,42,0.12)", grid: "rgba(15,23,42,0.072)",
+      spotlight: "radial-gradient(circle at 50% 48%, rgba(255,255,255,0.92) 0%, rgba(15,23,42,0.065) 78%)",
+      hudRgb: "255, 255, 255", agentBg: "rgba(255,255,255,0.98)", composerFade: "rgba(255,255,255,0.98)",
+      composerBg: "#f6f8fb", codeBg: "rgba(15,23,42,0.055)", inlineCodeBg: "rgba(15,23,42,0.06)",
+    },
+    {
+      id: "cotton", name: "暖调棉纸", hex: "#eae5dc",
+      base: "#f2eee7", well: "#e8e2d7", panel: "#fbf9f5", alt: "#efeae0", elevated: "#ffffff",
+      inputWell: "#ffffff", wellHover: "#f3eee4", groupHover: "#ece5d9", popover: "#fffdf9",
+      btnBg: "#fffdf9", btnHover: "#f4efe5", btnBorder: "rgba(60,42,20,0.17)",
+      segmentedBg: "rgba(60,42,20,0.072)", subgroupBg: "rgba(60,42,20,0.045)",
+      borderHairline: "rgba(60,42,20,0.115)", borderControl: "rgba(60,42,20,0.185)", borderHover: "rgba(60,42,20,0.34)",
+      textPrimary: "#241c14", textSecondary: "#514335", textMuted: "#706050", placeholder: "#827262",
+      accentPrimary: "#c2410c", accentTint: "rgba(194,65,12,0.105)", accentBorder: "rgba(194,65,12,0.32)",
+      dot: "rgba(65,45,20,0.125)", grid: "rgba(65,45,20,0.072)",
+      spotlight: "radial-gradient(circle at 50% 48%, rgba(255,252,245,0.82) 0%, rgba(60,42,20,0.055) 78%)",
+      hudRgb: "251, 249, 245", agentBg: "rgba(251,249,245,0.97)", composerFade: "rgba(251,249,245,0.98)",
+      composerBg: "#ffffff", codeBg: "rgba(60,42,20,0.058)", inlineCodeBg: "rgba(60,42,20,0.065)",
+    },
+    {
+      id: "mist", name: "雾青灰调", hex: "#e1e9ec",
+      base: "#e9f0f2", well: "#dfeaed", panel: "#f6f9fa", alt: "#ebf2f4", elevated: "#ffffff",
+      inputWell: "#ffffff", wellHover: "#ecf3f5", groupHover: "#e4edf0", popover: "#ffffff",
+      btnBg: "#ffffff", btnHover: "#ebf2f4", btnBorder: "rgba(15,48,54,0.165)",
+      segmentedBg: "rgba(15,48,54,0.07)", subgroupBg: "rgba(15,48,54,0.045)",
+      borderHairline: "rgba(15,48,54,0.11)", borderControl: "rgba(15,48,54,0.18)", borderHover: "rgba(15,48,54,0.33)",
+      textPrimary: "#0f2428", textSecondary: "#314b50", textMuted: "#4e6b71", placeholder: "#617d83",
+      accentPrimary: "#0d9488", accentTint: "rgba(13,148,136,0.11)", accentBorder: "rgba(13,148,136,0.33)",
+      dot: "rgba(15,48,54,0.125)", grid: "rgba(15,48,54,0.072)",
+      spotlight: "radial-gradient(circle at 50% 48%, rgba(255,255,255,0.80) 0%, rgba(15,48,54,0.055) 78%)",
+      hudRgb: "246, 249, 250", agentBg: "rgba(246,249,250,0.97)", composerFade: "rgba(246,249,250,0.98)",
+      composerBg: "#ffffff", codeBg: "rgba(15,48,54,0.058)", inlineCodeBg: "rgba(15,48,54,0.062)",
+    },
+    {
+      id: "sand", name: "砂岩浅灰", hex: "#e5e2dc",
+      base: "#eeece7", well: "#e4e0d8", panel: "#f8f7f4", alt: "#ece9e2", elevated: "#ffffff",
+      inputWell: "#ffffff", wellHover: "#f0ede6", groupHover: "#e9e5dd", popover: "#ffffff",
+      btnBg: "#ffffff", btnHover: "#efeae1", btnBorder: "rgba(45,38,28,0.16)",
+      segmentedBg: "rgba(45,38,28,0.068)", subgroupBg: "rgba(45,38,28,0.044)",
+      borderHairline: "rgba(45,38,28,0.11)", borderControl: "rgba(45,38,28,0.18)", borderHover: "rgba(45,38,28,0.33)",
+      textPrimary: "#1e1c18", textSecondary: "#49443c", textMuted: "#676054", placeholder: "#787166",
+      accentPrimary: "#b45309", accentTint: "rgba(180,83,9,0.11)", accentBorder: "rgba(180,83,9,0.33)",
+      dot: "rgba(45,38,28,0.12)", grid: "rgba(45,38,28,0.072)",
+      spotlight: "radial-gradient(circle at 50% 48%, rgba(255,254,250,0.82) 0%, rgba(45,38,28,0.055) 78%)",
+      hudRgb: "248, 247, 244", agentBg: "rgba(248,247,244,0.97)", composerFade: "rgba(248,247,244,0.98)",
+      composerBg: "#ffffff", codeBg: "rgba(45,38,28,0.055)", inlineCodeBg: "rgba(45,38,28,0.06)",
+    },
+    {
+      id: "ice", name: "冷调冰蓝", hex: "#dfe7f2",
+      base: "#e9f0f8", well: "#dde6f2", panel: "#f5f8fc", alt: "#eaf0f8", elevated: "#ffffff",
+      inputWell: "#ffffff", wellHover: "#ecf2fa", groupHover: "#e4ecf7", popover: "#ffffff",
+      btnBg: "#ffffff", btnHover: "#eaf1fa", btnBorder: "rgba(15,38,72,0.16)",
+      segmentedBg: "rgba(15,38,72,0.068)", subgroupBg: "rgba(15,38,72,0.044)",
+      borderHairline: "rgba(15,38,72,0.11)", borderControl: "rgba(15,38,72,0.18)", borderHover: "rgba(15,38,72,0.33)",
+      textPrimary: "#0d1d33", textSecondary: "#314563", textMuted: "#4f6485", placeholder: "#617697",
+      accentPrimary: "#0284c7", accentTint: "rgba(2,132,199,0.11)", accentBorder: "rgba(2,132,199,0.33)",
+      dot: "rgba(15,38,72,0.12)", grid: "rgba(15,38,72,0.072)",
+      spotlight: "radial-gradient(circle at 50% 48%, rgba(255,255,255,0.82) 0%, rgba(15,38,72,0.055) 78%)",
+      hudRgb: "245, 248, 252", agentBg: "rgba(245,248,252,0.97)", composerFade: "rgba(245,248,252,0.98)",
+      composerBg: "#ffffff", codeBg: "rgba(15,38,72,0.055)", inlineCodeBg: "rgba(15,38,72,0.06)",
+    },
   ],
 };
+
+const THEME_MANAGED_VARS = [
+  "--bg-base", "--bg-canvas-well", "--surface-panel", "--surface-panel-alt", "--surface-elevated",
+  "--surface-well", "--surface-well-hover", "--surface-group-hover", "--surface-popover",
+  "--btn-bg", "--btn-hover-bg", "--btn-border", "--segmented-bg", "--surface-subgroup",
+  "--border-hairline", "--border-control", "--border-hover", "--border-focus",
+  "--text-primary", "--text-secondary", "--text-muted", "--placeholder",
+  "--accent-primary", "--accent-primary-tint", "--accent-primary-border",
+  "--canvas-dot-color", "--canvas-grid-color", "--canvas-spotlight",
+  "--hud-rgb", "--surface-agent", "--surface-composer-fade", "--composer-bg",
+  "--code-block-bg", "--inline-code-bg", "--surface-chrome",
+];
+
+function applyThemeTokens(tokens) {
+  const root = document.documentElement.style;
+  const pairs = [
+    ["--bg-base", tokens.base],
+    ["--bg-canvas-well", tokens.well],
+    ["--surface-panel", tokens.panel],
+    ["--surface-panel-alt", tokens.alt],
+    ["--surface-elevated", tokens.elevated],
+    ["--surface-well", tokens.inputWell],
+    ["--surface-well-hover", tokens.wellHover],
+    ["--surface-group-hover", tokens.groupHover],
+    ["--surface-popover", tokens.popover],
+    ["--btn-bg", tokens.btnBg],
+    ["--btn-hover-bg", tokens.btnHover],
+    ["--btn-border", tokens.btnBorder],
+    ["--segmented-bg", tokens.segmentedBg],
+    ["--surface-subgroup", tokens.subgroupBg],
+    ["--border-hairline", tokens.borderHairline],
+    ["--border-control", tokens.borderControl],
+    ["--border-hover", tokens.borderHover],
+    ["--border-focus", tokens.accentPrimary],
+    ["--text-primary", tokens.textPrimary],
+    ["--text-secondary", tokens.textSecondary],
+    ["--text-muted", tokens.textMuted],
+    ["--placeholder", tokens.placeholder],
+    ["--accent-primary", tokens.accentPrimary],
+    ["--accent-primary-tint", tokens.accentTint],
+    ["--accent-primary-border", tokens.accentBorder],
+    ["--canvas-dot-color", tokens.dot],
+    ["--canvas-grid-color", tokens.grid],
+    ["--canvas-spotlight", tokens.spotlight],
+    ["--hud-rgb", tokens.hudRgb],
+    ["--surface-agent", tokens.agentBg],
+    ["--surface-composer-fade", tokens.composerFade],
+    ["--composer-bg", tokens.composerBg],
+    ["--code-block-bg", tokens.codeBg],
+    ["--inline-code-bg", tokens.inlineCodeBg],
+    ["--surface-chrome", `rgba(${tokens.hudRgb}, 0.92)`],
+  ];
+  pairs.forEach(([k, v]) => {
+    if (v !== undefined && v !== null) root.setProperty(k, v);
+  });
+}
+
+function hslToRgbTriplet(h, s, l) {
+  const sn = s / 100, ln = l / 100;
+  const k = n => (n + h / 30) % 12;
+  const a = sn * Math.min(ln, 1 - ln);
+  const f = n => ln - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  return `${Math.round(f(0) * 255)}, ${Math.round(f(8) * 255)}, ${Math.round(f(4) * 255)}`;
+}
 
 function loadAppearanceLocal() {
   try {
@@ -4782,9 +5002,7 @@ let _clarityConfigTimer = null;
 
 function clearCustomSurfaceVars() {
   const root = document.documentElement.style;
-  ["--bg-base", "--bg-canvas-well", "--surface-panel", "--surface-panel-alt", "--canvas-dot-color"].forEach(v =>
-    root.removeProperty(v)
-  );
+  THEME_MANAGED_VARS.forEach(v => root.removeProperty(v));
 }
 
 function renderAppearanceMenu() {
@@ -4794,12 +5012,12 @@ function renderAppearanceMenu() {
   const lightBtn = document.getElementById("appearance-mode-light");
   if (darkBtn) {
     darkBtn.className = !isLight
-      ? "appearance-mode-btn spring-btn px-2.5 py-1 rounded-[5px] font-medium bg-[var(--cta-bg)] text-[var(--cta-fg)]"
+      ? "appearance-mode-btn spring-btn px-2.5 py-1 rounded-[5px] seg-pill-active"
       : "appearance-mode-btn spring-btn px-2.5 py-1 rounded-[5px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)]";
   }
   if (lightBtn) {
     lightBtn.className = isLight
-      ? "appearance-mode-btn spring-btn px-2.5 py-1 rounded-[5px] font-medium bg-[var(--cta-bg)] text-[var(--cta-fg)]"
+      ? "appearance-mode-btn spring-btn px-2.5 py-1 rounded-[5px] seg-pill-active"
       : "appearance-mode-btn spring-btn px-2.5 py-1 rounded-[5px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)]";
   }
 
@@ -4809,7 +5027,7 @@ function renderAppearanceMenu() {
   const activePreset = presets.find(p => p.id === activePresetId);
   const labelEl = document.getElementById("appearance-preset-label");
   if (labelEl) {
-    labelEl.textContent = activePreset ? activePreset.name : state.config.bg_preset_name || "自定义色";
+    labelEl.textContent = !local[`customHex_${modeKey}`] && activePreset ? activePreset.name : state.config.bg_preset_name || "自定义色";
   }
 
   const grid = document.getElementById("appearance-presets-grid");
@@ -4820,12 +5038,13 @@ function renderAppearanceMenu() {
         return `
         <button type="button" onclick="applyAppearancePreset('${p.id}')" class="spring-btn text-left rounded-[8px] p-1.5 border transition-colors ${
           isAct
-            ? "border-[var(--cta-bg)] bg-[var(--accent-tint)]"
+            ? "border-[var(--accent-primary)] bg-[var(--accent-primary-tint)]"
             : "border-[var(--border-hairline)] hover:border-[var(--border-hover)] bg-[var(--surface-panel-alt)]"
         }">
-          <div class="h-5 rounded-[5px] overflow-hidden flex border border-[var(--border-hairline)] mb-1">
+          <div class="h-5 rounded-[5px] overflow-hidden flex items-center border border-[var(--border-control)] mb-1 relative">
             <span class="w-1/2 h-full block" style="background:${p.panel}"></span>
             <span class="w-1/2 h-full block" style="background:${p.well}"></span>
+            <span class="w-2 h-2 rounded-full absolute right-1.5 shadow-sm" style="background:${p.accentPrimary}"></span>
           </div>
           <div class="text-[11px] font-medium truncate text-[var(--text-primary)]">${escapeHtml(p.name)}</div>
         </button>
@@ -4837,7 +5056,7 @@ function renderAppearanceMenu() {
   document.querySelectorAll(".canvas-tex-btn").forEach(btn => {
     const act = btn.dataset.tex === state.canvasTexture;
     btn.className = act
-      ? "canvas-tex-btn spring-btn py-1 rounded-[5px] font-medium bg-[var(--cta-bg)] text-[var(--cta-fg)]"
+      ? "canvas-tex-btn spring-btn py-1 rounded-[5px] seg-pill-active"
       : "canvas-tex-btn spring-btn py-1 rounded-[5px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)]";
   });
 }
@@ -4848,12 +5067,7 @@ function applyAppearancePreset(presetId, persist = true) {
   const presets = APPEARANCE_PRESETS[modeKey];
   const preset = presets.find(p => p.id === presetId) || presets[0];
 
-  const root = document.documentElement.style;
-  root.setProperty("--bg-base", preset.base);
-  root.setProperty("--bg-canvas-well", preset.well);
-  root.setProperty("--surface-panel", preset.panel);
-  root.setProperty("--surface-panel-alt", preset.alt);
-  root.setProperty("--canvas-dot-color", preset.dot);
+  applyThemeTokens(preset);
 
   state.config.bg_hex = preset.hex;
   state.config.bg_preset_name = preset.name;
@@ -4894,21 +5108,89 @@ function applyBgHex(hex, presetName = null, persist = true) {
   if (label) label.textContent = normalizedHex.toUpperCase();
 
   const [h, s, l] = hexToHsl(normalizedHex);
-  const root = document.documentElement.style;
+  const sat = Math.min(s, isLight ? 16 : 24);
+  const accentH = s >= 12 ? h : isLight ? 234 : 230;
+  const accentS = s >= 12 ? Math.min(Math.max(s, 55), 82) : 78;
 
   if (isLight) {
-    const sat = Math.min(s, 14);
-    root.setProperty("--bg-base", `hsl(${h}, ${sat}%, 92%)`);
-    root.setProperty("--bg-canvas-well", `hsl(${h}, ${Math.min(s, 18)}%, 88%)`);
-    root.setProperty("--surface-panel", `hsl(${h}, ${Math.min(sat, 10)}%, 97%)`);
-    root.setProperty("--surface-panel-alt", `hsl(${h}, ${Math.min(sat, 12)}%, 94%)`);
+    const hudRgb = hslToRgbTriplet(h, Math.min(sat, 10), 98);
+    const inkRgb = hslToRgbTriplet(h, Math.min(sat, 22), 14);
+    const accentPrimary = `hsl(${accentH}, ${accentS}%, 44%)`;
+    applyThemeTokens({
+      base: `hsl(${h}, ${sat}%, 92%)`,
+      well: `hsl(${h}, ${Math.min(s, 20)}%, 87%)`,
+      panel: `hsl(${h}, ${Math.min(sat, 10)}%, 97%)`,
+      alt: `hsl(${h}, ${Math.min(sat, 12)}%, 93%)`,
+      elevated: "#ffffff",
+      inputWell: "#ffffff",
+      wellHover: `hsl(${h}, ${Math.min(sat, 12)}%, 92%)`,
+      groupHover: `hsl(${h}, ${sat}%, 90%)`,
+      popover: "#ffffff",
+      btnBg: "#ffffff",
+      btnHover: `hsl(${h}, ${Math.min(sat, 14)}%, 91%)`,
+      btnBorder: `rgba(${inkRgb}, 0.16)`,
+      segmentedBg: `rgba(${inkRgb}, 0.07)`,
+      subgroupBg: `rgba(${inkRgb}, 0.044)`,
+      borderHairline: `rgba(${inkRgb}, 0.11)`,
+      borderControl: `rgba(${inkRgb}, 0.18)`,
+      borderHover: `rgba(${inkRgb}, 0.34)`,
+      textPrimary: `hsl(${h}, ${Math.min(sat, 24)}%, 11%)`,
+      textSecondary: `hsl(${h}, ${Math.min(sat, 18)}%, 27%)`,
+      textMuted: `hsl(${h}, ${Math.min(sat, 14)}%, 40%)`,
+      placeholder: `hsl(${h}, ${Math.min(sat, 12)}%, 48%)`,
+      accentPrimary,
+      accentTint: `hsla(${accentH}, ${accentS}%, 44%, 0.11)`,
+      accentBorder: `hsla(${accentH}, ${accentS}%, 44%, 0.33)`,
+      dot: `rgba(${inkRgb}, 0.125)`,
+      grid: `rgba(${inkRgb}, 0.075)`,
+      spotlight: `radial-gradient(circle at 50% 48%, rgba(255,255,255,0.82) 0%, rgba(${inkRgb},0.055) 78%)`,
+      hudRgb,
+      agentBg: `rgba(${hudRgb}, 0.97)`,
+      composerFade: `rgba(${hudRgb}, 0.98)`,
+      composerBg: "#ffffff",
+      codeBg: `rgba(${inkRgb}, 0.055)`,
+      inlineCodeBg: `rgba(${inkRgb}, 0.062)`,
+    });
   } else {
-    const sat = Math.min(s, 22);
-    const baseL = Math.min(Math.max(l, 4), 11);
-    root.setProperty("--bg-base", `hsl(${h}, ${sat}%, ${baseL}%)`);
-    root.setProperty("--bg-canvas-well", `hsl(${h}, ${sat}%, ${Math.max(2, baseL - 3)}%)`);
-    root.setProperty("--surface-panel", `hsl(${h}, ${sat}%, ${baseL + 2}%)`);
-    root.setProperty("--surface-panel-alt", `hsl(${h}, ${sat}%, ${baseL + 5}%)`);
+    const baseL = Math.min(Math.max(l, 5), 11);
+    const hudRgb = hslToRgbTriplet(h, sat, baseL + 3);
+    const tintRgb = hslToRgbTriplet(h, Math.min(sat, 28), 90);
+    const accentPrimary = `hsl(${accentH}, ${accentS}%, 68%)`;
+    applyThemeTokens({
+      base: `hsl(${h}, ${sat}%, ${baseL}%)`,
+      well: `hsl(${h}, ${sat}%, ${Math.max(2, baseL - 3)}%)`,
+      panel: `hsl(${h}, ${sat}%, ${baseL + 2}%)`,
+      alt: `hsl(${h}, ${sat}%, ${baseL + 6}%)`,
+      elevated: `hsl(${h}, ${sat}%, ${baseL + 11}%)`,
+      inputWell: `hsl(${h}, ${sat}%, ${Math.max(2, baseL - 2)}%)`,
+      wellHover: `hsl(${h}, ${sat}%, ${baseL + 8}%)`,
+      groupHover: `hsl(${h}, ${sat}%, ${baseL + 8}%)`,
+      popover: `hsl(${h}, ${sat}%, ${baseL + 5}%)`,
+      btnBg: `rgba(${tintRgb}, 0.06)`,
+      btnHover: `rgba(${tintRgb}, 0.12)`,
+      btnBorder: `rgba(${tintRgb}, 0.14)`,
+      segmentedBg: "rgba(0, 0, 0, 0.32)",
+      subgroupBg: `rgba(${tintRgb}, 0.04)`,
+      borderHairline: `rgba(${tintRgb}, 0.095)`,
+      borderControl: `rgba(${tintRgb}, 0.165)`,
+      borderHover: `rgba(${tintRgb}, 0.32)`,
+      textPrimary: `hsl(${h}, ${Math.min(sat, 18)}%, 95%)`,
+      textSecondary: `hsl(${h}, ${Math.min(sat, 16)}%, 76%)`,
+      textMuted: `hsl(${h}, ${Math.min(sat, 14)}%, 59%)`,
+      placeholder: `hsl(${h}, ${Math.min(sat, 12)}%, 52%)`,
+      accentPrimary,
+      accentTint: `hsla(${accentH}, ${accentS}%, 68%, 0.16)`,
+      accentBorder: `hsla(${accentH}, ${accentS}%, 68%, 0.38)`,
+      dot: `rgba(${tintRgb}, 0.095)`,
+      grid: `rgba(${tintRgb}, 0.058)`,
+      spotlight: `radial-gradient(circle at 50% 48%, rgba(${tintRgb},0.075) 0%, rgba(0,0,0,0.22) 76%)`,
+      hudRgb,
+      agentBg: `rgba(${hudRgb}, 0.94)`,
+      composerFade: `rgba(${hudRgb}, 0.97)`,
+      composerBg: `rgba(${tintRgb}, 0.048)`,
+      codeBg: "rgba(0, 0, 0, 0.32)",
+      inlineCodeBg: `rgba(${tintRgb}, 0.08)`,
+    });
   }
 
   saveAppearanceLocal({ [`customHex_${modeKey}`]: normalizedHex });
@@ -4949,7 +5231,8 @@ function setGlassClarity(val, persist = true) {
   const isLight = document.documentElement.classList.contains("light");
   const alpha = Math.max(0.5, Math.min(0.96, clarity / 100));
   const root = document.documentElement.style;
-  const rgbaVal = isLight ? `rgba(255, 255, 255, ${alpha.toFixed(2)})` : `rgba(16, 20, 28, ${alpha.toFixed(2)})`;
+  const hudRgb = root.getPropertyValue("--hud-rgb").trim() || (isLight ? "255, 255, 255" : "15, 19, 27");
+  const rgbaVal = `rgba(${hudRgb}, ${alpha.toFixed(2)})`;
   root.setProperty("--surface-glass", rgbaVal);
   root.setProperty("--surface-hud", rgbaVal);
 
@@ -5048,6 +5331,19 @@ function toggleTheme() {
   });
 }
 
+function scrollToSettingsSection(sectionId, btnEl) {
+  const target = document.getElementById(sectionId);
+  if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+  document.querySelectorAll(".settings-nav-btn").forEach(btn => {
+    const active = btn === btnEl || btn.dataset.sec === sectionId;
+    btn.className = active
+      ? "settings-nav-btn w-full text-left flex items-center gap-2 px-2.5 py-1.5 rounded-[7px] text-[12.5px] font-medium text-[var(--text-primary)] bg-[var(--surface-subgroup)] border border-[var(--border-hairline)] transition-colors"
+      : "settings-nav-btn w-full text-left flex items-center gap-2 px-2.5 py-1.5 rounded-[7px] text-[12.5px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subgroup)] border border-transparent transition-colors";
+    const ic = btn.querySelector("svg");
+    if (ic) ic.classList.toggle("text-[var(--accent-primary)]", active);
+  });
+}
+
 // ================= V2.1 Interactive Tag Pills (Pos + UC Unified) & Dynamic Wildcard Preview =================
 const QUICK_CN_HINTS = {
   "1girl": "单人女孩", "1boy": "单人男孩", "solo": "单人", "silver hair": "银发",
@@ -5142,7 +5438,7 @@ function renderTagPillsBar(side = "pos") {
   const segments = parsePromptSegments(ta.value);
   if (cnt) cnt.textContent = `${segments.length}` + (mutedSet.size ? `·${mutedSet.size}静音` : "");
   if (!segments.length) {
-    bar.innerHTML = `<span class="text-[12px] text-[var(--muted-foreground)]">${
+    bar.innerHTML = `<span class="text-[12px] text-[var(--text-muted)]">${
       side === "uc" ? "输入负面词后自动生成可调权重的 Tag 胶囊..." : "输入提示词后自动生成可拖拽排序的 Tag 胶囊..."
     }</span>`;
     return;
@@ -5759,7 +6055,7 @@ function renderOcCardsList() {
   const wrap = document.getElementById("oc-cards-list");
   if (!wrap) return;
   if (!state.ocCards.length) {
-    wrap.innerHTML = `<div class="text-center py-6 text-[var(--muted-foreground)]">暂无 OC 角色卡，可在上方新建保存常用设定</div>`;
+    wrap.innerHTML = `<div class="text-center py-6 text-[var(--text-muted)]">暂无 OC 角色卡，可在上方新建保存常用设定</div>`;
     return;
   }
   wrap.innerHTML = state.ocCards
@@ -6432,7 +6728,7 @@ function renderSnapshotList() {
   if (!wrap) return;
   const snaps = loadPromptSnapshots();
   if (!snaps.length) {
-    wrap.innerHTML = `<div class="text-center py-6 text-[var(--muted-foreground)]">暂无草稿记录，每次生成或点击上方「+ 保存当前草稿」会自动存档</div>`;
+    wrap.innerHTML = `<div class="text-center py-6 text-[var(--text-muted)]">暂无草稿记录，每次生成或点击上方「+ 保存当前草稿」会自动存档</div>`;
     return;
   }
   wrap.innerHTML = snaps

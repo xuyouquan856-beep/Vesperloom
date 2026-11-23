@@ -6,7 +6,7 @@
   <title>NAI Studio — 个人创作工作台</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23111318'/%3E%3Cpath d='M20 44V20l24 24V20' stroke='%23ffffff' stroke-width='6' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E" />
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="/static/styles.css?v=p2-21" />
+  <link rel="stylesheet" href="/static/styles.css?v=p2-22" />
 </head>
 <body class="lg:h-screen min-h-screen flex flex-col lg:overflow-hidden overflow-y-auto">
 
@@ -1195,18 +1195,18 @@
       <!-- 左侧轻量章节锚点栏 -->
       <aside class="w-full lg:w-52 studio-panel rounded-[12px] border border-[var(--border-hairline)] p-3 space-y-1 shrink-0 lg:sticky lg:top-0">
         <div class="px-2.5 py-1.5 text-[11px] font-mono uppercase tracking-wider text-[var(--text-muted)]">Preferences</div>
-        <a href="#sec-settings-agent" class="flex items-center gap-2 px-2.5 py-1.5 rounded-[7px] text-[12.5px] font-medium text-[var(--text-primary)] bg-[var(--surface-subgroup)]">
+        <button type="button" data-sec="sec-settings-agent" onclick="scrollToSettingsSection('sec-settings-agent', this)" class="settings-nav-btn w-full text-left flex items-center gap-2 px-2.5 py-1.5 rounded-[7px] text-[12.5px] font-medium text-[var(--text-primary)] bg-[var(--surface-subgroup)] border border-[var(--border-hairline)] transition-colors">
           <svg class="ui-ic-sm ui-ic text-[var(--accent-primary)]" aria-hidden="true"><use href="#ic-agent"/></svg>
           <span>提示词模式与 LLM</span>
-        </a>
-        <a href="#sec-settings-nai" class="flex items-center gap-2 px-2.5 py-1.5 rounded-[7px] text-[12.5px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subgroup)] transition-colors">
+        </button>
+        <button type="button" data-sec="sec-settings-nai" onclick="scrollToSettingsSection('sec-settings-nai', this)" class="settings-nav-btn w-full text-left flex items-center gap-2 px-2.5 py-1.5 rounded-[7px] text-[12.5px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subgroup)] border border-transparent transition-colors">
           <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-shield"/></svg>
           <span>NovelAI 接口与存储</span>
-        </a>
-        <a href="#sec-settings-mcp" class="flex items-center gap-2 px-2.5 py-1.5 rounded-[7px] text-[12.5px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subgroup)] transition-colors">
+        </button>
+        <button type="button" data-sec="sec-settings-mcp" onclick="scrollToSettingsSection('sec-settings-mcp', this)" class="settings-nav-btn w-full text-left flex items-center gap-2 px-2.5 py-1.5 rounded-[7px] text-[12.5px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subgroup)] border border-transparent transition-colors">
           <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-layers"/></svg>
           <span>原生 MCP 控制台</span>
-        </a>
+        </button>
       </aside>
 
       <!-- 右侧单栏聚焦配置区 -->
@@ -1855,7 +1855,7 @@
       <div class="flex items-center gap-2 min-w-0">
         <span id="agent-live-dot" class="w-2 h-2 rounded-full bg-[var(--status-success)] shrink-0"></span>
         <span class="font-semibold text-[13px] tracking-[-0.01em] text-[var(--text-primary)] truncate">Studio Agent</span>
-        <span id="agent-model-pill" class="px-1.5 py-0.5 rounded-[5px] bg-white/[0.04] border border-[var(--border-hairline)] font-mono text-[10.5px] text-[var(--text-muted)] truncate max-w-[118px]">qwen4-max</span>
+        <span id="agent-model-pill" class="px-1.5 py-0.5 rounded-[5px] bg-[var(--surface-subgroup)] border border-[var(--border-hairline)] font-mono text-[10.5px] text-[var(--text-muted)] truncate max-w-[118px]">qwen4-max</span>
       </div>
       <div class="flex items-center gap-0.5 shrink-0" onpointerdown="event.stopPropagation()">
         <button type="button" onclick="startNewAgentSession()" class="agent-icon-btn" title="新建对话">
@@ -1884,7 +1884,7 @@
     <div id="agent-body-wrap" class="flex-1 min-h-0 flex flex-col">
       <div id="agent-live-strip" class="agent-telemetry-strip flex items-center justify-between gap-2 shrink-0">
         <span id="agent-live-telemetry" class="font-mono text-[11px] text-[var(--text-muted)] truncate">V5 Full · 画0 / 人0 / 光0 / 负0</span>
-        <button id="agent-live-audit-btn" type="button" onclick="quickSendAgent('请检查我当前的提示词和参数，指出可以优化或有冲突的地方并给出建议')" class="spring-btn px-2 py-0.5 rounded-[5px] text-[11px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/[0.06] transition-colors shrink-0 whitespace-nowrap">体检</button>
+        <button id="agent-live-audit-btn" type="button" onclick="quickSendAgent('请检查我当前的提示词和参数，指出可以优化或有冲突的地方并给出建议')" class="spring-btn px-2 py-0.5 rounded-[5px] text-[11px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--btn-hover-bg)] transition-colors shrink-0 whitespace-nowrap">体检</button>
       </div>
 
       <!-- 面板 1：对话与实时操作流 -->
@@ -1895,7 +1895,7 @@
         <div id="agent-quick-replies" class="hidden px-3.5 pb-1 flex flex-wrap gap-1.5 shrink-0"></div>
 
         <!-- 排队消息提示条（防流式连点丢失） -->
-        <div id="agent-queue-chip" class="hidden mx-3.5 mb-1 px-2.5 py-1 rounded-[8px] border border-[var(--border-control)] bg-white/[0.04] flex items-center justify-between gap-2 text-[11px] text-[var(--text-secondary)] shrink-0">
+        <div id="agent-queue-chip" class="hidden mx-3.5 mb-1 px-2.5 py-1 rounded-[8px] border border-[var(--border-control)] bg-[var(--surface-subgroup)] flex items-center justify-between gap-2 text-[11px] text-[var(--text-secondary)] shrink-0">
           <span id="agent-queue-chip-text" class="truncate"></span>
           <button type="button" onclick="clearQueuedAgentPrompt()" class="text-[var(--text-muted)] hover:text-[var(--text-primary)] shrink-0">取消排队</button>
         </div>
@@ -1911,7 +1911,7 @@
 
             <div class="flex items-center justify-between gap-2 pt-0.5">
               <div class="flex items-center gap-1.5 min-w-0">
-                <button type="button" onclick="openAgentSlashQuick()" class="spring-btn inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] text-[11px] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-white/[0.06] transition-colors shrink-0" title="插入 / 调用专业 Skill">
+                <button type="button" onclick="openAgentSlashQuick()" class="spring-btn inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] text-[11px] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--btn-hover-bg)] transition-colors shrink-0" title="插入 / 调用专业 Skill">
                   <span class="font-mono font-semibold">/</span>
                   <span>Skills</span>
                 </button>
@@ -2008,7 +2008,7 @@
 
   <div id="studio-tooltip" role="tooltip" aria-hidden="true"></div>
 
-  <script src="/static/app.js?v=p2-21"></script>
-  <script src="/static/agent_window.js?v=p2-21"></script>
+  <script src="/static/app.js?v=p2-22"></script>
+  <script src="/static/agent_window.js?v=p2-22"></script>
 </body>
 </html>

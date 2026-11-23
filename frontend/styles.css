@@ -9,7 +9,9 @@
   /* 1. Studio Obsidian Palette (Dark Default) */
   --bg-base: #0a0c10;
   --bg-canvas-well: #06080b;
-  --canvas-dot-color: rgba(255, 255, 255, 0.055);
+  --canvas-dot-color: rgba(255, 255, 255, 0.088);
+  --canvas-grid-color: rgba(255, 255, 255, 0.055);
+  --canvas-spotlight: radial-gradient(circle at 50% 48%, rgba(255, 255, 255, 0.075) 0%, rgba(0, 0, 0, 0.18) 76%);
   --sky-top: #0a0c10;
   --sky-mid: #0a0c10;
   --water-horizon: #0a0c10;
@@ -17,45 +19,56 @@
 
   /* 2. Surface Elevation Tiers */
   --surface-panel: #0e1117;
-  --surface-panel-alt: #131720;
-  --surface-elevated: #1a202c;
-  --surface-group-hover: #171c26;
+  --surface-panel-alt: #141923;
+  --surface-elevated: #202736;
+  --surface-group-hover: #181e2a;
   --surface-well: #080a0e;
-  --surface-well-hover: #121620;
-  --surface-chrome: rgba(13, 16, 22, 0.90);
-  --surface-hud: rgba(15, 19, 27, 0.86);
-  --surface-popover: #141822;
-  --surface-glass: rgba(16, 20, 28, 0.86);
-  --surface-subgroup: rgba(255, 255, 255, 0.024);
-  --inner-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.065);
+  --surface-well-hover: #151b26;
+  --hud-rgb: 15, 19, 27;
+  --surface-chrome: rgba(var(--hud-rgb), 0.90);
+  --surface-hud: rgba(var(--hud-rgb), 0.88);
+  --surface-popover: #151a25;
+  --surface-glass: rgba(var(--hud-rgb), 0.88);
+  --surface-subgroup: rgba(255, 255, 255, 0.036);
+  --surface-agent: rgba(14, 17, 23, 0.94);
+  --surface-composer-fade: rgba(13, 16, 22, 0.96);
+  --composer-bg: rgba(255, 255, 255, 0.044);
+  --segmented-bg: rgba(0, 0, 0, 0.28);
+  --btn-bg: rgba(255, 255, 255, 0.054);
+  --btn-hover-bg: rgba(255, 255, 255, 0.10);
+  --btn-border: rgba(255, 255, 255, 0.115);
+  --code-block-bg: rgba(0, 0, 0, 0.30);
+  --inline-code-bg: rgba(255, 255, 255, 0.075);
+  --inner-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.07);
   --well-inset-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.32);
 
   /* 3. Architectural Borders & Focus */
-  --border-hairline: rgba(255, 255, 255, 0.065);
-  --border-control: rgba(255, 255, 255, 0.12);
-  --border-hover: rgba(255, 255, 255, 0.26);
+  --border-hairline: rgba(255, 255, 255, 0.085);
+  --border-control: rgba(255, 255, 255, 0.15);
+  --border-hover: rgba(255, 255, 255, 0.30);
   --border-focus: #818cf8;
 
   /* 4. Ink, Studio Accent & Darkroom Contrast */
   --text-primary: #f4f5f8;
-  --text-secondary: #a3acc0;
-  --text-muted: #6e788d;
+  --text-secondary: #b6bfd1;
+  --text-muted: #8893a8;
   --cta-bg: #f4f5f8;
   --cta-bg-hover: #ffffff;
   --cta-fg: #090b0f;
   --accent: #f4f5f8;
   --accent-solid: #f4f5f8;
-  --accent-tint: rgba(255, 255, 255, 0.085);
+  --accent-tint: rgba(255, 255, 255, 0.095);
   --accent-primary: #818cf8;
-  --accent-primary-tint: rgba(129, 140, 248, 0.15);
+  --accent-primary-tint: rgba(129, 140, 248, 0.16);
+  --accent-primary-border: rgba(129, 140, 248, 0.36);
 
   /* Semantic Status Ink & Tints */
   --status-success: #34d399;
-  --status-success-tint: rgba(52, 211, 153, 0.14);
+  --status-success-tint: rgba(52, 211, 153, 0.15);
   --status-warning: #fbbf24;
-  --status-warning-tint: rgba(251, 191, 36, 0.15);
+  --status-warning-tint: rgba(251, 191, 36, 0.16);
   --status-danger: #f87171;
-  --status-danger-tint: rgba(248, 113, 113, 0.15);
+  --status-danger-tint: rgba(248, 113, 113, 0.16);
 
   /* 5. Typography Scale */
   --fs-brand: 14.5px;
@@ -85,17 +98,17 @@
   --right-panel-w: 256px;
 
   /* 7. Legacy Aliases */
-  --glass-popover: #141822;
-  --glass-inset-bg: #080a0e;
-  --glass-border: rgba(255, 255, 255, 0.14);
+  --glass-popover: var(--surface-popover);
+  --glass-inset-bg: var(--surface-well);
+  --glass-border: var(--border-control);
   --glass-border-strong: rgba(255, 255, 255, 0.36);
   --popover-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
   --hud-shadow: 0 12px 32px rgba(0, 0, 0, 0.48);
   --hud-blur: 18px;
   --stage-art-shadow: 0 20px 56px rgba(0, 0, 0, 0.62);
-  --foreground: #f4f4f6;
-  --muted-foreground: #a1a9b8;
-  --placeholder: #6c7689;
+  --foreground: var(--text-primary);
+  --muted-foreground: var(--text-muted);
+  --placeholder: #7a8599;
   --primary: #f4f4f5;
   --primary-deep: #d4d4d8;
   --success: #34d399;
@@ -107,60 +120,73 @@ html.light {
   color-scheme: light;
   --bg-base: #eaedf2;
   --bg-canvas-well: #e3e7ee;
-  --canvas-dot-color: rgba(15, 23, 42, 0.085);
+  --canvas-dot-color: rgba(15, 23, 42, 0.125);
+  --canvas-grid-color: rgba(15, 23, 42, 0.075);
+  --canvas-spotlight: radial-gradient(circle at 50% 48%, rgba(255, 255, 255, 0.78) 0%, rgba(15, 23, 42, 0.055) 78%);
   --sky-top: #eaedf2;
   --sky-mid: #eaedf2;
   --water-horizon: #eaedf2;
   --water-deep: #eaedf2;
 
   --surface-panel: #f6f7f9;
-  --surface-panel-alt: #edf0f5;
+  --surface-panel-alt: #ebeef4;
   --surface-elevated: #ffffff;
-  --surface-group-hover: #e8ecf3;
+  --surface-group-hover: #e6ebf2;
   --surface-well: #ffffff;
-  --surface-well-hover: #f1f4f9;
-  --surface-chrome: rgba(246, 247, 249, 0.92);
-  --surface-hud: rgba(255, 255, 255, 0.92);
+  --surface-well-hover: #edf1f7;
+  --hud-rgb: 255, 255, 255;
+  --surface-chrome: rgba(var(--hud-rgb), 0.92);
+  --surface-hud: rgba(var(--hud-rgb), 0.92);
   --surface-popover: #ffffff;
-  --surface-glass: rgba(255, 255, 255, 0.92);
-  --surface-subgroup: rgba(15, 23, 42, 0.032);
+  --surface-glass: rgba(var(--hud-rgb), 0.92);
+  --surface-subgroup: rgba(15, 23, 42, 0.042);
+  --surface-agent: rgba(255, 255, 255, 0.97);
+  --surface-composer-fade: rgba(246, 247, 249, 0.98);
+  --composer-bg: #ffffff;
+  --segmented-bg: rgba(15, 23, 42, 0.068);
+  --btn-bg: #ffffff;
+  --btn-hover-bg: #eef2f7;
+  --btn-border: rgba(15, 23, 42, 0.145);
+  --code-block-bg: rgba(15, 23, 42, 0.055);
+  --inline-code-bg: rgba(15, 23, 42, 0.06);
   --inner-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.95);
-  --well-inset-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.045);
+  --well-inset-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.05);
 
-  --border-hairline: rgba(15, 23, 42, 0.085);
-  --border-control: rgba(15, 23, 42, 0.14);
-  --border-hover: rgba(15, 23, 42, 0.28);
+  --border-hairline: rgba(15, 23, 42, 0.105);
+  --border-control: rgba(15, 23, 42, 0.175);
+  --border-hover: rgba(15, 23, 42, 0.32);
   --border-focus: #4f46e5;
 
   /* Light Mode Complementary Polarity: Calm Elevated Tabs & Precision Indigo Accent */
   --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --text-muted: #64748b;
+  --text-secondary: #334155;
+  --text-muted: #526176;
   --cta-bg: #18181b;
   --cta-bg-hover: #27272a;
   --cta-fg: #ffffff;
   --accent: #18181b;
   --accent-solid: #18181b;
-  --accent-tint: rgba(15, 23, 42, 0.065);
+  --accent-tint: rgba(15, 23, 42, 0.07);
   --accent-primary: #4f46e5;
-  --accent-primary-tint: rgba(79, 70, 229, 0.10);
+  --accent-primary-tint: rgba(79, 70, 229, 0.11);
+  --accent-primary-border: rgba(79, 70, 229, 0.30);
 
   --status-success: #047857;
-  --status-success-tint: rgba(4, 120, 87, 0.10);
+  --status-success-tint: rgba(4, 120, 87, 0.11);
   --status-warning: #b45309;
-  --status-warning-tint: rgba(180, 83, 9, 0.10);
+  --status-warning-tint: rgba(180, 83, 9, 0.11);
   --status-danger: #be123c;
-  --status-danger-tint: rgba(190, 18, 60, 0.10);
+  --status-danger-tint: rgba(190, 18, 60, 0.11);
 
-  --glass-popover: #ffffff;
-  --glass-inset-bg: #ffffff;
-  --glass-border: rgba(15, 23, 42, 0.16);
+  --glass-popover: var(--surface-popover);
+  --glass-inset-bg: var(--surface-well);
+  --glass-border: var(--border-control);
   --glass-border-strong: rgba(17, 19, 24, 0.38);
   --popover-shadow: 0 14px 36px rgba(15, 23, 42, 0.12);
   --hud-shadow: 0 10px 28px rgba(15, 23, 42, 0.10);
   --stage-art-shadow: 0 16px 40px rgba(15, 23, 42, 0.16);
-  --foreground: #0f172a;
-  --muted-foreground: #475569;
+  --foreground: var(--text-primary);
+  --muted-foreground: var(--text-muted);
   --placeholder: #64748b;
   --primary: #111318;
   --primary-deep: #272a33;
@@ -211,7 +237,7 @@ body {
   width: 14px;
   height: 14px;
   stroke: currentColor;
-  stroke-width: 1.75;
+  stroke-width: 1.85;
   fill: none;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -220,12 +246,19 @@ body {
   vertical-align: -2px;
 }
 .ui-ic-sm {
-  width: 12px;
-  height: 12px;
+  width: 12.5px;
+  height: 12.5px;
+  stroke-width: 1.9;
 }
 .ui-ic-lg {
   width: 20px;
   height: 20px;
+}
+.ui-label {
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--text-muted);
 }
 
 /* Compact Info Icon Trigger */
@@ -347,21 +380,18 @@ body {
 /* Darkroom Canvas Backdrop & Selectable Surface Textures */
 .studio-canvas-grid {
   background-color: var(--bg-canvas-well);
-  background-image: radial-gradient(var(--canvas-dot-color) 1px, transparent 1px);
+  background-image: radial-gradient(circle, var(--canvas-dot-color) 1.15px, transparent 1.2px);
   background-size: 20px 20px;
 }
 .studio-canvas-grid.tex-grid {
   background-image:
-    linear-gradient(to right, var(--canvas-dot-color) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--canvas-dot-color) 1px, transparent 1px);
+    linear-gradient(to right, var(--canvas-grid-color) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--canvas-grid-color) 1px, transparent 1px);
   background-size: 24px 24px;
 }
 .studio-canvas-grid.tex-frame {
-  background-image: radial-gradient(circle at 50% 48%, rgba(255, 255, 255, 0.045) 0%, transparent 64%);
+  background-image: var(--canvas-spotlight);
   background-size: 100% 100%;
-}
-html.light .studio-canvas-grid.tex-frame {
-  background-image: radial-gradient(circle at 50% 48%, rgba(255, 255, 255, 0.55) 0%, rgba(15, 23, 42, 0.04) 78%);
 }
 .studio-canvas-grid.tex-solid {
   background-image: none;
@@ -572,13 +602,12 @@ select.ui-well option {
 
 /* Segmented Control Track & Calm Elevated Pill (Replaces harsh black/white bricks) */
 .ui-segmented {
-  background-color: rgba(0, 0, 0, 0.24);
+  background-color: var(--segmented-bg);
   border: 1px solid var(--border-hairline);
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.22);
 }
 html.light .ui-segmented {
-  background-color: rgba(15, 23, 42, 0.055);
-  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.045);
 }
 .seg-pill-active {
   background-color: var(--surface-elevated) !important;
@@ -588,26 +617,24 @@ html.light .ui-segmented {
   border: 1px solid var(--border-control);
 }
 html.light .seg-pill-active {
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08), var(--inner-highlight);
-  border-color: rgba(15, 23, 42, 0.11);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.09), var(--inner-highlight);
+  border-color: var(--border-control);
 }
 
 /* Interactive Buttons (Layering over Borders + Silky Spring Release) */
 .ui-btn {
-  background-color: rgba(255, 255, 255, 0.038);
-  border: 1px solid var(--border-hairline);
+  background-color: var(--btn-bg);
+  border: 1px solid var(--btn-border);
   box-shadow: var(--inner-highlight);
   color: var(--text-primary);
   transition: background-color 0.14s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.14s cubic-bezier(0.22, 1, 0.36, 1), color 0.14s ease, transform 0.14s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.14s ease, opacity 0.14s ease;
 }
 html.light .ui-btn {
-  background-color: #ffffff;
-  border-color: rgba(15, 23, 42, 0.11);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03), var(--inner-highlight);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.035), var(--inner-highlight);
 }
 .ui-btn:hover:not(:disabled) {
-  background-color: var(--surface-well-hover);
-  border-color: var(--border-control);
+  background-color: var(--btn-hover-bg);
+  border-color: var(--border-hover);
 }
 .ui-btn:active:not(:disabled) {
   transform: scale(0.96);
@@ -628,12 +655,12 @@ html.light .ui-btn {
 /* Tonal High-Contrast Secondary Action Button */
 .ui-btn-accent {
   background-color: var(--accent-primary-tint);
-  border: 1px solid rgba(129, 140, 248, 0.32);
+  border: 1px solid var(--accent-primary-border);
   color: var(--text-primary);
   transition: background-color 0.14s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.14s cubic-bezier(0.22, 1, 0.36, 1), color 0.14s ease, transform 0.14s cubic-bezier(0.22, 1, 0.36, 1);
 }
 html.light .ui-btn-accent {
-  border-color: rgba(79, 70, 229, 0.28);
+  border-color: var(--accent-primary-border);
   color: var(--accent-primary);
 }
 .ui-btn-accent:hover:not(:disabled) {
@@ -741,13 +768,13 @@ html.light .ui-card {
   box-shadow: 0 2px 8px rgba(15, 23, 42, 0.045), var(--inner-highlight);
 }
 .ui-card:hover {
-  border-color: var(--border-control);
+  border-color: var(--border-hover);
   background-color: var(--surface-group-hover);
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.24), var(--inner-highlight);
 }
 html.light .ui-card:hover {
-  background-color: #ffffff;
-  border-color: rgba(15, 23, 42, 0.18);
+  background-color: var(--surface-elevated);
+  border-color: var(--border-hover);
   box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08), var(--inner-highlight);
 }
 
@@ -1427,8 +1454,8 @@ html.light .checkerboard-bg {
   z-index: 45;
   display: flex;
   flex-direction: column;
-  background: rgba(14, 17, 23, 0.93);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: var(--surface-agent);
+  border: 1px solid var(--border-control);
   border-radius: 16px;
   box-shadow:
     0 28px 72px rgba(0, 0, 0, 0.65),
@@ -1445,13 +1472,13 @@ html.light .checkerboard-bg {
   animation: agentPopIn 0.18s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 html.light .agent-float-window {
-  background: rgba(255, 255, 255, 0.96);
-  border-color: rgba(15, 23, 42, 0.16);
+  background: var(--surface-agent);
+  border-color: var(--border-control);
   box-shadow:
     0 28px 68px rgba(15, 23, 42, 0.22),
     0 8px 24px rgba(15, 23, 42, 0.11),
     0 0 0 1px rgba(15, 23, 42, 0.06),
-    inset 0 1px 0 rgba(255, 255, 255, 1);
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 .agent-float-window.is-minimized {
   min-height: 0 !important;
@@ -1674,14 +1701,11 @@ html.light .agent-telemetry-strip {
   font-size: 11.5px;
   padding: 1.5px 6px;
   border-radius: 5px;
-  background-color: rgba(255, 255, 255, 0.055);
+  background-color: var(--inline-code-bg);
   border: 1px solid var(--border-hairline);
   color: var(--text-primary);
   cursor: pointer;
   transition: background-color 0.12s ease, border-color 0.12s ease;
-}
-html.light .agent-prose code {
-  background-color: rgba(15, 23, 42, 0.05);
 }
 .agent-prose code:hover {
   border-color: var(--border-hover);
@@ -1909,29 +1933,26 @@ html.light .agent-diff-line-del {
 /* Unified Cursor / Claude Desktop Floating Glass Composer */
 .agent-composer-dock {
   padding: 8px 12px 12px;
-  background: linear-gradient(180deg, transparent, rgba(13, 16, 22, 0.96) 18%);
-}
-html.light .agent-composer-dock {
-  background: linear-gradient(180deg, transparent, rgba(252, 253, 255, 0.98) 18%);
+  background: linear-gradient(180deg, transparent, var(--surface-composer-fade) 18%);
 }
 .agent-composer-shell {
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.035);
+  background: var(--composer-bg);
   border: 1px solid var(--border-control);
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.22);
   transition: border-color 0.14s ease, box-shadow 0.14s ease, background-color 0.14s ease;
 }
 html.light .agent-composer-shell {
-  background: #ffffff;
+  background: var(--composer-bg);
   box-shadow: 0 4px 16px rgba(15, 23, 42, 0.07);
 }
 .agent-composer-shell:focus-within {
-  border-color: var(--border-hover);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  border-color: var(--border-focus);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28), 0 0 0 2px var(--accent-primary-tint);
 }
 html.light .agent-composer-shell:focus-within {
   border-color: var(--border-focus);
-  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.10);
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.10), 0 0 0 2px var(--accent-primary-tint);
 }
 .agent-send-circle {
   width: 28px;
