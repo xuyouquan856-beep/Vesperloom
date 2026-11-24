@@ -2766,6 +2766,106 @@ function sendDiffToAgent() {
   window.quickSendAgent?.(msg);
 }
 
+function setDiffTargetSlot(slot) {
+  state._diffActiveSlot = slot === "A" ? "A" : "B";
+  renderDiffFilmstrip();
+  document.getElementById("diff-slot-card-A")?.classList.toggle("border-[var(--status-warning)]", state._diffActiveSlot === "A");
+  document.getElementById("diff-slot-card-B")?.classList.toggle("border-[var(--status-success)]", state._diffActiveSlot === "B");
+  const hint = document.getElementById("diff-strip-target-hint");
+  if (hint) {
+    hint.textContent = state._diffActiveSlot === "A" ? "点击缩略图设置 左侧图 A" : "点击缩略图设置 右侧图 B";
+    hint.className = state._diffActiveSlot === "A"
+      ? "text-[11px] font-medium text-[var(--status-warning)]"
+      : "text-[11px] font-medium text-[var(--status-success)]";
+  }
+}
+
+function stepDiffSlot(slot, delta) {
+  const source = state._diffSourceList || state.gallery || [];
+  if (source.length < 2) return;
+  const curA = state._diffIdxA ?? 0;
+  const curB = state._diffIdxB ?? 1;
+  if (slot === "A") {
+    const nextA = (curA + delta + source.length) % source.length;
+    openDiffModal(nextA, curB, source);
+  } else {
+    const nextB = (curB + delta + source.length) % source.length;
+    openDiffModal(curA, nextB, source);
+  }
+}
+
+function assignDiffThumb(sourceIdx, explicitSlot = null) {
+  const source = state._diffSourceList || state.gallery || [];
+  if (sourceIdx < 0 || sourceIdx >= source.length) return;
+  const target = explicitSlot || (state._diffActiveSlot === "A" ? "A" : "B");
+  if (target === "A") {
+    openDiffModal(sourceIdx, state._diffIdxB ?? 1, source);
+  } else {
+    openDiffModal(state._diffIdxA ?? 0, sourceIdx, source);
+  }
+}
+
+function toggleDiffFavFilter() {
+  state._diffFavOnly = !state._diffFavOnly;
+  renderDiffFilmstrip();
+}
+
+function renderDiffFilmstrip() {
+  const strip = document.getElementById("diff-thumb-strip");
+  if (!strip) return;
+  const source = state._diffSourceList || state.gallery || [];
+  const q = (state._diffFilterQuery || "").trim().toLowerCase();
+  const favOnly = Boolean(state._diffFavOnly);
+  const idxA = state._diffIdxA ?? 0;
+  const idxB = state._diffIdxB ?? 1;
+  const favBtn = document.getElementById("diff-fav-filter-btn");
+  if (favBtn) {
+    favBtn.className = favOnly
+      ? "spring-btn px-2 py-0.5 rounded-[5px] text-[11px] font-medium bg-[var(--status-warning-tint)] text-[var(--status-warning)] border border-[var(--status-warning)]"
+      : "spring-btn px-2 py-0.5 rounded-[5px] ui-btn text-[11px]";
+  }
+
+  const filtered = source
+    .map((it, origIdx) => ({ it, origIdx }))
+    .filter(({ it }) => {
+      if (favOnly && !it.favorite) return false;
+      if (!q) return true;
+      const hay = `${it.seed || ""} ${it.model_short || ""} ${it.notes || ""} ${it.prompt || ""} ${it.filename || ""}`.toLowerCase();
+      return hay.includes(q);
+    });
+
+  if (!filtered.length) {
+    strip.innerHTML = `<div class="text-[11.5px] text-[var(--text-muted)] py-4 px-2">没有匹配的候选作品</div>`;
+    return;
+  }
+
+  strip.innerHTML = filtered
+    .slice(0, 60)
+    .map(({ it, origIdx }) => {
+      const isA = origIdx === idxA;
+      const isB = origIdx === idxB;
+      const ringCls = isA && isB
+        ? "ring-2 ring-[var(--accent-primary)] border-transparent"
+        : isA
+          ? "ring-2 ring-[var(--status-warning)] border-transparent"
+          : isB
+            ? "ring-2 ring-[var(--status-success)] border-transparent"
+            : "border-[var(--border-control)] hover:border-[var(--border-hover)]";
+      return `
+        <div class="group relative shrink-0 w-[62px] rounded-[7px] overflow-hidden border bg-[var(--bg-canvas-well)] cursor-pointer transition-all ${ringCls}" onclick="assignDiffThumb(${origIdx})" title="#${it.seed} · ${escapeHtml(it.model_short)}${it.notes ? ` · ${escapeHtml(it.notes)}` : ""}">
+          <img src="${it.image_url}" alt="" loading="lazy" class="w-[62px] h-[76px] object-cover object-top block" />
+          ${isA ? `<span class="absolute top-1 left-1 px-1 py-0 rounded-[3px] text-[9.5px] font-bold bg-[var(--status-warning)] text-black leading-tight">A</span>` : ""}
+          ${isB ? `<span class="absolute top-1 right-1 px-1 py-0 rounded-[3px] text-[9.5px] font-bold bg-[var(--status-success)] text-black leading-tight">B</span>` : ""}
+          <div class="absolute inset-x-0 bottom-0 bg-black/72 px-1 py-0.5 flex items-center justify-between gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button type="button" onclick="event.stopPropagation();assignDiffThumb(${origIdx}, 'A')" class="flex-1 rounded-[3px] bg-amber-400/90 text-black text-[9.5px] font-bold leading-tight py-0.5 hover:bg-amber-300" title="设为左侧图 A">A</button>
+            <button type="button" onclick="event.stopPropagation();assignDiffThumb(${origIdx}, 'B')" class="flex-1 rounded-[3px] bg-emerald-400/90 text-black text-[9.5px] font-bold leading-tight py-0.5 hover:bg-emerald-300" title="设为右侧图 B">B</button>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+}
+
 function openDiffModal(idxA = 0, idxB = 1, customList = null) {
   if (arguments.length === 0) {
     state._diffSourceList = state.gallery;
@@ -2784,6 +2884,7 @@ function openDiffModal(idxA = 0, idxB = 1, customList = null) {
   const safeB = Math.min(Math.max(0, idxB), source.length - 1);
   state._diffIdxA = safeA;
   state._diffIdxB = safeB;
+  if (!state._diffActiveSlot) state._diffActiveSlot = "B";
   const viewMode = state._diffViewMode === "side" ? "side" : "swipe";
   const pct = typeof state._diffSwipePct === "number" ? state._diffSwipePct : 50;
 
@@ -2819,21 +2920,15 @@ function openDiffModal(idxA = 0, idxB = 1, customList = null) {
     ["Seed", `#${a.seed}`, `#${b.seed}`],
   ];
 
-  const optHtml = (selIdx) =>
-    source
-      .slice(0, 40)
-      .map((it, i) => `<option value="${i}" ${i === selIdx ? "selected" : ""}>#${it.seed} · ${escapeHtml(it.model_short)} (${it.notes ? escapeHtml(it.notes) : escapeHtml(it.filename)})</option>`)
-      .join("");
-
   const viewportHtml =
     viewMode === "side"
       ? `
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div class="relative rounded-[10px] border border-[var(--border-control)] bg-[var(--bg-canvas-well)] h-[380px] flex items-center justify-center overflow-hidden p-2">
+        <div class="relative rounded-[10px] border border-[var(--border-control)] bg-[var(--bg-canvas-well)] h-[340px] flex items-center justify-center overflow-hidden p-2">
           <img src="${a.image_url}" alt="Image A" class="max-h-full max-w-full object-contain rounded-[6px]" />
           <span class="absolute top-2 left-2 px-2 py-0.5 rounded-[5px] liquid-popover text-[11px] font-mono">A · #${a.seed}</span>
         </div>
-        <div class="relative rounded-[10px] border border-[var(--border-control)] bg-[var(--bg-canvas-well)] h-[380px] flex items-center justify-center overflow-hidden p-2">
+        <div class="relative rounded-[10px] border border-[var(--border-control)] bg-[var(--bg-canvas-well)] h-[340px] flex items-center justify-center overflow-hidden p-2">
           <img src="${b.image_url}" alt="Image B" class="max-h-full max-w-full object-contain rounded-[6px]" />
           <span class="absolute top-2 left-2 px-2 py-0.5 rounded-[5px] liquid-popover text-[11px] font-mono">B · #${b.seed}</span>
         </div>
@@ -2853,25 +2948,58 @@ function openDiffModal(idxA = 0, idxB = 1, customList = null) {
       ? arr.map(t => `<span class="inline-block px-1.5 py-0.5 rounded-[4px] font-mono text-[11px] ${cls}">${escapeHtml(t)}</span>`).join(" ")
       : `<span class="text-[11.5px] text-[var(--text-muted)]">无差异</span>`;
 
+  const activeSlot = state._diffActiveSlot;
   document.getElementById("diff-content").innerHTML = `
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-      <div class="p-2.5 rounded-[10px] ui-subgroup space-y-1.5">
-        <div class="flex items-center justify-between">
-          <span class="text-[var(--text-primary)] font-semibold text-[12px]">左侧图 A</span>
-          <button type="button" onclick="applyDiffSideRecipe('A')" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn text-[11px]">采用 A 配方</button>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+      <div id="diff-slot-card-A" onclick="setDiffTargetSlot('A')" class="p-2 rounded-[10px] ui-subgroup border cursor-pointer transition-colors flex items-center gap-2.5 ${activeSlot === "A" ? "border-[var(--status-warning)]" : "border-[var(--border-hairline)] hover:border-[var(--border-hover)]"}">
+        <img src="${a.image_url}" alt="A" class="w-10 h-12 rounded-[6px] object-cover object-top shrink-0 border border-[var(--border-control)]" />
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-1.5">
+            <span class="px-1.5 py-0 rounded-[4px] text-[10px] font-bold bg-[var(--status-warning-tint)] text-[var(--status-warning)]">左侧图 A</span>
+            <span class="font-mono text-[11px] text-[var(--text-primary)] truncate">#${a.seed} · ${escapeHtml(a.model_short)}</span>
+          </div>
+          <div class="text-[11px] text-[var(--text-muted)] truncate mt-0.5">${escapeHtml(a.notes || a.prompt || a.filename)}</div>
         </div>
-        <select onchange="openDiffModal(Number(this.value), ${safeB})" class="w-full ui-well rounded-[6px] px-2 py-1 text-[12px]">${optHtml(safeA)}</select>
+        <div class="flex items-center gap-1 shrink-0" onclick="event.stopPropagation()">
+          <button type="button" onclick="stepDiffSlot('A', -1)" class="spring-btn w-6 h-6 rounded-[5px] ui-btn flex items-center justify-center text-[11px]" title="上一张">‹</button>
+          <button type="button" onclick="stepDiffSlot('A', 1)" class="spring-btn w-6 h-6 rounded-[5px] ui-btn flex items-center justify-center text-[11px]" title="下一张">›</button>
+          <button type="button" onclick="applyDiffSideRecipe('A')" class="spring-btn px-2 py-1 rounded-[5px] ui-btn text-[11px]">采用</button>
+        </div>
       </div>
-      <div class="p-2.5 rounded-[10px] ui-subgroup space-y-1.5">
-        <div class="flex items-center justify-between">
-          <span class="text-[var(--text-primary)] font-semibold text-[12px]">右侧图 B</span>
-          <button type="button" onclick="applyDiffSideRecipe('B')" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn text-[11px]">采用 B 配方</button>
+
+      <div id="diff-slot-card-B" onclick="setDiffTargetSlot('B')" class="p-2 rounded-[10px] ui-subgroup border cursor-pointer transition-colors flex items-center gap-2.5 ${activeSlot === "B" ? "border-[var(--status-success)]" : "border-[var(--border-hairline)] hover:border-[var(--border-hover)]"}">
+        <img src="${b.image_url}" alt="B" class="w-10 h-12 rounded-[6px] object-cover object-top shrink-0 border border-[var(--border-control)]" />
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-1.5">
+            <span class="px-1.5 py-0 rounded-[4px] text-[10px] font-bold bg-[var(--status-success-tint)] text-[var(--status-success)]">右侧图 B</span>
+            <span class="font-mono text-[11px] text-[var(--text-primary)] truncate">#${b.seed} · ${escapeHtml(b.model_short)}</span>
+          </div>
+          <div class="text-[11px] text-[var(--text-muted)] truncate mt-0.5">${escapeHtml(b.notes || b.prompt || b.filename)}</div>
         </div>
-        <select onchange="openDiffModal(${safeA}, Number(this.value))" class="w-full ui-well rounded-[6px] px-2 py-1 text-[12px]">${optHtml(safeB)}</select>
+        <div class="flex items-center gap-1 shrink-0" onclick="event.stopPropagation()">
+          <button type="button" onclick="stepDiffSlot('B', -1)" class="spring-btn w-6 h-6 rounded-[5px] ui-btn flex items-center justify-center text-[11px]" title="上一张">‹</button>
+          <button type="button" onclick="stepDiffSlot('B', 1)" class="spring-btn w-6 h-6 rounded-[5px] ui-btn flex items-center justify-center text-[11px]" title="下一张">›</button>
+          <button type="button" onclick="applyDiffSideRecipe('B')" class="spring-btn px-2 py-1 rounded-[5px] ui-btn text-[11px]">采用</button>
+        </div>
       </div>
     </div>
 
     ${viewportHtml}
+
+    <!-- 可视化缩略图快选胶片条（悬停可直接点 A / B 按钮指定） -->
+    <div class="p-2.5 rounded-[10px] ui-subgroup space-y-2">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <span id="diff-strip-target-hint" class="text-[11px] font-medium ${activeSlot === "A" ? "text-[var(--status-warning)]" : "text-[var(--status-success)]"}">${activeSlot === "A" ? "点击缩略图设置 左侧图 A" : "点击缩略图设置 右侧图 B"}</span>
+          <span class="text-[10.5px] text-[var(--text-muted)] hidden sm:inline">· 悬停缩略图可直接点 A / B 指定</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <input type="text" value="${escapeHtml(state._diffFilterQuery || "")}" oninput="state._diffFilterQuery=this.value;renderDiffFilmstrip()" placeholder="筛选画师/提示词/Seed..." class="w-36 sm:w-44 px-2 py-0.5 rounded-[5px] ui-well text-[11px]" />
+          <button id="diff-fav-filter-btn" type="button" onclick="toggleDiffFavFilter()" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn text-[11px]">仅收藏</button>
+        </div>
+      </div>
+      <div id="diff-thumb-strip" class="flex items-center gap-2 overflow-x-auto custom-scroll pb-1"></div>
+    </div>
 
     <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-1.5">
       ${paramRows
@@ -2901,6 +3029,7 @@ function openDiffModal(idxA = 0, idxB = 1, customList = null) {
       </div>
     </div>
   `;
+  renderDiffFilmstrip();
   document.getElementById("diff-modal").classList.remove("hidden");
 }
 
@@ -6382,6 +6511,8 @@ function setupGlobalHotkeys() {
     }
     const diffOpen = !document.getElementById("diff-modal")?.classList.contains("hidden");
     if (diffOpen) {
+      const aTag = document.activeElement?.tagName;
+      if (aTag === "INPUT" || aTag === "TEXTAREA" || aTag === "SELECT") return;
       if (e.key === "ArrowLeft") {
         e.preventDefault();
         setDiffSwipePct((state._diffSwipePct ?? 50) - 5);
