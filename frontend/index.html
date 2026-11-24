@@ -1478,6 +1478,10 @@
                 <span class="text-[var(--text-secondary)]">允许外部直接触发生图</span>
                 <input id="ext-allow-generate" type="checkbox" checked class="accent-[var(--accent-primary)]" />
               </label>
+              <label class="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-[7px] ui-well cursor-pointer sm:col-span-2" title="出图后用多模态视觉模型快速排查崩手与角落伪签名；当最大出图 >= 2 时发现硬伤自动补强 UC 重抽 1 次">
+                <span class="text-[var(--text-secondary)]">出图后自动视觉质检（抓崩手 / 角落伪签名，超 1 张限额时可自动重抽）</span>
+                <input id="ext-vision-qa" type="checkbox" class="accent-[var(--accent-primary)]" />
+              </label>
             </div>
             <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
               <input id="ext-auth-token" type="text" placeholder="未设置（开启鉴权后点击右侧按钮一键生成 Bearer Token）" class="selectable-text flex-1 min-w-0 px-2.5 py-1.5 rounded-[7px] ui-well font-mono text-[11.5px]" aria-label="外部 Agent Bearer Token" />

@@ -1269,3 +1269,15 @@ def list_a2a_tasks(limit: int = 20) -> List[Dict[str, Any]]:
         return [_row_to_a2a_task(r) for r in rows]
 
 
+def get_latest_a2a_task_by_context(context_id: str) -> Optional[Dict[str, Any]]:
+    cid = str(context_id or "").strip()
+    if not cid:
+        return None
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM a2a_tasks WHERE context_id = ? AND state = 'completed' ORDER BY updated_at DESC LIMIT 1",
+            (cid,),
+        ).fetchone()
+        return _row_to_a2a_task(row) if row else None
+
+

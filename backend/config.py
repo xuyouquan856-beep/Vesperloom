@@ -48,6 +48,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "external_agent_max_images": 1,
     "external_agent_opus_guard": True,
     "external_agent_allow_generate": True,
+    "external_agent_vision_qa": False,
 }
 
 

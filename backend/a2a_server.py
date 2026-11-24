@@ -10,6 +10,7 @@ Implements:
 from __future__ import annotations
 
 import asyncio
+import base64
 import datetime
 import json
 import re
@@ -23,14 +24,22 @@ from .database import (
     create_agent_session,
     get_a2a_task,
     get_agent_session,
+    get_latest_a2a_task_by_context,
     list_a2a_tasks,
     list_artists,
     update_a2a_task,
 )
 from .models_spec import get_model_spec
-from .nai_client import generate_image
+from .nai_client import augment_image, generate_image
 from .prompt_engine import lint_prompt
-from .studio_agent import read_creator_memory, stream_studio_agent
+from .studio_agent import (
+    _clean_base_url,
+    _encode_file_to_data_url,
+    _get_llm_client,
+    _run_vision_inspection,
+    read_creator_memory,
+    stream_studio_agent,
+)
 
 A2A_PROTOCOL_VERSION = "0.2.6"
 A2A_AGENT_VERSION = "3.0.0"
@@ -238,6 +247,95 @@ def _is_brief_too_vague(brief: str, has_history: bool, has_images: bool) -> bool
     return True
 
 
+def _extract_prev_context_state(prev_task: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Restore previous recipe blocks, params, and generated image path for multi-turn A2A/MCP refinement."""
+    out: Dict[str, Any] = {
+        "blocks": {"artist": "", "character": "", "lighting": "", "negative": ""},
+        "params": {},
+        "stage_file_path": "",
+        "stage_image_url": "",
+        "stage_item_id": None,
+    }
+    if not prev_task:
+        return out
+    for art in prev_task.get("artifacts") or []:
+        if not isinstance(art, dict):
+            continue
+        aname = art.get("name")
+        if aname == "art_recipe":
+            parts = art.get("parts") or []
+            if parts and isinstance(parts[0], dict) and isinstance(parts[0].get("data"), dict):
+                rec = parts[0]["data"]
+                if isinstance(rec.get("blocks"), dict):
+                    for k in ("artist", "character", "lighting", "negative"):
+                        if rec["blocks"].get(k):
+                            out["blocks"][k] = str(rec["blocks"][k]).strip()
+                for pk in ("model", "width", "height", "steps", "scale"):
+                    if rec.get(pk) is not None:
+                        out["params"][pk] = rec[pk]
+                imgs = rec.get("generated_images") or []
+                if imgs and isinstance(imgs[-1], dict):
+                    last_img = imgs[-1]
+                    fp = str(last_img.get("file_path") or "")
+                    if fp and Path(fp).is_file():
+                        out["stage_file_path"] = fp
+                        try:
+                            rel = Path(fp).resolve().relative_to(OUTPUTS_DIR.resolve()).as_posix()
+                            out["stage_image_url"] = f"/outputs/{rel}"
+                        except Exception:
+                            out["stage_image_url"] = str(last_img.get("image_url") or "")
+                        out["stage_item_id"] = last_img.get("id")
+        elif aname == "generated_image" and not out["stage_file_path"]:
+            meta = art.get("metadata") or {}
+            fp = str(meta.get("file_path") or "")
+            if fp and Path(fp).is_file():
+                out["stage_file_path"] = fp
+                try:
+                    rel = Path(fp).resolve().relative_to(OUTPUTS_DIR.resolve()).as_posix()
+                    out["stage_image_url"] = f"/outputs/{rel}"
+                except Exception:
+                    out["stage_image_url"] = ""
+                out["stage_item_id"] = meta.get("gallery_id")
+    return out
+
+
+async def _run_post_gen_vision_qa(image_path: str, brief: str, cfg: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Optional fast multimodal QA pass to catch severe hand/face defects or corner pseudo-signatures."""
+    base_url = _clean_base_url(cfg.get("llm_base_url") or "")
+    api_key = str(cfg.get("llm_api_key") or "").strip()
+    llm_model = str(cfg.get("llm_model") or "qwen4-max").strip()
+    if not base_url or not api_key or not image_path or not Path(image_path).is_file():
+        return None
+    data_url = _encode_file_to_data_url(Path(image_path), max_dim=768)
+    if not data_url:
+        return None
+    prompt_txt = (
+        f"你是 NovelAI 插画质检员。请快速检查这张刚生成的作品是否符合需求「{brief[:180]}」，"
+        "重点排查 3 类硬伤：1) 明显手部/五官/肢体畸形；2) 角落出现明显伪画师签名/水印文字；3) 严重跑题。\n"
+        '请只输出一段紧凑 JSON：{"passed": true或false, "issues": "30字以内中文简评（无硬伤写通过）", "extra_uc": "若未通过，补充2~5个英文负向词如 signature, watermark, bad hands，通过则留空"}。'
+    )
+    try:
+        client = _get_llm_client()
+        raw, err = await _run_vision_inspection(
+            [{"type": "text", "text": prompt_txt}, {"type": "image_url", "image_url": {"url": data_url}}],
+            client,
+            f"{base_url}/chat/completions",
+            {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            llm_model,
+        )
+        if err or not raw:
+            return {"passed": True, "issues": f"视觉质检跳过: {err or '无返回'}", "extra_uc": ""}
+        m = re.search(r"\{.*\}", raw, re.DOTALL)
+        parsed = json.loads(m.group(0) if m else raw)
+        return {
+            "passed": bool(parsed.get("passed", True)),
+            "issues": str(parsed.get("issues") or "通过").strip(),
+            "extra_uc": str(parsed.get("extra_uc") or "").strip(),
+        }
+    except Exception as exc:
+        return {"passed": True, "issues": f"视觉质检跳过: {str(exc)[:60]}", "extra_uc": ""}
+
+
 def _format_a2a_task(row: Dict[str, Any], base_url: str = "http://127.0.0.1:8780") -> Dict[str, Any]:
     """Format DB a2a_tasks row into standard A2A Task object."""
     updated_ts = int(row.get("updated_at") or 0)
@@ -365,40 +463,59 @@ async def run_delegated_art_task(
 
     await _emit("working", "NAI Studio 美术总监已接单，正在分析需求与审美记忆...")
 
-    # 2. Prepare headless workbench context for Studio Agent
+    # 2. Prepare headless workbench context (restoring previous turn's blocks, params & image for multi-turn refinement!)
+    prev_ctx = _extract_prev_context_state(get_latest_a2a_task_by_context(cid) if cid else None)
+    prev_stage_path = prev_ctx["stage_file_path"]
+    prev_stage_url = prev_ctx["stage_image_url"]
+
     default_steps = min(28, int(spec.get("default_steps") or 28)) if opus_guard else int(spec.get("default_steps") or 28)
+    init_blocks = dict(prev_ctx["blocks"])
+    init_pos = ", ".join(init_blocks[k] for k in ("artist", "character", "lighting") if init_blocks.get(k))
     wb_state: Dict[str, Any] = {
-        "model": spec["id"],
+        "model": str(prev_ctx["params"].get("model") or spec["id"]) if (not model and prev_ctx["params"].get("model")) else spec["id"],
         "action": "generate",
         "width": w,
         "height": h,
         "steps": default_steps,
-        "scale": float(spec.get("default_scale") or 5.0),
+        "scale": float(prev_ctx["params"].get("scale") or spec.get("default_scale") or 5.0),
         "cfg_rescale": 0.0,
         "sampler": "k_euler_ancestral",
         "scheduler": "karras",
         "seed": 0,
         "seed_locked": False,
         "opus_free_guard": opus_guard,
-        "stage_has_image": False,
-        "blocks": {"artist": "", "character": "", "lighting": "", "negative": ""},
-        "prompt": "",
-        "uc": "",
+        "stage_has_image": bool(prev_stage_path),
+        "stage_image_url": prev_stage_url,
+        "blocks": dict(init_blocks),
+        "prompt": init_pos,
+        "uc": init_blocks.get("negative", ""),
     }
+
+    prev_img_directive = (
+        "\n- **多轮带图精修**：上一轮成图已自动载入画布！你可以先调用 `inspect_canvas_stage` 审阅上一张图；"
+        "若只需表情微调/转线稿/智能上色/去杂物，可直接调用 `run_director_tool`（Opus 0 点数免费）；"
+        "若需在原图基础上微调局部或光影，可先调用 `set_workbench_mode(action='img2img', i2i_strength=0.45~0.65)` 再修改区块并调用 `trigger_generate_image`。"
+        if prev_stage_path
+        else ""
+    )
 
     directive_suffix = (
         "\n\n[外部 Agent 委派约束 — 请严格遵守]"
-        f"\n- 目标画幅：{w}x{h}，目标模型：{spec['short_name']} ({spec['id']})"
+        f"\n- 目标画幅：{w}x{h}，目标模型：{spec['short_name']} ({wb_state['model']})"
         f"\n- 本次允许直接生图：{'是（最多 ' + str(max_images) + ' 张）' if effective_allow_gen else '否（仅构思配方与提案，不要触发生图）'}"
         "\n- **角色考据铁律**：若需求涉及具体动漫/游戏角色，必须先调用 `lookup_danbooru_character` 查询官方 Danbooru 角色 Tag、作品 Tag 与高分作品真实外貌/服装特征，禁止凭空编造。"
         "\n- **画风美学铁律**：除非需求明确要求“不加画师/纯白模”，否则必须调用 `search_artist_catalog` 从本地画师图鉴挑选 1~2 位契合题材与氛围的高质量画师并合理配权写入 `artist` 区块（严禁将 `artist` 区块留空导致画风平庸）。"
-        "\n- **无头出图时序**：写入完整四区块并设好参数后，若允许直接生图请调用 `trigger_generate_image` 后直接结束并给出简洁中文总结（不要调用 `inspect_canvas_stage`，后端会在你结束后立即执行真实出图并交付 Artifact）；不要输出 `[QUICK_REPLIES: ...]`。"
+        f"{prev_img_directive}"
+        "\n- **无头出图时序**：写入完整四区块并设好参数后，若允许直接生图请调用 `trigger_generate_image`（或 `run_director_tool`）后直接结束并给出简洁中文总结（触发出图后不要再调用 `inspect_canvas_stage`，后端会在你结束后立即执行真实出图并交付 Artifact）；不要输出 `[QUICK_REPLIES: ...]`。"
     )
 
     llm_ready = bool(str(cfg.get("llm_api_key") or "").strip())
     final_text = ""
-    blocks = {"artist": "", "character": "", "lighting": "", "negative": ""}
-    params = {"model": spec["id"], "width": w, "height": h, "steps": default_steps, "scale": wb_state["scale"]}
+    blocks = dict(init_blocks)
+    params = {"model": wb_state["model"], "width": w, "height": h, "steps": default_steps, "scale": wb_state["scale"]}
+    workbench_action = "generate"
+    i2i_strength = 0.55
+    director_req: Optional[Dict[str, Any]] = None
     proposals: List[Dict[str, Any]] = []
     tool_trace: List[str] = []
     wants_generate = False
@@ -456,6 +573,13 @@ async def run_delegated_art_task(
                     for pk in ("model", "width", "height", "steps", "scale", "sampler", "scheduler", "seed"):
                         if payload.get(pk) is not None:
                             params[pk] = payload[pk]
+                elif atype == "set_workbench_mode":
+                    if payload.get("action"):
+                        workbench_action = str(payload["action"])
+                    if payload.get("i2i_strength") is not None:
+                        i2i_strength = max(0.15, min(0.95, float(payload["i2i_strength"])))
+                elif atype == "run_director_tool":
+                    director_req = dict(payload)
                 elif atype == "load_oc_character":
                     card_obj = payload.get("card") if isinstance(payload.get("card"), dict) else {}
                     if payload.get("apply_to_character_block", True) and card_obj.get("prompt"):
@@ -501,68 +625,125 @@ async def run_delegated_art_task(
 
     generated_images: List[Dict[str, Any]] = []
     artifacts: List[Dict[str, Any]] = []
+    vision_qa_result: Optional[Dict[str, Any]] = None
+    vision_qa_enabled = bool(cfg.get("external_agent_vision_qa", False))
 
-    # 3. Optional real image generation (strictly bounded by allow_generate & max_images)
-    should_generate = effective_allow_gen and wants_generate and bool(combined_prompt) and max_images >= 1
+    def _record_generated(gen_res: Dict[str, Any], label_desc: str) -> Dict[str, Any]:
+        rel_path = str(gen_res.get("rel_path") or gen_res.get("filename") or "")
+        abs_path = str((OUTPUTS_DIR / rel_path).resolve()) if rel_path else ""
+        img_url = str(gen_res.get("image_url") or (f"/outputs/{rel_path}" if rel_path else ""))
+        rec = {
+            "id": gen_res.get("id"),
+            "seed": gen_res.get("seed"),
+            "image_url": f"{root}{img_url}" if img_url.startswith("/") else img_url,
+            "file_path": abs_path,
+            "width": int(gen_res.get("width") or fin_w),
+            "height": int(gen_res.get("height") or fin_h),
+            "model": str(gen_res.get("model") or fin_model),
+        }
+        generated_images.append(rec)
+        artifacts.append(
+            {
+                "artifactId": f"img_{uuid.uuid4().hex[:8]}",
+                "name": "generated_image",
+                "description": label_desc,
+                "parts": [
+                    {
+                        "kind": "file",
+                        "file": {
+                            "name": Path(abs_path).name if abs_path else "artwork.png",
+                            "mimeType": "image/png",
+                            "uri": rec["image_url"],
+                        },
+                    }
+                ],
+                "metadata": {"file_path": abs_path, "seed": gen_res.get("seed"), "gallery_id": gen_res.get("id")},
+            }
+        )
+        return rec
+
+    # 3a. Optional Director execution (e.g., 0-Anlas emotion / lineart / colorize on previous turn's image)
+    if effective_allow_gen and director_req and prev_stage_path and Path(prev_stage_path).is_file() and max_images >= 1:
+        if not str(cfg.get("api_token") or "").strip():
+            final_text += "\n\n[提示] 尚未配置 NovelAI API Token，未执行 Director 图像处理。"
+        else:
+            req_type = str(director_req.get("req_type") or "emotion")
+            await _emit("working", f"正在对上一轮成图执行 Director ({req_type})...")
+            try:
+                img_b64 = base64.b64encode(Path(prev_stage_path).read_bytes()).decode("ascii")
+                dir_res = await augment_image(
+                    {
+                        "req_type": req_type,
+                        "image": img_b64,
+                        "emotion": str(director_req.get("emotion") or "happy"),
+                        "defry": int(director_req.get("defry") or 0),
+                        "prompt": str(director_req.get("prompt") or ""),
+                    },
+                    cfg,
+                )
+                _record_generated(dir_res, f"Director ({req_type}) 处理成图")
+            except Exception as exc:
+                final_text += f"\n\n[Director 处理失败] {exc}"
+
+    # 3b. Optional real image generation (txt2img or img2img, strictly bounded by allow_generate & max_images)
+    should_generate = (
+        effective_allow_gen
+        and wants_generate
+        and bool(combined_prompt)
+        and len(generated_images) < max_images
+    )
     if should_generate:
         if not str(cfg.get("api_token") or "").strip():
             final_text += "\n\n[提示] 尚未配置 NovelAI API Token，已保留完整配方未扣费出图。"
         else:
-            await _emit("working", f"正在调用 NovelAI ({fin_model}, {fin_w}x{fin_h}) 生成作品...")
+            use_i2i = (workbench_action == "img2img") and bool(prev_stage_path) and Path(prev_stage_path).is_file()
+            await _emit("working", f"正在调用 NovelAI ({fin_model}, {'图生图' if use_i2i else '文生图'} {fin_w}x{fin_h}) 生成作品...")
             try:
-                # Prevent double-stacking quality tags & Heavy UC when Studio Agent already wrote them
                 pos_lower = combined_prompt.lower()
                 uc_lower = combined_uc.lower()
                 has_quality_tags = any(q in pos_lower for q in ("masterpiece", "very aesthetic", "best quality"))
                 has_heavy_uc = ("lowres" in uc_lower) and ("worst quality" in uc_lower)
-                gen_res = await generate_image(
-                    {
-                        "prompt": combined_prompt,
-                        "uc": combined_uc,
-                        "model": fin_model,
-                        "width": fin_w,
-                        "height": fin_h,
-                        "steps": fin_steps,
-                        "scale": fin_scale,
-                        "sampler": str(params.get("sampler") or "k_euler_ancestral"),
-                        "scheduler": str(params.get("scheduler") or "karras"),
-                        "seed": int(params.get("seed") or 0),
-                        "quality_toggle": not has_quality_tags,
-                        "uc_preset": 3 if has_heavy_uc else 0,
-                        "opus_free_guard": opus_guard,
-                    }
-                )
-                rel_path = str(gen_res.get("rel_path") or gen_res.get("filename") or "")
-                abs_path = str((OUTPUTS_DIR / rel_path).resolve()) if rel_path else ""
-                img_url = str(gen_res.get("image_url") or (f"/outputs/{rel_path}" if rel_path else ""))
-                img_record = {
-                    "id": gen_res.get("id"),
-                    "seed": gen_res.get("seed"),
-                    "image_url": f"{root}{img_url}" if img_url.startswith("/") else img_url,
-                    "file_path": abs_path,
+                gen_payload: Dict[str, Any] = {
+                    "prompt": combined_prompt,
+                    "uc": combined_uc,
+                    "model": fin_model,
+                    "action": "img2img" if use_i2i else "generate",
                     "width": fin_w,
                     "height": fin_h,
-                    "model": fin_model,
+                    "steps": fin_steps,
+                    "scale": fin_scale,
+                    "sampler": str(params.get("sampler") or "k_euler_ancestral"),
+                    "scheduler": str(params.get("scheduler") or "karras"),
+                    "seed": int(params.get("seed") or 0),
+                    "quality_toggle": not has_quality_tags,
+                    "uc_preset": 3 if has_heavy_uc else 0,
+                    "opus_free_guard": opus_guard,
                 }
-                generated_images.append(img_record)
-                artifacts.append(
-                    {
-                        "artifactId": f"img_{uuid.uuid4().hex[:8]}",
-                        "name": "generated_image",
-                        "description": f"NovelAI 生成成品图 (Seed #{gen_res.get('seed')})",
-                        "parts": [
-                            {
-                                "kind": "file",
-                                "file": {
-                                    "name": Path(abs_path).name if abs_path else "artwork.png",
-                                    "mimeType": "image/png",
-                                    "uri": img_record["image_url"],
-                                },
-                            }
-                        ],
-                        "metadata": {"file_path": abs_path, "seed": gen_res.get("seed"), "gallery_id": gen_res.get("id")},
-                    }
-                )
+                if use_i2i:
+                    gen_payload["image"] = base64.b64encode(Path(prev_stage_path).read_bytes()).decode("ascii")
+                    gen_payload["strength"] = i2i_strength
+                    gen_payload["noise"] = 0.0
+
+                gen_res = await generate_image(gen_payload)
+                first_rec = _record_generated(gen_res, f"NovelAI 生成成品图 (Seed #{gen_res.get('seed')})")
+
+                # 3c. Optional Post-Generation Vision QA & bounded auto-retry (strictly within max_images!)
+                if vision_qa_enabled and first_rec.get("file_path"):
+                    await _emit("working", "正在执行出图后多模态视觉质检...")
+                    vision_qa_result = await _run_post_gen_vision_qa(first_rec["file_path"], brief, cfg)
+                    if vision_qa_result and (not vision_qa_result.get("passed")) and len(generated_images) < max_images:
+                        extra_uc = str(vision_qa_result.get("extra_uc") or "signature, artist name, watermark, bad hands").strip()
+                        await _emit("working", f"视觉质检发现瑕疵（{vision_qa_result.get('issues')}），正在补强 UC 自动重抽...")
+                        retry_payload = {
+                            **gen_payload,
+                            "uc": f"{combined_uc}, {extra_uc}".strip(", "),
+                            "seed": 0,
+                        }
+                        retry_res = await generate_image(retry_payload)
+                        _record_generated(retry_res, f"视觉质检自动重抽成品图 (Seed #{retry_res.get('seed')})")
+                        final_text += f"\n\n[视觉质检] 初稿检测到「{vision_qa_result.get('issues')}」，已补强 UC ({extra_uc}) 自动重抽。"
+                    elif vision_qa_result:
+                        final_text += f"\n\n[视觉质检] {'通过' if vision_qa_result.get('passed') else '提示'}：{vision_qa_result.get('issues')}"
             except Exception as exc:
                 final_text += f"\n\n[生图失败] {exc}"
 
@@ -572,11 +753,13 @@ async def run_delegated_art_task(
         "height": fin_h,
         "steps": fin_steps,
         "scale": fin_scale,
+        "action": workbench_action,
         "blocks": blocks,
         "prompt": combined_prompt,
         "uc": combined_uc,
         "proposals": proposals,
         "generated_images": generated_images,
+        "vision_qa": vision_qa_result,
         "tools_used": tool_trace,
     }
 

@@ -5348,6 +5348,7 @@ async function rollbackToLocalSnapshot(filename) {
 let _mcpCatalogCache = null;
 
 let _extSnippetTab = "http";
+let _extTasksCache = [];
 
 async function copyTextById(elId, toastMsg = "已复制") {
   const txt = document.getElementById(elId)?.textContent?.trim() || "";
@@ -5391,11 +5392,13 @@ async function saveExternalAgentGuardrails() {
   const maxEl = document.getElementById("ext-max-images");
   const opusEl = document.getElementById("ext-opus-guard");
   const genEl = document.getElementById("ext-allow-generate");
+  const vqaEl = document.getElementById("ext-vision-qa");
   const payload = {
     external_agent_auth_enabled: !!authEl?.checked,
     external_agent_max_images: Number(maxEl?.value || 1),
     external_agent_opus_guard: !!opusEl?.checked,
     external_agent_allow_generate: !!genEl?.checked,
+    external_agent_vision_qa: !!vqaEl?.checked,
     skip_account_check: true,
   };
   const rawToken = String(tokenEl?.value || "").trim();
@@ -5436,13 +5439,14 @@ async function generateExternalAgentToken() {
 }
 
 function renderExternalAgentTasks(tasks = []) {
+  _extTasksCache = Array.isArray(tasks) ? tasks : [];
   const box = document.getElementById("ext-a2a-tasks-list");
   if (!box) return;
-  if (!tasks.length) {
+  if (!_extTasksCache.length) {
     box.innerHTML = `<div class="text-[var(--text-muted)] text-[11.5px]">暂无外部 Agent 委派记录</div>`;
     return;
   }
-  box.innerHTML = tasks.map(t => {
+  box.innerHTML = _extTasksCache.map(t => {
     const st = String(t.state || "submitted");
     const tone = st === "completed"
       ? "text-[var(--status-success)]"
@@ -5452,20 +5456,90 @@ function renderExternalAgentTasks(tasks = []) {
       ? "text-[var(--status-danger)]"
       : "text-[var(--accent-primary)]";
     const src = (t.metadata && t.metadata.source) ? String(t.metadata.source).toUpperCase() : "A2A";
-    const artCnt = Array.isArray(t.artifacts) ? t.artifacts.length : 0;
+    const arts = Array.isArray(t.artifacts) ? t.artifacts : [];
+    const imgArt = [...arts].reverse().find(a => a && a.name === "generated_image");
+    const rawUri = imgArt?.parts?.[0]?.file?.uri || "";
+    const thumbUri = rawUri.replace(/^https?:\/\/127\.0\.0\.1:\d+(\/outputs\/)/i, "$1");
+    const tidEsc = escapeHtml(t.id || "");
+    const cidEsc = escapeHtml(t.context_id || "");
     return `
-      <div class="px-2.5 py-2 rounded-[8px] ui-well flex items-center justify-between gap-2">
-        <div class="min-w-0">
-          <div class="flex items-center gap-1.5">
-            <span class="px-1.5 py-0.5 rounded-[4px] ui-badge font-mono text-[10px]">${escapeHtml(src)}</span>
-            <span class="font-mono text-[10.5px] ${tone}">${escapeHtml(st)}</span>
-            <span class="text-[11px] text-[var(--text-muted)] font-mono">${escapeHtml(t.id)}</span>
+      <div class="px-2.5 py-2 rounded-[8px] ui-well flex items-center justify-between gap-2.5">
+        <div class="flex items-center gap-2.5 min-w-0">
+          ${thumbUri ? `<img src="${escapeHtml(thumbUri)}" alt="" class="w-9 h-11 rounded-[5px] object-cover object-top shrink-0 border border-[var(--border-hairline)]" />` : ""}
+          <div class="min-w-0">
+            <div class="flex flex-wrap items-center gap-1.5">
+              <span class="px-1.5 py-0.5 rounded-[4px] ui-badge font-mono text-[10px]">${escapeHtml(src)}</span>
+              <span class="font-mono text-[10.5px] ${tone}">${escapeHtml(st)}</span>
+              <span class="text-[11px] text-[var(--text-muted)] font-mono">${tidEsc}</span>
+            </div>
+            <div class="text-[12px] text-[var(--text-primary)] truncate mt-0.5">${escapeHtml(t.brief || "")}</div>
           </div>
-          <div class="text-[12px] text-[var(--text-primary)] truncate mt-0.5">${escapeHtml(t.brief || "")}</div>
         </div>
-        <span class="text-[10.5px] font-mono text-[var(--text-muted)] shrink-0">${artCnt} 产物</span>
+        <div class="flex items-center gap-1 shrink-0">
+          <button type="button" onclick="loadExternalTaskToWorkbench('${tidEsc}')" class="spring-btn px-2 py-1 rounded-[5px] ui-btn text-[11px] whitespace-nowrap" title="将此次外部任务的成品图与配方一键载入工作台">载入画布</button>
+          ${cidEsc ? `<button type="button" onclick="takeoverExternalTaskInAgent('${cidEsc}')" class="spring-btn px-2 py-1 rounded-[5px] ui-btn-ghost text-[11px] whitespace-nowrap" title="在 Studio Agent 浮窗中打开该会话继续对话">接管对话</button>` : ""}
+        </div>
       </div>`;
   }).join("");
+}
+
+async function loadExternalTaskToWorkbench(taskId) {
+  const t = _extTasksCache.find(x => x.id === taskId);
+  if (!t) return;
+  const arts = Array.isArray(t.artifacts) ? t.artifacts : [];
+  const imgArt = [...arts].reverse().find(a => a && a.name === "generated_image");
+  const recArt = arts.find(a => a && a.name === "art_recipe");
+  const rec = recArt?.parts?.[0]?.data || {};
+  const galId = imgArt?.metadata?.gallery_id || rec?.generated_images?.[rec.generated_images.length - 1]?.id;
+
+  if (typeof switchTab === "function") switchTab("workbench");
+
+  if (galId) {
+    try {
+      const res = await fetch(`/api/gallery?limit=30&offset=0`);
+      const data = await res.json();
+      if (Array.isArray(data.items)) {
+        state.gallery = data.items;
+        if (typeof renderGallery === "function") renderGallery();
+        const found = data.items.find(g => Number(g.id) === Number(galId));
+        if (found && typeof setStageFromGalleryItem === "function") {
+          setStageFromGalleryItem(found, true);
+          showToast(`已将外部任务 #${galId} 成图与配方载入画布`);
+          return;
+        }
+      }
+    } catch (e) {}
+  }
+
+  // Fallback: apply structured recipe blocks & params directly
+  if (rec.blocks) {
+    const map = {
+      artist: "block-artist-input",
+      character: "block-character-input",
+      lighting: "block-lighting-input",
+      negative: "block-negative-input",
+    };
+    Object.entries(map).forEach(([k, id]) => {
+      const el = document.getElementById(id);
+      if (el && rec.blocks[k] !== undefined) el.value = rec.blocks[k];
+    });
+    if (typeof syncStructuredToClassic === "function") syncStructuredToClassic();
+  } else if (rec.prompt) {
+    const pEl = document.getElementById("prompt-input");
+    const uEl = document.getElementById("uc-input");
+    if (pEl) pEl.value = rec.prompt;
+    if (uEl && rec.uc) uEl.value = rec.uc;
+  }
+  showToast("已将外部任务配方载入工作台");
+}
+
+async function takeoverExternalTaskInAgent(contextId) {
+  if (!contextId) return;
+  if (typeof toggleAgentWindow === "function") toggleAgentWindow(true);
+  if (typeof loadAgentSession === "function") {
+    await loadAgentSession(contextId, true);
+    showToast("已在 Studio Agent 浮窗接管该外部会话");
+  }
 }
 
 async function refreshExternalAgentTasks() {
@@ -5571,6 +5645,8 @@ async function loadMcpConsoleInfo() {
     if (opusEl) opusEl.checked = g.external_agent_opus_guard !== false;
     const genEl = document.getElementById("ext-allow-generate");
     if (genEl) genEl.checked = g.external_agent_allow_generate !== false;
+    const vqaEl = document.getElementById("ext-vision-qa");
+    if (vqaEl) vqaEl.checked = !!g.external_agent_vision_qa;
 
     switchMcpSnippetTab(_extSnippetTab);
     renderExternalAgentTasks(info.recent_tasks || []);

@@ -214,6 +214,7 @@ async def api_update_config(body: Dict[str, Any]) -> Dict[str, Any]:
         "external_agent_max_images",
         "external_agent_opus_guard",
         "external_agent_allow_generate",
+        "external_agent_vision_qa",
     ):
         if k in body and body[k] is not None:
             if k in ("api_token", "llm_api_key", "external_agent_token") and "..." in str(body[k]):
@@ -936,6 +937,7 @@ async def api_mcp_info(request: Request) -> Dict[str, Any]:
             "external_agent_max_images": int(cfg.get("external_agent_max_images") or 1),
             "external_agent_opus_guard": bool(cfg.get("external_agent_opus_guard", True)),
             "external_agent_allow_generate": bool(cfg.get("external_agent_allow_generate", True)),
+            "external_agent_vision_qa": bool(cfg.get("external_agent_vision_qa", False)),
         },
         "client_config": {
             "mcpServers": {

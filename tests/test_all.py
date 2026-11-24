@@ -1570,6 +1570,88 @@ def test_stage3_streamable_http_mcp_and_a2a_server(tmp_path, monkeypatch):
     assert len(json.loads(r_plan.json()["result"]["content"][0]["text"])["generated_images"]) == 0
     assert len(gen_calls) == 2
 
+    # 7. Multi-turn visual continuity (Director emotion + img2img) & optional Post-Gen Vision QA retry
+    mock_out_dir = tmp_path / "outputs"
+    mock_out_dir.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(a2a_mod, "OUTPUTS_DIR", mock_out_dir)
+    (mock_out_dir / "2026-11-24").mkdir(parents=True, exist_ok=True)
+    (mock_out_dir / "2026-11-24" / "mock_panda.png").write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 32)
+
+    # 7a. Enable Vision QA + max_images=2 -> failing QA triggers 1 auto-retry with extra_uc
+    cfg_vqa = {**cfg_with_keys, "external_agent_vision_qa": True, "external_agent_max_images": 2}
+    cfg_mod.save_config(cfg_vqa)
+
+    async def _fake_vision_qa(image_path, brief, cfg):
+        return {"passed": False, "issues": "右下角存在轻微伪画师签名", "extra_uc": "signature, artist name"}
+
+    monkeypatch.setattr(a2a_mod, "_run_post_gen_vision_qa", _fake_vision_qa)
+    gen_calls.clear()
+
+    r_vqa = client.post(
+        "/a2a",
+        json={
+            "jsonrpc": "2.0",
+            "id": "a2a-vqa-1",
+            "method": "message/send",
+            "params": {"message": {"role": "user", "parts": [{"kind": "text", "text": "画一张蓝发少女插画，开启质检"}]}},
+        },
+    )
+    assert r_vqa.status_code == 200
+    t_vqa = r_vqa.json()["result"]
+    assert t_vqa["metadata"]["generated_count"] == 2
+    assert len(gen_calls) == 2
+    assert "signature" in gen_calls[1]["uc"]
+
+    # 7b. Follow-up on SAME contextId -> previous image is auto-loaded into wb_state & Director emotion runs!
+    seen_wb_states = []
+    dir_calls = []
+
+    async def _fake_turn2_director(**kwargs):
+        seen_wb_states.append(dict(kwargs.get("workbench_state") or {}))
+        def _sse(et, pl):
+            return f"event: {et}\ndata: {json.dumps(pl, ensure_ascii=False)}\n\n"
+        yield _sse("ui_action", {
+            "action": {"type": "run_director_tool", "payload": {"req_type": "emotion", "emotion": "happy", "defry": 0, "prompt": ""}}
+        })
+        yield _sse("delta", {"text": "已为你把上一张图的表情微调为开心微笑。"})
+
+    async def _fake_augment(req, cfg=None):
+        dir_calls.append(dict(req))
+        return {
+            "id": 1001,
+            "filename": "mock_happy.png",
+            "rel_path": "2026-11-24/mock_panda.png",
+            "seed": 0,
+            "width": 1024,
+            "height": 1024,
+            "model": "director-emotion",
+        }
+
+    monkeypatch.setattr(a2a_mod, "stream_studio_agent", _fake_turn2_director)
+    monkeypatch.setattr(a2a_mod, "augment_image", _fake_augment)
+
+    r_turn2 = client.post(
+        "/a2a",
+        json={
+            "jsonrpc": "2.0",
+            "id": "a2a-turn2",
+            "method": "message/send",
+            "params": {
+                "message": {
+                    "role": "user",
+                    "contextId": t_vqa["contextId"],
+                    "parts": [{"kind": "text", "text": "把刚才那张图的表情改成开心微笑"}],
+                }
+            },
+        },
+    )
+    assert r_turn2.status_code == 200
+    t2 = r_turn2.json()["result"]
+    assert seen_wb_states and seen_wb_states[0]["stage_has_image"] is True
+    assert len(dir_calls) == 1 and dir_calls[0]["req_type"] == "emotion" and dir_calls[0]["emotion"] == "happy"
+    assert t2["metadata"]["generated_count"] == 1
+
+
 
 
 
