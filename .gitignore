@@ -24,6 +24,8 @@ data/oc_avatars/
 data/skills/
 data/backups/
 data/agent_memory.md
+data/webview_cache/
+data/desktop_window.json
 node_modules/
 
 # === Generated Artworks, Artist Previews & Large Media ===
