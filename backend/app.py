@@ -1,9 +1,13 @@
 import base64
+import hmac
+import json
+import secrets
 import sys
+import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -28,6 +32,7 @@ from .database import (
     get_agent_session,
     get_gallery_item,
     init_db,
+    list_a2a_tasks,
     list_agent_sessions,
     list_artists,
     list_gallery,
@@ -64,7 +69,22 @@ from .studio_agent import (
     stream_studio_agent,
     write_creator_memory,
 )
-from .mcp_tools import MCP_EXAMPLE_ARGS, MCP_TOOLS, execute_mcp_tool
+from .mcp_tools import (
+    MCP_EXAMPLE_ARGS,
+    MCP_PROMPTS,
+    MCP_RESOURCES,
+    MCP_TOOLS,
+    execute_mcp_tool,
+    get_mcp_prompt,
+    read_mcp_resource,
+)
+from .a2a_server import (
+    A2A_PROTOCOL_VERSION,
+    build_agent_card,
+    build_external_client_skill_markdown,
+    handle_a2a_jsonrpc,
+    stream_a2a_jsonrpc_sse,
+)
 from .backup_manager import (
     BACKUPS_DIR,
     build_backup_payload,
@@ -121,9 +141,12 @@ def _sanitize_config_for_client(cfg: Dict[str, Any]) -> Dict[str, Any]:
     out = dict(cfg)
     out["api_token_masked"] = mask_token(cfg.get("api_token", ""))
     out["llm_api_key_masked"] = mask_token(cfg.get("llm_api_key", ""))
+    out["external_agent_token_masked"] = mask_token(cfg.get("external_agent_token", ""))
+    out["external_agent_token_set"] = bool(str(cfg.get("external_agent_token") or "").strip())
     # Never echo raw secret keys to frontend state
     out.pop("api_token", None)
     out.pop("llm_api_key", None)
+    out.pop("external_agent_token", None)
     return out
 
 
@@ -186,12 +209,23 @@ async def api_update_config(body: Dict[str, Any]) -> Dict[str, Any]:
         "llm_use_knowledge_agent",
         "llm_context_tokens",
         "llm_max_output_tokens",
+        "external_agent_auth_enabled",
+        "external_agent_token",
+        "external_agent_max_images",
+        "external_agent_opus_guard",
+        "external_agent_allow_generate",
     ):
         if k in body and body[k] is not None:
-            if k in ("api_token", "llm_api_key") and "..." in str(body[k]):
+            if k in ("api_token", "llm_api_key", "external_agent_token") and "..." in str(body[k]):
                 continue
             if k in ("api_token", "output_dir"):
                 account_check_needed = True
+            if k == "external_agent_max_images":
+                try:
+                    cfg[k] = max(1, min(4, int(body[k])))
+                except Exception:
+                    continue
+                continue
             if k == "llm_context_tokens":
                 try:
                     cfg[k] = max(8000, min(1000000, int(body[k])))
@@ -839,19 +873,70 @@ async def api_del_mix_preset(preset_id: int) -> Dict[str, Any]:
     return {"ok": delete_mix_preset(preset_id)}
 
 
+_MCP_HTTP_SESSIONS: Dict[str, Dict[str, Any]] = {}
+
+
+def _request_base_url(request: Request) -> str:
+    return str(request.base_url).rstrip("/")
+
+
+def _verify_external_bearer(request: Request) -> None:
+    cfg = load_config()
+    if not cfg.get("external_agent_auth_enabled"):
+        return
+    expected = str(cfg.get("external_agent_token") or "").strip()
+    if not expected:
+        return
+    auth_header = str(request.headers.get("authorization") or "").strip()
+    token = ""
+    if auth_header.lower().startswith("bearer "):
+        token = auth_header[7:].strip()
+    elif request.headers.get("x-api-key"):
+        token = str(request.headers.get("x-api-key") or "").strip()
+    if not token or not hmac.compare_digest(token, expected):
+        raise HTTPException(
+            status_code=401,
+            detail="External Agent authentication required (invalid or missing Bearer token)",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
 @app.get("/api/mcp/info")
-async def api_mcp_info() -> Dict[str, Any]:
+async def api_mcp_info(request: Request) -> Dict[str, Any]:
+    cfg = load_config()
+    root = _request_base_url(request)
     server_script = str((BASE_DIR / "mcp_server.py").resolve())
     python_exe = str(Path(sys.executable).resolve())
+    mcp_http_url = f"{root}/mcp"
+    a2a_card_url = f"{root}/.well-known/agent-card.json"
+    a2a_endpoint_url = f"{root}/a2a"
+    auth_enabled = bool(cfg.get("external_agent_auth_enabled"))
+    http_entry: Dict[str, Any] = {"url": mcp_http_url, "type": "http"}
+    if auth_enabled:
+        http_entry["headers"] = {"Authorization": "Bearer <YOUR_NAI_STUDIO_TOKEN>"}
     return {
         "server_name": "nai-studio-mcp",
-        "server_version": "2.3.0",
-        "protocol_version": "2024-11-05",
+        "server_version": "3.0.0",
+        "protocol_version": "2025-03-26",
+        "a2a_protocol_version": A2A_PROTOCOL_VERSION,
         "python_executable": python_exe,
         "server_script": server_script,
+        "streamable_http_url": mcp_http_url,
+        "a2a_card_url": a2a_card_url,
+        "a2a_endpoint_url": a2a_endpoint_url,
         "tool_count": len(MCP_TOOLS),
         "tools": MCP_TOOLS,
+        "resources": MCP_RESOURCES,
+        "prompts": MCP_PROMPTS,
         "example_args": MCP_EXAMPLE_ARGS,
+        "guardrails": {
+            "external_agent_auth_enabled": auth_enabled,
+            "external_agent_token_masked": mask_token(cfg.get("external_agent_token", "")),
+            "external_agent_token_set": bool(str(cfg.get("external_agent_token") or "").strip()),
+            "external_agent_max_images": int(cfg.get("external_agent_max_images") or 1),
+            "external_agent_opus_guard": bool(cfg.get("external_agent_opus_guard", True)),
+            "external_agent_allow_generate": bool(cfg.get("external_agent_allow_generate", True)),
+        },
         "client_config": {
             "mcpServers": {
                 "nai-studio": {
@@ -861,7 +946,214 @@ async def api_mcp_info() -> Dict[str, Any]:
                 }
             }
         },
+        "http_client_config": {
+            "mcpServers": {
+                "nai-studio-http": http_entry,
+            }
+        },
+        "client_skill_md": build_external_client_skill_markdown(root),
+        "recent_tasks": list_a2a_tasks(limit=12),
     }
+
+
+@app.post("/api/external-agent/token/generate")
+async def api_generate_external_agent_token() -> Dict[str, Any]:
+    cfg = load_config()
+    new_token = f"nai_ext_{secrets.token_urlsafe(24)}"
+    cfg["external_agent_token"] = new_token
+    cfg["external_agent_auth_enabled"] = True
+    save_config(cfg)
+    return {
+        "ok": True,
+        "token": new_token,
+        "token_masked": mask_token(new_token),
+        "auth_enabled": True,
+    }
+
+
+@app.get("/api/external-agent/tasks")
+async def api_list_external_agent_tasks(limit: int = Query(20, ge=1, le=100)) -> Dict[str, Any]:
+    return {"tasks": list_a2a_tasks(limit=limit)}
+
+
+# ================= Streamable HTTP MCP Endpoint (/mcp) =================
+@app.get("/mcp")
+async def mcp_http_get(request: Request) -> Dict[str, Any]:
+    _verify_external_bearer(request)
+    return {
+        "name": "nai-studio-mcp",
+        "version": "3.0.0",
+        "transport": "streamable-http",
+        "protocolVersion": "2025-03-26",
+        "endpoint": f"{_request_base_url(request)}/mcp",
+        "tools_count": len(MCP_TOOLS),
+        "resources_count": len(MCP_RESOURCES),
+        "prompts_count": len(MCP_PROMPTS),
+    }
+
+
+@app.delete("/mcp")
+async def mcp_http_delete(request: Request) -> Response:
+    _verify_external_bearer(request)
+    sid = str(request.headers.get("mcp-session-id") or "").strip()
+    if sid:
+        _MCP_HTTP_SESSIONS.pop(sid, None)
+    return Response(status_code=204)
+
+
+@app.post("/mcp")
+async def mcp_http_post(request: Request) -> Response:
+    """Standard Streamable HTTP MCP JSON-RPC 2.0 endpoint."""
+    _verify_external_bearer(request)
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse(
+            {"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "Parse error"}},
+            status_code=400,
+        )
+
+    if not isinstance(body, dict):
+        return JSONResponse(
+            {"jsonrpc": "2.0", "id": None, "error": {"code": -32600, "message": "Invalid Request"}},
+            status_code=400,
+        )
+
+    req_id = body.get("id")
+    method = str(body.get("method") or "").strip()
+    params = body.get("params") if isinstance(body.get("params"), dict) else {}
+    sid = str(request.headers.get("mcp-session-id") or "").strip()
+
+    if method == "notifications/initialized" or (req_id is None and method.startswith("notifications/")):
+        return Response(status_code=202)
+
+    headers: Dict[str, str] = {}
+    if method == "initialize":
+        sid = sid or f"mcp_{uuid.uuid4().hex[:16]}"
+        _MCP_HTTP_SESSIONS[sid] = {"created": True}
+        headers["Mcp-Session-Id"] = sid
+        return JSONResponse(
+            {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": {
+                    "protocolVersion": "2025-03-26",
+                    "capabilities": {
+                        "tools": {"listChanged": False},
+                        "resources": {"listChanged": False},
+                        "prompts": {"listChanged": False},
+                    },
+                    "serverInfo": {"name": "nai-studio-mcp", "version": "3.0.0"},
+                },
+            },
+            headers=headers,
+        )
+
+    if sid:
+        headers["Mcp-Session-Id"] = sid
+
+    if method == "ping":
+        return JSONResponse({"jsonrpc": "2.0", "id": req_id, "result": {}}, headers=headers)
+
+    if method == "tools/list":
+        return JSONResponse({"jsonrpc": "2.0", "id": req_id, "result": {"tools": MCP_TOOLS}}, headers=headers)
+
+    if method == "tools/call":
+        tname = str(params.get("name") or "").strip()
+        targs = params.get("arguments") if isinstance(params.get("arguments"), dict) else {}
+        try:
+            res = await execute_mcp_tool(tname, targs)
+            return JSONResponse(
+                {
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "result": {
+                        "content": [{"type": "text", "text": json.dumps(res, ensure_ascii=False, indent=2)}],
+                        "isError": False,
+                    },
+                },
+                headers=headers,
+            )
+        except Exception as exc:
+            return JSONResponse(
+                {
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "result": {
+                        "content": [{"type": "text", "text": f"Error: {exc}"}],
+                        "isError": True,
+                    },
+                },
+                headers=headers,
+            )
+
+    if method == "resources/list":
+        return JSONResponse({"jsonrpc": "2.0", "id": req_id, "result": {"resources": MCP_RESOURCES}}, headers=headers)
+
+    if method == "resources/read":
+        uri = str(params.get("uri") or "").strip()
+        try:
+            item = read_mcp_resource(uri, base_url=_request_base_url(request))
+            return JSONResponse({"jsonrpc": "2.0", "id": req_id, "result": {"contents": [item]}}, headers=headers)
+        except Exception as exc:
+            return JSONResponse(
+                {"jsonrpc": "2.0", "id": req_id, "error": {"code": -32002, "message": str(exc)}},
+                headers=headers,
+            )
+
+    if method == "prompts/list":
+        return JSONResponse({"jsonrpc": "2.0", "id": req_id, "result": {"prompts": MCP_PROMPTS}}, headers=headers)
+
+    if method == "prompts/get":
+        pname = str(params.get("name") or "").strip()
+        pargs = params.get("arguments") if isinstance(params.get("arguments"), dict) else {}
+        try:
+            prompt_res = get_mcp_prompt(pname, pargs)
+            return JSONResponse({"jsonrpc": "2.0", "id": req_id, "result": prompt_res}, headers=headers)
+        except Exception as exc:
+            return JSONResponse(
+                {"jsonrpc": "2.0", "id": req_id, "error": {"code": -32602, "message": str(exc)}},
+                headers=headers,
+            )
+
+    return JSONResponse(
+        {"jsonrpc": "2.0", "id": req_id, "error": {"code": -32601, "message": f"Method not found: {method}"}},
+        headers=headers,
+    )
+
+
+# ================= Standard A2A (Agent2Agent) Server Endpoints =================
+@app.get("/.well-known/agent-card.json")
+@app.get("/.well-known/agent.json")
+async def a2a_agent_card(request: Request) -> Dict[str, Any]:
+    return build_agent_card(_request_base_url(request))
+
+
+@app.post("/a2a")
+async def a2a_jsonrpc_endpoint(request: Request) -> Response:
+    _verify_external_bearer(request)
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse(
+            {"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "Parse error"}},
+            status_code=400,
+        )
+    if not isinstance(body, dict):
+        return JSONResponse(
+            {"jsonrpc": "2.0", "id": None, "error": {"code": -32600, "message": "Invalid Request"}},
+            status_code=400,
+        )
+    root = _request_base_url(request)
+    method = str(body.get("method") or "").strip()
+    if method in ("message/stream", "tasks/sendSubscribe"):
+        return StreamingResponse(
+            stream_a2a_jsonrpc_sse(body, root),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+        )
+    result = await handle_a2a_jsonrpc(body, root)
+    return JSONResponse(result)
 
 
 @app.post("/api/mcp/test")

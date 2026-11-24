@@ -5347,6 +5347,201 @@ async function rollbackToLocalSnapshot(filename) {
 
 let _mcpCatalogCache = null;
 
+let _extSnippetTab = "http";
+
+async function copyTextById(elId, toastMsg = "已复制") {
+  const txt = document.getElementById(elId)?.textContent?.trim() || "";
+  if (await _copyTextWithFallback(txt)) showToast(toastMsg);
+}
+
+async function copyExternalClientSkillMd() {
+  const txt = _mcpCatalogCache?.client_skill_md || "";
+  if (!txt) {
+    await loadMcpConsoleInfo();
+  }
+  const finalTxt = _mcpCatalogCache?.client_skill_md || "";
+  if (await _copyTextWithFallback(finalTxt)) {
+    showToast("已复制外部 Agent 外包 SKILL.md");
+  }
+}
+
+function switchMcpSnippetTab(tab) {
+  _extSnippetTab = tab === "stdio" || tab === "skill" ? tab : "http";
+  ["http", "stdio", "skill"].forEach(k => {
+    const btn = document.getElementById(`ext-snippet-tab-${k}`);
+    if (!btn) return;
+    btn.className = k === _extSnippetTab
+      ? "px-2.5 py-1 rounded-[5px] seg-pill-active font-medium"
+      : "px-2.5 py-1 rounded-[5px] text-[var(--text-muted)] hover:text-[var(--text-primary)]";
+  });
+  const pre = document.getElementById("mcp-config-pre");
+  if (!pre || !_mcpCatalogCache) return;
+  if (_extSnippetTab === "http") {
+    pre.textContent = JSON.stringify(_mcpCatalogCache.http_client_config || {}, null, 2);
+  } else if (_extSnippetTab === "stdio") {
+    pre.textContent = JSON.stringify(_mcpCatalogCache.client_config || {}, null, 2);
+  } else {
+    pre.textContent = _mcpCatalogCache.client_skill_md || "";
+  }
+}
+
+async function saveExternalAgentGuardrails() {
+  const authEl = document.getElementById("ext-auth-enabled");
+  const tokenEl = document.getElementById("ext-auth-token");
+  const maxEl = document.getElementById("ext-max-images");
+  const opusEl = document.getElementById("ext-opus-guard");
+  const genEl = document.getElementById("ext-allow-generate");
+  const payload = {
+    external_agent_auth_enabled: !!authEl?.checked,
+    external_agent_max_images: Number(maxEl?.value || 1),
+    external_agent_opus_guard: !!opusEl?.checked,
+    external_agent_allow_generate: !!genEl?.checked,
+    skip_account_check: true,
+  };
+  const rawToken = String(tokenEl?.value || "").trim();
+  if (rawToken && !rawToken.includes("...")) {
+    payload.external_agent_token = rawToken;
+  }
+  try {
+    const res = await fetch("/api/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error("保存失败");
+    const data = await res.json();
+    if (data.config) state.config = data.config;
+    showToast("已保存外部 Agent 安全与护栏配置");
+    await loadMcpConsoleInfo();
+  } catch (e) {
+    showToast("保存护栏配置失败: " + e.message);
+  }
+}
+
+async function generateExternalAgentToken() {
+  try {
+    const res = await fetch("/api/external-agent/token/generate", { method: "POST" });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error("生成失败");
+    const tokenEl = document.getElementById("ext-auth-token");
+    const authEl = document.getElementById("ext-auth-enabled");
+    if (tokenEl) tokenEl.value = data.token;
+    if (authEl) authEl.checked = true;
+    await _copyTextWithFallback(data.token);
+    showToast("已生成并复制 Bearer Token（同时已启用鉴权）");
+    await loadMcpConsoleInfo();
+  } catch (e) {
+    showToast("生成 Token 失败: " + e.message);
+  }
+}
+
+function renderExternalAgentTasks(tasks = []) {
+  const box = document.getElementById("ext-a2a-tasks-list");
+  if (!box) return;
+  if (!tasks.length) {
+    box.innerHTML = `<div class="text-[var(--text-muted)] text-[11.5px]">暂无外部 Agent 委派记录</div>`;
+    return;
+  }
+  box.innerHTML = tasks.map(t => {
+    const st = String(t.state || "submitted");
+    const tone = st === "completed"
+      ? "text-[var(--status-success)]"
+      : st === "input-required"
+      ? "text-[var(--status-warning)]"
+      : st === "failed" || st === "canceled"
+      ? "text-[var(--status-danger)]"
+      : "text-[var(--accent-primary)]";
+    const src = (t.metadata && t.metadata.source) ? String(t.metadata.source).toUpperCase() : "A2A";
+    const artCnt = Array.isArray(t.artifacts) ? t.artifacts.length : 0;
+    return `
+      <div class="px-2.5 py-2 rounded-[8px] ui-well flex items-center justify-between gap-2">
+        <div class="min-w-0">
+          <div class="flex items-center gap-1.5">
+            <span class="px-1.5 py-0.5 rounded-[4px] ui-badge font-mono text-[10px]">${escapeHtml(src)}</span>
+            <span class="font-mono text-[10.5px] ${tone}">${escapeHtml(st)}</span>
+            <span class="text-[11px] text-[var(--text-muted)] font-mono">${escapeHtml(t.id)}</span>
+          </div>
+          <div class="text-[12px] text-[var(--text-primary)] truncate mt-0.5">${escapeHtml(t.brief || "")}</div>
+        </div>
+        <span class="text-[10.5px] font-mono text-[var(--text-muted)] shrink-0">${artCnt} 产物</span>
+      </div>`;
+  }).join("");
+}
+
+async function refreshExternalAgentTasks() {
+  try {
+    const res = await fetch("/api/external-agent/tasks?limit=12");
+    const data = await res.json();
+    if (res.ok && Array.isArray(data.tasks)) {
+      renderExternalAgentTasks(data.tasks);
+    }
+  } catch (e) {}
+}
+
+async function testA2aAgentCard() {
+  const out = document.getElementById("mcp-test-output");
+  const statusEl = document.getElementById("mcp-test-status");
+  if (statusEl) {
+    statusEl.textContent = "读取 /.well-known/agent-card.json ...";
+    statusEl.className = "font-mono text-[11px] text-[var(--accent-primary)]";
+  }
+  try {
+    const res = await fetch("/.well-known/agent-card.json");
+    const data = await res.json();
+    if (out) out.textContent = JSON.stringify(data, null, 2);
+    if (statusEl) {
+      statusEl.textContent = `A2A Agent Card 就绪 · v${data.protocolVersion || ""}`;
+      statusEl.className = "font-mono text-[11px] text-[var(--status-success)]";
+    }
+  } catch (e) {
+    if (out) out.textContent = String(e);
+  }
+}
+
+async function testA2aDelegateTask() {
+  const out = document.getElementById("mcp-test-output");
+  const statusEl = document.getElementById("mcp-test-status");
+  if (statusEl) {
+    statusEl.textContent = "发送 A2A message/send（仅方案模式）...";
+    statusEl.className = "font-mono text-[11px] text-[var(--accent-primary)]";
+  }
+  const headers = { "Content-Type": "application/json" };
+  const rawTok = String(document.getElementById("ext-auth-token")?.value || "").trim();
+  if (document.getElementById("ext-auth-enabled")?.checked && rawTok && !rawTok.includes("...")) {
+    headers["Authorization"] = `Bearer ${rawTok}`;
+  }
+  try {
+    const res = await fetch("/a2a", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: "ui-a2a-test-1",
+        method: "message/send",
+        params: {
+          message: {
+            role: "user",
+            parts: [
+              { kind: "text", text: "帮我构思一张 16:9 银发少女雪夜教堂逆光横图，只出配方不出图" },
+              { kind: "data", data: { aspect_ratio: "16:9", plan_only: true } },
+            ],
+          },
+        },
+      }),
+    });
+    const data = await res.json();
+    if (out) out.textContent = JSON.stringify(data, null, 2);
+    if (statusEl) {
+      const ok = res.ok && !data.error;
+      statusEl.textContent = ok ? `A2A 联调成功 · ${data.result?.status?.state || "ok"}` : `A2A 返回 ${res.status}`;
+      statusEl.className = `font-mono text-[11px] ${ok ? "text-[var(--status-success)]" : "text-[var(--status-danger)]"}`;
+    }
+    refreshExternalAgentTasks();
+  } catch (e) {
+    if (out) out.textContent = String(e);
+  }
+}
+
 async function loadMcpConsoleInfo() {
   try {
     const res = await fetch("/api/mcp/info");
@@ -5356,12 +5551,30 @@ async function loadMcpConsoleInfo() {
 
     const pill = document.getElementById("mcp-tool-count-pill");
     if (pill) {
-      pill.textContent = `${info.tool_count || 0} Tools · ${info.protocol_version || "JSON-RPC 2.0"}`;
+      pill.textContent = `${info.tool_count || 0} Tools · MCP ${info.protocol_version || ""} + A2A ${info.a2a_protocol_version || ""}`;
     }
-    const pre = document.getElementById("mcp-config-pre");
-    if (pre && info.client_config) {
-      pre.textContent = JSON.stringify(info.client_config, null, 2);
-    }
+    const uHttp = document.getElementById("ext-mcp-http-url");
+    if (uHttp && info.streamable_http_url) uHttp.textContent = info.streamable_http_url;
+    const uCard = document.getElementById("ext-a2a-card-url");
+    if (uCard && info.a2a_card_url) uCard.textContent = info.a2a_card_url;
+    const uA2a = document.getElementById("ext-a2a-endpoint-url");
+    if (uA2a && info.a2a_endpoint_url) uA2a.textContent = info.a2a_endpoint_url;
+
+    const g = info.guardrails || {};
+    const authEl = document.getElementById("ext-auth-enabled");
+    if (authEl) authEl.checked = !!g.external_agent_auth_enabled;
+    const tokEl = document.getElementById("ext-auth-token");
+    if (tokEl && !tokEl.value) tokEl.placeholder = g.external_agent_token_masked ? `已配置: ${g.external_agent_token_masked}` : "未设置（开启鉴权后点击右侧按钮一键生成 Bearer Token）";
+    const maxEl = document.getElementById("ext-max-images");
+    if (maxEl) maxEl.value = String(g.external_agent_max_images || 1);
+    const opusEl = document.getElementById("ext-opus-guard");
+    if (opusEl) opusEl.checked = g.external_agent_opus_guard !== false;
+    const genEl = document.getElementById("ext-allow-generate");
+    if (genEl) genEl.checked = g.external_agent_allow_generate !== false;
+
+    switchMcpSnippetTab(_extSnippetTab);
+    renderExternalAgentTasks(info.recent_tasks || []);
+
     const sel = document.getElementById("mcp-tool-select");
     if (sel && Array.isArray(info.tools) && info.tools.length) {
       const prev = sel.value;

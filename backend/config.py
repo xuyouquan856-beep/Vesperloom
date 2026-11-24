@@ -43,6 +43,11 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "llm_use_knowledge_agent": True,
     "llm_context_tokens": 100000,
     "llm_max_output_tokens": 100000,
+    "external_agent_auth_enabled": False,
+    "external_agent_token": "",
+    "external_agent_max_images": 1,
+    "external_agent_opus_guard": True,
+    "external_agent_allow_generate": True,
 }
 
 

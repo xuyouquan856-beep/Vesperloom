@@ -1433,33 +1433,108 @@
           <div class="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-[var(--border-hairline)]">
             <div class="min-w-0">
               <div class="flex flex-wrap items-center gap-2">
-                <h3 class="ui-title">原生 Agent / MCP Server 控制台</h3>
-                <span id="mcp-tool-count-pill" class="ui-badge px-2 py-0.5 rounded-[6px] text-[11px] font-mono text-[var(--text-secondary)]">11 Tools · JSON-RPC 2.0</span>
+                <h3 class="ui-title">外部 Agent 接入控制台 (MCP & A2A)</h3>
+                <span id="mcp-tool-count-pill" class="ui-badge px-2 py-0.5 rounded-[6px] text-[11px] font-mono text-[var(--text-secondary)]">12 Tools · MCP + A2A</span>
               </div>
-              <p class="text-[12px] text-[var(--text-muted)] mt-0.5">JSON-RPC 2.0 MCP Server (<code>D:\NAI-Studio\mcp_server.py</code>)，兼容 Claude Desktop / Cursor / Antigravity。</p>
+              <p class="text-[12px] text-[var(--text-muted)] mt-0.5">同时支持 <strong>Streamable HTTP MCP</strong>、<strong>Stdio MCP</strong> 与标准 <strong>A2A (Agent2Agent)</strong> 协议，内置高层委派入口与点数护栏。</p>
             </div>
-            <button type="button" onclick="copyMcpConfigJson()" class="spring-btn inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] ui-btn text-[12px] shrink-0">
-              <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-copy"/></svg>
-              <span>复制 JSON</span>
-            </button>
+            <div class="flex flex-wrap items-center gap-1.5 shrink-0">
+              <button type="button" onclick="copyExternalClientSkillMd()" class="spring-btn inline-flex items-center gap-1 px-2.5 py-1 rounded-[6px] ui-btn text-[12px]" title="复制给外部 Agent 用的薄 SKILL.md（教它如何把画画外包给 NAI Studio）">
+                <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-book"/></svg>
+                <span>复制外包 Skill</span>
+              </button>
+              <button type="button" onclick="copyMcpConfigJson()" class="spring-btn inline-flex items-center gap-1 px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">
+                <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-copy"/></svg>
+                <span>复制配置</span>
+              </button>
+            </div>
           </div>
 
-          <div class="space-y-1.5">
-            <div class="text-[12px] text-[var(--text-muted)]">MCP 客户端配置片段（运行时自动对齐 Python 与 UTF-8 环境变量）</div>
-            <pre id="mcp-config-pre" class="selectable-text p-3 rounded-[8px] ui-well font-mono text-[11.5px] overflow-x-auto whitespace-pre-wrap break-all custom-scroll leading-relaxed">{
+          <!-- 安全与护栏配置（随时可调） -->
+          <div class="p-3.5 rounded-[10px] ui-subgroup space-y-3">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div class="text-[12.5px] font-medium text-[var(--text-primary)]">外部调用安全与点数护栏</div>
+              <button type="button" onclick="saveExternalAgentGuardrails()" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn-accent text-[11.5px] font-medium">保存护栏配置</button>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-[12px]">
+              <label class="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-[7px] ui-well cursor-pointer">
+                <span class="text-[var(--text-secondary)]">开启 Bearer Token 鉴权</span>
+                <input id="ext-auth-enabled" type="checkbox" class="accent-[var(--accent-primary)]" />
+              </label>
+              <label class="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-[7px] ui-well">
+                <span class="text-[var(--text-secondary)]">单次外部任务最大出图</span>
+                <select id="ext-max-images" class="bg-transparent font-mono text-[12px] text-[var(--text-primary)] focus:outline-none">
+                  <option value="1">1 张（推荐）</option>
+                  <option value="2">2 张</option>
+                  <option value="3">3 张</option>
+                  <option value="4">4 张</option>
+                </select>
+              </label>
+              <label class="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-[7px] ui-well cursor-pointer">
+                <span class="text-[var(--text-secondary)]">外部调用强制 Opus 免费保护</span>
+                <input id="ext-opus-guard" type="checkbox" checked class="accent-[var(--accent-primary)]" />
+              </label>
+              <label class="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-[7px] ui-well cursor-pointer">
+                <span class="text-[var(--text-secondary)]">允许外部直接触发生图</span>
+                <input id="ext-allow-generate" type="checkbox" checked class="accent-[var(--accent-primary)]" />
+              </label>
+            </div>
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              <input id="ext-auth-token" type="text" placeholder="未设置（开启鉴权后点击右侧按钮一键生成 Bearer Token）" class="selectable-text flex-1 min-w-0 px-2.5 py-1.5 rounded-[7px] ui-well font-mono text-[11.5px]" aria-label="外部 Agent Bearer Token" />
+              <button type="button" onclick="generateExternalAgentToken()" class="spring-btn px-2.5 py-1.5 rounded-[7px] ui-btn text-[11.5px] shrink-0">一键生成并启用 Token</button>
+            </div>
+          </div>
+
+          <!-- 协议端点与配置片段 -->
+          <div class="space-y-2">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11.5px]">
+              <div class="px-2.5 py-2 rounded-[8px] ui-well flex items-center justify-between gap-2 min-w-0">
+                <div class="min-w-0">
+                  <div class="text-[10.5px] text-[var(--text-muted)]">Streamable HTTP MCP</div>
+                  <code id="ext-mcp-http-url" class="font-mono text-[var(--text-primary)] truncate block">http://127.0.0.1:8780/mcp</code>
+                </div>
+                <button type="button" onclick="copyTextById('ext-mcp-http-url', '已复制 Streamable HTTP MCP 地址')" class="spring-btn px-1.5 py-0.5 rounded-[5px] ui-btn-ghost text-[11px] shrink-0">复制</button>
+              </div>
+              <div class="px-2.5 py-2 rounded-[8px] ui-well flex items-center justify-between gap-2 min-w-0">
+                <div class="min-w-0">
+                  <div class="text-[10.5px] text-[var(--text-muted)]">A2A Agent Card</div>
+                  <code id="ext-a2a-card-url" class="font-mono text-[var(--text-primary)] truncate block">http://127.0.0.1:8780/.well-known/agent-card.json</code>
+                </div>
+                <button type="button" onclick="copyTextById('ext-a2a-card-url', '已复制 A2A Agent Card 地址')" class="spring-btn px-1.5 py-0.5 rounded-[5px] ui-btn-ghost text-[11px] shrink-0">复制</button>
+              </div>
+              <div class="px-2.5 py-2 rounded-[8px] ui-well flex items-center justify-between gap-2 min-w-0">
+                <div class="min-w-0">
+                  <div class="text-[10.5px] text-[var(--text-muted)]">A2A JSON-RPC / SSE</div>
+                  <code id="ext-a2a-endpoint-url" class="font-mono text-[var(--text-primary)] truncate block">http://127.0.0.1:8780/a2a</code>
+                </div>
+                <button type="button" onclick="copyTextById('ext-a2a-endpoint-url', '已复制 A2A Endpoint 地址')" class="spring-btn px-1.5 py-0.5 rounded-[5px] ui-btn-ghost text-[11px] shrink-0">复制</button>
+              </div>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div class="inline-flex items-center gap-1 p-0.5 rounded-[7px] ui-subgroup text-[11.5px]">
+                <button id="ext-snippet-tab-http" type="button" onclick="switchMcpSnippetTab('http')" class="px-2.5 py-1 rounded-[5px] seg-pill-active font-medium">HTTP MCP</button>
+                <button id="ext-snippet-tab-stdio" type="button" onclick="switchMcpSnippetTab('stdio')" class="px-2.5 py-1 rounded-[5px] text-[var(--text-muted)] hover:text-[var(--text-primary)]">Stdio MCP</button>
+                <button id="ext-snippet-tab-skill" type="button" onclick="switchMcpSnippetTab('skill')" class="px-2.5 py-1 rounded-[5px] text-[var(--text-muted)] hover:text-[var(--text-primary)]">外部 Agent SKILL.md</button>
+              </div>
+              <span class="text-[11px] text-[var(--text-muted)]">给外部 Agent 接入时直接复制即可</span>
+            </div>
+            <pre id="mcp-config-pre" class="selectable-text p-3 rounded-[8px] ui-well font-mono text-[11.5px] max-h-52 overflow-y-auto whitespace-pre-wrap break-all custom-scroll leading-relaxed">{
   "mcpServers": {
-    "nai-studio": {
-      "command": "C:\\Users\\21815\\AppData\\Local\\Python\\bin\\python.exe",
-      "args": ["D:\\NAI-Studio\\mcp_server.py"],
-      "env": {"PYTHONUTF8": "1"}
+    "nai-studio-http": {
+      "url": "http://127.0.0.1:8780/mcp",
+      "type": "http"
     }
   }
 }</pre>
           </div>
 
           <div class="space-y-2.5 pt-2 border-t border-[var(--border-hairline)]">
-            <div class="text-[12.5px] font-medium">实测 MCP 工具调用</div>
+            <div class="text-[12.5px] font-medium">实测 MCP & A2A 联调</div>
             <div class="flex flex-wrap gap-1.5">
+              <button type="button" onclick="runMcpTest('nai_delegate_art_task', {brief: '构思一张 16:9 冷色调雨夜赛博街景横图，左侧留白，先只出方案', aspect_ratio: '16:9', plan_only: true})" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn-accent text-[12px]">委派美术总监(方案)</button>
+              <button type="button" onclick="testA2aAgentCard()" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">读取 A2A 名片</button>
+              <button type="button" onclick="testA2aDelegateTask()" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">A2A 联调派单</button>
               <button type="button" onclick="runMcpTest('nai_studio_overview', {})" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">工作室概览</button>
               <button type="button" onclick="runMcpTest('nai_account_status', {})" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">查询账号状态</button>
               <button type="button" onclick="runMcpTest('nai_lint_and_format_prompt', {prompt: '1girl, (silver_hair:1.2), {[{rooftop}]}，{sunset|night}', model: 'nai-diffusion-5-full'})" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">测试语法规范器</button>
@@ -1473,18 +1548,28 @@
 
             <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
               <select id="mcp-tool-select" onchange="onMcpToolSelectChange()" class="px-2.5 py-1.5 rounded-[7px] ui-well font-mono text-[12px] sm:w-56 shrink-0" aria-label="选择 MCP 工具">
-                <option value="nai_studio_overview">nai_studio_overview</option>
+                <option value="nai_delegate_art_task">nai_delegate_art_task</option>
               </select>
-              <input id="mcp-args-input" type="text" value="{}" onkeydown="if(event.key==='Enter'){event.preventDefault();runCustomMcpTest();}" class="selectable-text flex-1 min-w-0 px-2.5 py-1.5 rounded-[7px] ui-well font-mono text-[12px]" placeholder='JSON 参数，例如 {"search": "rella", "limit": 5}' aria-label="MCP 工具 JSON 参数" />
+              <input id="mcp-args-input" type="text" value="{}" onkeydown="if(event.key==='Enter'){event.preventDefault();runCustomMcpTest();}" class="selectable-text flex-1 min-w-0 px-2.5 py-1.5 rounded-[7px] ui-well font-mono text-[12px]" placeholder='JSON 参数，例如 {"brief": "画一张黄昏天台少女", "plan_only": true}' aria-label="MCP 工具 JSON 参数" />
               <button id="mcp-run-custom-btn" type="button" onclick="runCustomMcpTest()" class="spring-btn px-3 py-1.5 rounded-[7px] ui-btn-accent text-[12px] font-medium shrink-0">执行工具</button>
             </div>
-            <div id="mcp-tool-desc" class="text-[11.5px] text-[var(--text-muted)]">选择任意 MCP 工具查看说明并自定义 JSON 参数实测（与 stdio MCP Server 共享同一执行引擎）。</div>
+            <div id="mcp-tool-desc" class="text-[11.5px] text-[var(--text-muted)]">选择任意 MCP 工具查看说明并自定义 JSON 参数实测（与 Streamable HTTP / Stdio MCP Server 共享同一执行引擎）。</div>
 
             <div class="flex items-center justify-between gap-2 pt-0.5">
               <span id="mcp-test-status" class="font-mono text-[11px] text-[var(--text-muted)]">就绪</span>
               <button type="button" onclick="copyMcpTestOutput()" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn-ghost text-[11px]">复制输出</button>
             </div>
-            <pre id="mcp-test-output" class="selectable-text p-3 rounded-[8px] ui-well font-mono text-[12px] max-h-64 overflow-y-auto custom-scroll">点击上方按钮或选择自定义工具实测 MCP 返回结果...</pre>
+            <pre id="mcp-test-output" class="selectable-text p-3 rounded-[8px] ui-well font-mono text-[12px] max-h-64 overflow-y-auto custom-scroll">点击上方按钮或选择自定义工具实测 MCP / A2A 返回结果...</pre>
+          </div>
+
+          <div class="space-y-2 pt-2 border-t border-[var(--border-hairline)]">
+            <div class="flex items-center justify-between text-[12px] text-[var(--text-muted)]">
+              <span>近期外部委派任务（A2A / MCP）</span>
+              <button type="button" onclick="refreshExternalAgentTasks()" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn-ghost text-[11px]">刷新</button>
+            </div>
+            <div id="ext-a2a-tasks-list" class="space-y-1.5 max-h-40 overflow-y-auto custom-scroll text-[12px]">
+              <div class="text-[var(--text-muted)] text-[11.5px]">暂无外部 Agent 委派记录</div>
+            </div>
           </div>
         </div>
 

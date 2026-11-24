@@ -926,7 +926,7 @@ def test_mcp_server_stdio_and_api_tools():
     r_info = client.get("/api/mcp/info")
     assert r_info.status_code == 200
     info = r_info.json()
-    assert info["tool_count"] == len(mcp_server.MCP_TOOLS) == 11
+    assert info["tool_count"] == len(mcp_server.MCP_TOOLS) == 12
     srv_cfg = info["client_config"]["mcpServers"]["nai-studio"]
     assert srv_cfg["args"][0].endswith("mcp_server.py")
     assert srv_cfg["env"]["PYTHONUTF8"] == "1"
@@ -1012,7 +1012,7 @@ def test_mcp_server_stdio_and_api_tools():
     assert len(lines) == 8
     assert by_id[1]["result"]["serverInfo"]["name"] == "nai-studio-mcp"
     assert by_id[2]["result"] == {}
-    assert len(by_id[3]["result"]["tools"]) == 11
+    assert len(by_id[3]["result"]["tools"]) == 12
     ov_text = json.loads(by_id[4]["result"]["content"][0]["text"])
     assert ov_text["artists_summary"]["total"] >= 10
     assert by_id[5]["result"]["isError"] is False
@@ -1284,6 +1284,179 @@ def test_studio_agent_v3_memory_modes_mentions_proposals_and_compact(tmp_path, m
     assert cmp_data["before_count"] == 4 and cmp_data["after_count"] == 1
     assert "阶段摘要" in cmp_data["summary"]
     assert len(db_mod.get_agent_session(sid)["messages"]) == 1
+
+
+def test_stage3_streamable_http_mcp_and_a2a_server(tmp_path, monkeypatch):
+    """Verify Stage 3: Streamable HTTP MCP (/mcp), Standard A2A Server (/.well-known/agent-card.json, /a2a, SSE), guardrails & Bearer auth."""
+    from fastapi.testclient import TestClient
+    import backend.app as app_mod
+    import backend.a2a_server as a2a_mod
+    import backend.config as cfg_mod
+    import backend.database as db_mod
+    import backend.mcp_tools as mcp_mod
+
+    # Isolate DB & config so live user data/config is NEVER touched
+    temp_db = tmp_path / "test_stage3.db"
+    temp_cfg = tmp_path / "config.json"
+    monkeypatch.setattr(db_mod, "DB_PATH", temp_db)
+    monkeypatch.setattr(cfg_mod, "CONFIG_PATH", temp_cfg)
+    db_mod.init_db()
+
+    base_cfg = {
+        **cfg_mod.DEFAULT_CONFIG,
+        "api_token": "",
+        "llm_api_key": "",
+        "external_agent_auth_enabled": False,
+        "external_agent_token": "",
+        "external_agent_max_images": 1,
+        "external_agent_opus_guard": True,
+        "external_agent_allow_generate": True,
+    }
+    cfg_mod.save_config(base_cfg)
+
+    client = TestClient(app_mod.app)
+
+    # 1. Agent Card discovery
+    rc = client.get("/.well-known/agent-card.json")
+    assert rc.status_code == 200
+    card = rc.json()
+    assert card["name"] == "NAI Studio Art Director"
+    assert card["capabilities"]["streaming"] is True
+    assert any(s["id"] == "art-direction" for s in card["skills"])
+    assert "securitySchemes" not in card
+
+    rc2 = client.get("/.well-known/agent.json")
+    assert rc2.status_code == 200 and rc2.json()["url"] == card["url"]
+
+    # 2. Streamable HTTP MCP (/mcp)
+    r_init = client.post("/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}})
+    assert r_init.status_code == 200
+    sid = r_init.headers.get("mcp-session-id")
+    assert sid and sid.startswith("mcp_")
+    assert r_init.json()["result"]["serverInfo"]["name"] == "nai-studio-mcp"
+
+    r_tools = client.post("/mcp", headers={"Mcp-Session-Id": sid}, json={"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
+    assert r_tools.status_code == 200
+    tools = r_tools.json()["result"]["tools"]
+    assert tools[0]["name"] == "nai_delegate_art_task"
+    assert len(tools) == 12
+
+    r_res = client.post("/mcp", headers={"Mcp-Session-Id": sid}, json={"jsonrpc": "2.0", "id": 3, "method": "resources/read", "params": {"uri": "nai://studio/guide"}})
+    assert r_res.status_code == 200
+    assert "nai_delegate_art_task" in r_res.json()["result"]["contents"][0]["text"]
+
+    r_prm = client.post("/mcp", headers={"Mcp-Session-Id": sid}, json={"jsonrpc": "2.0", "id": 4, "method": "prompts/get", "params": {"name": "art_director_brief", "arguments": {"goal": "雪夜少女", "aspect_ratio": "16:9"}}})
+    assert r_prm.status_code == 200
+    assert "雪夜少女" in r_prm.json()["result"]["messages"][0]["content"]["text"]
+
+    r_call = client.post(
+        "/mcp",
+        headers={"Mcp-Session-Id": sid},
+        json={
+            "jsonrpc": "2.0",
+            "id": 5,
+            "method": "tools/call",
+            "params": {
+                "name": "nai_delegate_art_task",
+                "arguments": {"brief": "16:9 冷色调雨夜赛博街景横图，左侧留白", "aspect_ratio": "16:9", "plan_only": True},
+            },
+        },
+    )
+    assert r_call.status_code == 200
+    call_res = r_call.json()["result"]
+    assert call_res["isError"] is False
+    parsed_mcp = json.loads(call_res["content"][0]["text"])
+    assert parsed_mcp["state"] == "completed"
+    assert parsed_mcp["recipe"]["width"] == 1344 and parsed_mcp["recipe"]["height"] == 768
+
+    assert client.delete("/mcp", headers={"Mcp-Session-Id": sid}).status_code == 204
+
+    # 3. A2A vague brief -> input-required & tasks/cancel
+    r_vague = client.post(
+        "/a2a",
+        json={
+            "jsonrpc": "2.0",
+            "id": "a2a-vague",
+            "method": "message/send",
+            "params": {"message": {"role": "user", "parts": [{"kind": "text", "text": "画图"}]}},
+        },
+    )
+    assert r_vague.status_code == 200
+    vague_task = r_vague.json()["result"]
+    assert vague_task["status"]["state"] == "input-required"
+    vague_tid = vague_task["id"]
+
+    r_cancel = client.post("/a2a", json={"jsonrpc": "2.0", "id": "a2a-c", "method": "tasks/cancel", "params": {"id": vague_tid}})
+    assert r_cancel.status_code == 200 and r_cancel.json()["result"]["status"]["state"] == "canceled"
+
+    # 4. A2A clear brief -> completed + tasks/get + SSE message/stream
+    r_send = client.post(
+        "/a2a",
+        json={
+            "jsonrpc": "2.0",
+            "id": "a2a-1",
+            "method": "message/send",
+            "params": {
+                "message": {
+                    "role": "user",
+                    "parts": [
+                        {"kind": "text", "text": "画一张银发少女站在雪夜教堂前的横图，先只出配方"},
+                        {"kind": "data", "data": {"aspect_ratio": "landscape", "plan_only": True}},
+                    ],
+                }
+            },
+        },
+    )
+    assert r_send.status_code == 200
+    task1 = r_send.json()["result"]
+    assert task1["status"]["state"] == "completed"
+    assert any(a["name"] == "art_recipe" for a in task1["artifacts"])
+
+    r_get = client.post("/a2a", json={"jsonrpc": "2.0", "id": "a2a-get", "method": "tasks/get", "params": {"id": task1["id"]}})
+    assert r_get.status_code == 200 and r_get.json()["result"]["id"] == task1["id"]
+
+    # SSE message/stream with same contextId (multi-turn continuation)
+    r_sse = client.post(
+        "/a2a",
+        json={
+            "jsonrpc": "2.0",
+            "id": "a2a-sse",
+            "method": "message/stream",
+            "params": {
+                "message": {
+                    "role": "user",
+                    "contextId": task1["contextId"],
+                    "parts": [
+                        {"kind": "text", "text": "把背景压暗一点，加强发丝逆光"},
+                        {"kind": "data", "data": {"plan_only": True}},
+                    ],
+                }
+            },
+        },
+    )
+    assert r_sse.status_code == 200
+    assert "text/event-stream" in r_sse.headers.get("content-type", "")
+    assert '"artifact-update"' in r_sse.text
+    assert '"final": true' in r_sse.text
+
+    # 5. Bearer Token Auth guardrail enforcement
+    r_tok = client.post("/api/external-agent/token/generate")
+    assert r_tok.status_code == 200
+    secret_tok = r_tok.json()["token"]
+    assert secret_tok.startswith("nai_ext_")
+
+    # Agent Card now advertises bearerAuth
+    assert "bearerAuth" in client.get("/.well-known/agent-card.json").json().get("securitySchemes", {})
+
+    # Unauthenticated calls must be rejected with 401
+    assert client.post("/mcp", json={"jsonrpc": "2.0", "id": 9, "method": "ping"}).status_code == 401
+    assert client.post("/a2a", json={"jsonrpc": "2.0", "id": 9, "method": "tasks/list"}).status_code == 401
+
+    # Authenticated calls succeed
+    auth_h = {"Authorization": f"Bearer {secret_tok}"}
+    assert client.post("/mcp", headers=auth_h, json={"jsonrpc": "2.0", "id": 10, "method": "ping"}).status_code == 200
+    assert client.post("/a2a", headers=auth_h, json={"jsonrpc": "2.0", "id": 11, "method": "tasks/list"}).status_code == 200
+
 
 
 

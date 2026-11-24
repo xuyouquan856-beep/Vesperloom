@@ -352,6 +352,23 @@ def init_db() -> None:
             """
         )
         conn.execute("CREATE INDEX IF NOT EXISTS idx_agent_msg_session ON agent_messages(session_id, id ASC)")
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS a2a_tasks (
+                id TEXT PRIMARY KEY,
+                context_id TEXT NOT NULL,
+                state TEXT NOT NULL,
+                brief TEXT NOT NULL,
+                result_text TEXT DEFAULT '',
+                artifacts_json TEXT DEFAULT '[]',
+                history_json TEXT DEFAULT '[]',
+                metadata_json TEXT DEFAULT '{}',
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            )
+            """
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_a2a_tasks_updated ON a2a_tasks(updated_at DESC)")
 
         # Seed artists if empty
         cur = conn.execute("SELECT COUNT(*) as cnt FROM artists")
@@ -1145,4 +1162,110 @@ def replace_agent_session_messages(session_id: str, summary_text: str) -> Dict[s
             "after_count": 1,
             "summary_msg_id": cur.lastrowid,
         }
+
+
+# ================= A2A External Agent Tasks =================
+def _row_to_a2a_task(row: sqlite3.Row) -> Dict[str, Any]:
+    d = dict(row)
+    for src, dst, default in (
+        ("artifacts_json", "artifacts", []),
+        ("history_json", "history", []),
+        ("metadata_json", "metadata", {}),
+    ):
+        try:
+            d[dst] = json.loads(d.pop(src, None) or json.dumps(default))
+        except Exception:
+            d[dst] = default
+    return d
+
+
+def create_a2a_task(
+    task_id: str,
+    context_id: str,
+    brief: str,
+    state: str = "submitted",
+    history: Optional[List[Dict[str, Any]]] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    now = int(time.time())
+    hist = history or []
+    meta = metadata or {}
+    with get_conn() as conn:
+        conn.execute(
+            """
+            INSERT INTO a2a_tasks (id, context_id, state, brief, result_text, artifacts_json, history_json, metadata_json, created_at, updated_at)
+            VALUES (?, ?, ?, ?, '', '[]', ?, ?, ?, ?)
+            """,
+            (
+                task_id,
+                context_id,
+                state,
+                str(brief or "")[:2000],
+                json.dumps(hist, ensure_ascii=False),
+                json.dumps(meta, ensure_ascii=False),
+                now,
+                now,
+            ),
+        )
+        conn.commit()
+    return get_a2a_task(task_id) or {
+        "id": task_id,
+        "context_id": context_id,
+        "state": state,
+        "brief": brief,
+        "result_text": "",
+        "artifacts": [],
+        "history": hist,
+        "metadata": meta,
+        "created_at": now,
+        "updated_at": now,
+    }
+
+
+def update_a2a_task(
+    task_id: str,
+    *,
+    state: Optional[str] = None,
+    result_text: Optional[str] = None,
+    artifacts: Optional[List[Dict[str, Any]]] = None,
+    history: Optional[List[Dict[str, Any]]] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> Optional[Dict[str, Any]]:
+    now = int(time.time())
+    sets = ["updated_at = ?"]
+    params: List[Any] = [now]
+    if state is not None:
+        sets.append("state = ?")
+        params.append(state)
+    if result_text is not None:
+        sets.append("result_text = ?")
+        params.append(result_text)
+    if artifacts is not None:
+        sets.append("artifacts_json = ?")
+        params.append(json.dumps(artifacts, ensure_ascii=False))
+    if history is not None:
+        sets.append("history_json = ?")
+        params.append(json.dumps(history, ensure_ascii=False))
+    if metadata is not None:
+        sets.append("metadata_json = ?")
+        params.append(json.dumps(metadata, ensure_ascii=False))
+    params.append(task_id)
+    with get_conn() as conn:
+        conn.execute(f"UPDATE a2a_tasks SET {', '.join(sets)} WHERE id = ?", params)
+        conn.commit()
+    return get_a2a_task(task_id)
+
+
+def get_a2a_task(task_id: str) -> Optional[Dict[str, Any]]:
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM a2a_tasks WHERE id = ?", (task_id,)).fetchone()
+        return _row_to_a2a_task(row) if row else None
+
+
+def list_a2a_tasks(limit: int = 20) -> List[Dict[str, Any]]:
+    lim = max(1, min(100, int(limit or 20)))
+    with get_conn() as conn:
+        rows = conn.execute("SELECT * FROM a2a_tasks ORDER BY updated_at DESC LIMIT ?", (lim,)).fetchall()
+        return [_row_to_a2a_task(r) for r in rows]
+
 

@@ -31,6 +31,23 @@ init_db()
 
 MCP_TOOLS: List[Dict[str, Any]] = [
     {
+        "name": "nai_delegate_art_task",
+        "description": "【外部 Agent 首选高阶入口】直接用自然语言将生图、改词或画师搭配需求委派给 NAI Studio 内置「美术总监 Agent」。外部 Agent 无需懂 NovelAI V5 语法或画师权重，服务端会自动读取用户审美记忆、检索本地画师库、执行语法体检并按护栏安全出图，返回结构化配方与本地 PNG 路径。多轮精修时请传回上一轮返回的 context_id。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "brief": {"type": "string", "description": "用自然语言清晰描述画面主体、场景、风格氛围或修改意见"},
+                "aspect_ratio": {"type": "string", "default": "", "description": "可选画幅，如 '16:9'、'竖图'、'横图'、'1:1'、'3:4'"},
+                "width": {"type": "integer", "description": "可选像素宽度（自动对齐 64 倍数并受 Opus 护栏保护）"},
+                "height": {"type": "integer", "description": "可选像素高度（自动对齐 64 倍数并受 Opus 护栏保护）"},
+                "model": {"type": "string", "default": "", "description": "可选模型 ID，留空使用工作台默认模型"},
+                "plan_only": {"type": "boolean", "default": False, "description": "true 表示仅构思方案与提示词不出图（零点数）；false 则遵循工作台外部生图权限"},
+                "context_id": {"type": "string", "default": "", "description": "多轮精修时传回上一轮返回的 context_id，以便接续原配方微调"},
+            },
+            "required": ["brief"],
+        },
+    },
+    {
         "name": "nai_studio_overview",
         "description": "查询 NAI Studio 本地能力总览（支持模型、分辨率、画师分类与风格标签分布、Wildcards 词库、OC/混搭方案数量及当前脱敏配置）。零点数离线查询。",
         "inputSchema": {"type": "object", "properties": {}},
@@ -171,6 +188,11 @@ MCP_TOOLS: List[Dict[str, Any]] = [
 ]
 
 MCP_EXAMPLE_ARGS: Dict[str, Dict[str, Any]] = {
+    "nai_delegate_art_task": {
+        "brief": "帮我构思一张 16:9 冷色调雨夜赛博街景插画，左侧留白，先只出方案与提示词",
+        "aspect_ratio": "16:9",
+        "plan_only": True,
+    },
     "nai_studio_overview": {},
     "nai_account_status": {},
     "nai_lint_and_format_prompt": {
@@ -294,10 +316,42 @@ async def execute_mcp_tool(tool_name: str, arguments: Optional[Dict[str, Any]] =
         model_str = str(args.get("model") or "nai-diffusion-5-full")
         return await suggest_tags_hybrid(query, model_str, cfg)
 
+    if name == "nai_delegate_art_task":
+        from .a2a_server import run_delegated_art_task
+        brief = str(args.get("brief") or "").strip()
+        if not brief:
+            raise ValueError("nai_delegate_art_task 需要提供非空 brief（画面需求描述）")
+        return await run_delegated_art_task(
+            brief=brief,
+            context_id=str(args.get("context_id") or "").strip() or None,
+            aspect_ratio=str(args.get("aspect_ratio") or ""),
+            width=args.get("width"),
+            height=args.get("height"),
+            model=str(args.get("model") or ""),
+            plan_only=bool(args.get("plan_only", False)),
+            source="mcp",
+        )
+
     if name == "nai_generate_image":
+        from .a2a_server import normalize_aspect_ratio_and_size
         if not str(args.get("prompt") or "").strip():
-            raise ValueError("nai_generate_image 需要提供非空 prompt")
-        item = await generate_image(args, cfg)
+            raise ValueError("nai_generate_image 需要提供非空 prompt；若不想手写 NovelAI 标签，请改用首选入口 nai_delegate_art_task。")
+        if not bool(cfg.get("external_agent_allow_generate", True)):
+            raise ValueError("当前工作台已关闭外部 Agent 直接生图权限（仅允许方案模式）。请在「设置与 Agent → 外部接入」开启，或使用 nai_delegate_art_task(plan_only=true)。")
+        opus_guard = bool(cfg.get("external_agent_opus_guard", True))
+        req_args = dict(args)
+        w, h = normalize_aspect_ratio_and_size(
+            str(req_args.pop("aspect_ratio", "") or ""),
+            req_args.get("width"),
+            req_args.get("height"),
+            opus_guard=opus_guard,
+        )
+        req_args["width"] = w
+        req_args["height"] = h
+        if opus_guard and int(req_args.get("steps") or 28) > 28:
+            req_args["steps"] = 28
+        req_args["opus_free_guard"] = opus_guard
+        item = await generate_image(req_args, cfg)
         if isinstance(item, dict) and item.get("rel_path"):
             p = (OUTPUTS_DIR / item["rel_path"]).resolve()
             item.setdefault("file_path", str(p))
@@ -420,4 +474,78 @@ async def execute_mcp_tool(tool_name: str, arguments: Optional[Dict[str, Any]] =
     if name == "nai_sync_gallery":
         return sync_outputs_folder(OUTPUTS_DIR)
 
-    raise ValueError(f"未知的 MCP 工具: {name}")
+    raise ValueError(f"未知的 MCP 工具: {name}。常规创作建议优先调用 nai_delegate_art_task。")
+
+
+MCP_RESOURCES: List[Dict[str, Any]] = [
+    {
+        "uri": "nai://studio/guide",
+        "name": "NAI Studio External Agent Guide",
+        "description": "外部 Agent 与 NAI Studio 协作指南（职责分工、首选工具与多轮精修约定）",
+        "mimeType": "text/markdown",
+    },
+    {
+        "uri": "nai://studio/overview",
+        "name": "NAI Studio Capabilities Overview",
+        "description": "当前本地模型、分辨率、画师图鉴与词库总览 JSON",
+        "mimeType": "application/json",
+    },
+    {
+        "uri": "nai://studio/creator-memory",
+        "name": "Creator Aesthetic Memory",
+        "description": "用户跨会话个人审美记忆本（偏好与忌讳）",
+        "mimeType": "text/markdown",
+    },
+]
+
+MCP_PROMPTS: List[Dict[str, Any]] = [
+    {
+        "name": "art_director_brief",
+        "description": "生成标准美术委派 Brief，交由 NAI Studio 美术总监执行",
+        "arguments": [
+            {"name": "goal", "description": "画面主题与用途", "required": True},
+            {"name": "aspect_ratio", "description": "期望画幅（如 16:9 / 竖图 / 1:1）", "required": False},
+        ],
+    }
+]
+
+
+def read_mcp_resource(uri: str, base_url: str = "http://127.0.0.1:8780") -> Dict[str, Any]:
+    u = str(uri or "").strip()
+    if u == "nai://studio/guide":
+        from .a2a_server import build_external_client_skill_markdown
+        return {"uri": u, "mimeType": "text/markdown", "text": build_external_client_skill_markdown(base_url)}
+    if u == "nai://studio/overview":
+        import json as _json
+        return {"uri": u, "mimeType": "application/json", "text": _json.dumps(_build_studio_overview(load_config()), ensure_ascii=False, indent=2)}
+    if u == "nai://studio/creator-memory":
+        from .studio_agent import read_creator_memory
+        return {"uri": u, "mimeType": "text/markdown", "text": read_creator_memory() or "（暂未填写个人审美记忆）"}
+    raise FileNotFoundError(f"未知的 MCP Resource URI: {u}")
+
+
+def get_mcp_prompt(name: str, arguments: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    args = arguments or {}
+    if name == "art_director_brief":
+        goal = str(args.get("goal") or "一张二次元插画").strip()
+        ar = str(args.get("aspect_ratio") or "竖图").strip()
+        return {
+            "description": "向 NAI Studio 美术总监委派创作任务的标准提示模板",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": {
+                        "type": "text",
+                        "text": (
+                            f"请调用 nai_delegate_art_task 工具完成以下视觉创作需求：\n"
+                            f"- 画面目标：{goal}\n"
+                            f"- 期望画幅：{ar}\n"
+                            f"- 要求：不要自己手写 NovelAI 标签，直接把目标交给 NAI Studio 美术总监处理，"
+                            f"并在完成后检查返回的 artifacts（file_path 与 recipe）。"
+                        ),
+                    },
+                }
+            ],
+        }
+    raise ValueError(f"未知的 MCP Prompt: {name}")
+
