@@ -6,7 +6,7 @@
   <title>NAI Studio — 个人创作工作台</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23111318'/%3E%3Cpath d='M20 44V20l24 24V20' stroke='%23ffffff' stroke-width='6' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E" />
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="/static/styles.css?v=p2-22" />
+  <link rel="stylesheet" href="/static/styles.css?v=p2-23" />
 </head>
 <body class="lg:h-screen min-h-screen flex flex-col lg:overflow-hidden overflow-y-auto">
 
@@ -1352,10 +1352,13 @@
         </div>
 
         <div id="sec-settings-mcp" class="min-w-0 studio-panel rounded-[12px] border border-[var(--border-hairline)] p-5 space-y-4">
-          <div class="flex items-center justify-between gap-2 pb-3 border-b border-[var(--border-hairline)]">
-            <div>
-              <h3 class="ui-title">原生 Agent / MCP Server 控制台</h3>
-              <p class="text-[12px] text-[var(--text-muted)] mt-0.5">JSON-RPC 2.0 MCP Server (<code>D:\NAI-Studio\mcp_server.py</code>)，适配 Claude / Cursor / Antigravity。</p>
+          <div class="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-[var(--border-hairline)]">
+            <div class="min-w-0">
+              <div class="flex flex-wrap items-center gap-2">
+                <h3 class="ui-title">原生 Agent / MCP Server 控制台</h3>
+                <span id="mcp-tool-count-pill" class="ui-badge px-2 py-0.5 rounded-[6px] text-[11px] font-mono text-[var(--text-secondary)]">11 Tools · JSON-RPC 2.0</span>
+              </div>
+              <p class="text-[12px] text-[var(--text-muted)] mt-0.5">JSON-RPC 2.0 MCP Server (<code>D:\NAI-Studio\mcp_server.py</code>)，兼容 Claude Desktop / Cursor / Antigravity。</p>
             </div>
             <button type="button" onclick="copyMcpConfigJson()" class="spring-btn inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] ui-btn text-[12px] shrink-0">
               <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-copy"/></svg>
@@ -1364,12 +1367,13 @@
           </div>
 
           <div class="space-y-1.5">
-            <div class="text-[12px] text-[var(--text-muted)]">MCP 客户端配置片段</div>
+            <div class="text-[12px] text-[var(--text-muted)]">MCP 客户端配置片段（运行时自动对齐 Python 与 UTF-8 环境变量）</div>
             <pre id="mcp-config-pre" class="selectable-text p-3 rounded-[8px] ui-well font-mono text-[11.5px] overflow-x-auto whitespace-pre-wrap break-all custom-scroll leading-relaxed">{
   "mcpServers": {
     "nai-studio": {
       "command": "C:\\Users\\21815\\AppData\\Local\\Python\\bin\\python.exe",
-      "args": ["D:\\NAI-Studio\\mcp_server.py"]
+      "args": ["D:\\NAI-Studio\\mcp_server.py"],
+      "env": {"PYTHONUTF8": "1"}
     }
   }
 }</pre>
@@ -1378,16 +1382,31 @@
           <div class="space-y-2.5 pt-2 border-t border-[var(--border-hairline)]">
             <div class="text-[12.5px] font-medium">实测 MCP 工具调用</div>
             <div class="flex flex-wrap gap-1.5">
-              <button onclick="runMcpTest('nai_account_status', {})" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">查询账号状态</button>
-              <button onclick="runMcpTest('nai_lint_and_format_prompt', {prompt: '1girl, (silver_hair:1.2), {[{rooftop}]}，{sunset|night}', model: 'nai-diffusion-5-full'})" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">测试语法规范器</button>
-              <button onclick="runMcpTest('nai_search_tags', {query: '水手服'})" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">测试中文搜标签</button>
-              <button onclick="runMcpTest('nai_list_artists', {category: '厚涂光影'})" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">查询画师库</button>
-              <button onclick="runMcpTest('nai_query_gallery', {limit: 3})" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">查询本地图库</button>
-              <button onclick="runMcpTest('nai_inspect_png', {})" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">读取最新图参数</button>
-              <button onclick="runMcpTest('nai_manage_oc_cards', {action: 'list'})" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">查询 OC 角色</button>
-              <button onclick="runMcpTest('nai_sync_gallery', {})" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">同步磁盘图库</button>
+              <button type="button" onclick="runMcpTest('nai_studio_overview', {})" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">工作室概览</button>
+              <button type="button" onclick="runMcpTest('nai_account_status', {})" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">查询账号状态</button>
+              <button type="button" onclick="runMcpTest('nai_lint_and_format_prompt', {prompt: '1girl, (silver_hair:1.2), {[{rooftop}]}，{sunset|night}', model: 'nai-diffusion-5-full'})" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">测试语法规范器</button>
+              <button type="button" onclick="runMcpTest('nai_search_tags', {query: '水手服'})" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">测试中文搜标签</button>
+              <button type="button" onclick="runMcpTest('nai_list_artists', {category: '厚涂光影', limit: 10})" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">查询画师库</button>
+              <button type="button" onclick="runMcpTest('nai_query_gallery', {limit: 3})" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">查询本地图库</button>
+              <button type="button" onclick="runMcpTest('nai_inspect_png', {})" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">读取最新图参数</button>
+              <button type="button" onclick="runMcpTest('nai_manage_oc_cards', {action: 'list'})" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">查询 OC 角色</button>
+              <button type="button" onclick="runMcpTest('nai_sync_gallery', {})" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">同步磁盘图库</button>
             </div>
-            <pre id="mcp-test-output" class="selectable-text p-3 rounded-[8px] ui-well font-mono text-[12px] max-h-48 overflow-y-auto custom-scroll">点击上方按钮实测 MCP 工具返回结果...</pre>
+
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
+              <select id="mcp-tool-select" onchange="onMcpToolSelectChange()" class="px-2.5 py-1.5 rounded-[7px] ui-well font-mono text-[12px] sm:w-56 shrink-0" aria-label="选择 MCP 工具">
+                <option value="nai_studio_overview">nai_studio_overview</option>
+              </select>
+              <input id="mcp-args-input" type="text" value="{}" onkeydown="if(event.key==='Enter'){event.preventDefault();runCustomMcpTest();}" class="selectable-text flex-1 min-w-0 px-2.5 py-1.5 rounded-[7px] ui-well font-mono text-[12px]" placeholder='JSON 参数，例如 {"search": "rella", "limit": 5}' aria-label="MCP 工具 JSON 参数" />
+              <button id="mcp-run-custom-btn" type="button" onclick="runCustomMcpTest()" class="spring-btn px-3 py-1.5 rounded-[7px] ui-btn-accent text-[12px] font-medium shrink-0">执行工具</button>
+            </div>
+            <div id="mcp-tool-desc" class="text-[11.5px] text-[var(--text-muted)]">选择任意 MCP 工具查看说明并自定义 JSON 参数实测（与 stdio MCP Server 共享同一执行引擎）。</div>
+
+            <div class="flex items-center justify-between gap-2 pt-0.5">
+              <span id="mcp-test-status" class="font-mono text-[11px] text-[var(--text-muted)]">就绪</span>
+              <button type="button" onclick="copyMcpTestOutput()" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn-ghost text-[11px]">复制输出</button>
+            </div>
+            <pre id="mcp-test-output" class="selectable-text p-3 rounded-[8px] ui-well font-mono text-[12px] max-h-64 overflow-y-auto custom-scroll">点击上方按钮或选择自定义工具实测 MCP 返回结果...</pre>
           </div>
         </div>
 
@@ -2008,7 +2027,7 @@
 
   <div id="studio-tooltip" role="tooltip" aria-hidden="true"></div>
 
-  <script src="/static/app.js?v=p2-22"></script>
-  <script src="/static/agent_window.js?v=p2-22"></script>
+  <script src="/static/app.js?v=p2-23"></script>
+  <script src="/static/agent_window.js?v=p2-23"></script>
 </body>
 </html>

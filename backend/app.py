@@ -1,4 +1,5 @@
 import base64
+import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -58,6 +59,7 @@ from .png_metadata import extract_nai_metadata
 from .prompt_agent import fetch_llm_models, run_prompt_agent, test_llm_connection
 from .skills_manager import delete_skill, ensure_builtin_skills, get_skill, list_skills, save_skill
 from .studio_agent import stream_studio_agent
+from .mcp_tools import MCP_EXAMPLE_ARGS, MCP_TOOLS, execute_mcp_tool
 from .prompt_engine import (
     adjust_tag_weight,
     delete_wildcard_file,
@@ -796,51 +798,49 @@ async def api_del_mix_preset(preset_id: int) -> Dict[str, Any]:
     return {"ok": delete_mix_preset(preset_id)}
 
 
+@app.get("/api/mcp/info")
+async def api_mcp_info() -> Dict[str, Any]:
+    server_script = str((BASE_DIR / "mcp_server.py").resolve())
+    python_exe = str(Path(sys.executable).resolve())
+    return {
+        "server_name": "nai-studio-mcp",
+        "server_version": "2.3.0",
+        "protocol_version": "2024-11-05",
+        "python_executable": python_exe,
+        "server_script": server_script,
+        "tool_count": len(MCP_TOOLS),
+        "tools": MCP_TOOLS,
+        "example_args": MCP_EXAMPLE_ARGS,
+        "client_config": {
+            "mcpServers": {
+                "nai-studio": {
+                    "command": python_exe,
+                    "args": [server_script],
+                    "env": {"PYTHONUTF8": "1"},
+                }
+            }
+        },
+    }
+
+
 @app.post("/api/mcp/test")
 async def api_mcp_test(body: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Executes an MCP tool call directly from the UI so users can test Agent integration live.
+    Executes an MCP tool call directly from the UI via the shared MCP dispatcher.
     """
     tool_name = str(body.get("tool") or "nai_account_status")
     args = body.get("arguments") or {}
-    cfg = load_config()
-    if tool_name == "nai_account_status":
-        return {"tool": tool_name, "result": await fetch_account_status(cfg)}
-    elif tool_name == "nai_lint_and_format_prompt":
-        return {"tool": tool_name, "result": lint_prompt(str(args.get("prompt") or ""), str(args.get("model") or "nai-diffusion-5-full"))}
-    elif tool_name == "nai_search_tags":
-        return {"tool": tool_name, "result": await suggest_tags_hybrid(str(args.get("query") or "白发"), str(args.get("model") or "nai-diffusion-5-full"), cfg)}
-    elif tool_name == "nai_list_artists":
-        return {"tool": tool_name, "result": list_artists(search=str(args.get("search") or ""), category=str(args.get("category") or ""))}
-    elif tool_name == "nai_query_gallery":
-        return {"tool": tool_name, "result": list_gallery(search=str(args.get("search") or ""), limit=int(args.get("limit") or 10))}
-    elif tool_name == "nai_generate_image":
-        item = await generate_image(args, cfg)
-        return {"tool": tool_name, "result": item}
-    elif tool_name == "nai_inspect_png":
-        fpath = str(args.get("file_path") or "").strip()
-        if fpath:
-            p = Path(fpath)
-            if not p.is_absolute():
-                p = BASE_DIR / p
-            if not p.exists():
-                raise HTTPException(status_code=404, detail=f"文件不存在: {p}")
-            return {"tool": tool_name, "result": extract_nai_metadata(p.read_bytes())}
-        latest = list_gallery(limit=1)
-        if not latest:
-            return {"tool": tool_name, "result": {"info": "图库暂无本地 PNG 可检测"}}
-        p = OUTPUTS_DIR / latest[0]["rel_path"]
-        return {"tool": tool_name, "result": extract_nai_metadata(p.read_bytes()) if p.exists() else {"info": "最新图片磁盘文件不存在"}}
-    elif tool_name == "nai_director_augment":
-        return {"tool": tool_name, "result": await augment_image(args, cfg)}
-    elif tool_name == "nai_manage_oc_cards":
-        if str(args.get("action") or "list").lower() == "save" and args.get("name") and args.get("prompt"):
-            return {"tool": tool_name, "result": save_oc_card(str(args["name"]), str(args["prompt"]), str(args.get("uc") or ""))}
-        return {"tool": tool_name, "result": list_oc_cards()}
-    elif tool_name == "nai_sync_gallery":
-        return {"tool": tool_name, "result": sync_outputs_folder(OUTPUTS_DIR)}
-    else:
-        raise HTTPException(status_code=400, detail=f"未知的 MCP 工具: {tool_name}")
+    if not isinstance(args, dict):
+        raise HTTPException(status_code=400, detail="arguments 必须为 JSON 对象")
+    try:
+        result = await execute_mcp_tool(tool_name, args)
+        return {"tool": tool_name, "ok": True, "result": result}
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 app.mount("/outputs", StaticFiles(directory=str(OUTPUTS_DIR)), name="outputs")

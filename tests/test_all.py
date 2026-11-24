@@ -912,6 +912,112 @@ def test_artist_multifacet_dossier_schema_and_search(tmp_path):
         db_mod.DB_PATH = orig_db
 
 
+def test_mcp_server_stdio_and_api_tools():
+    import subprocess
+    import mcp_server
+
+    client = TestClient(app)
+
+    # 1. /api/mcp/info runtime snippet & schema parity
+    r_info = client.get("/api/mcp/info")
+    assert r_info.status_code == 200
+    info = r_info.json()
+    assert info["tool_count"] == len(mcp_server.MCP_TOOLS) == 11
+    srv_cfg = info["client_config"]["mcpServers"]["nai-studio"]
+    assert srv_cfg["args"][0].endswith("mcp_server.py")
+    assert srv_cfg["env"]["PYTHONUTF8"] == "1"
+
+    # 2. /api/mcp/test unified dispatcher parity
+    r_ov = client.post("/api/mcp/test", json={"tool": "nai_studio_overview", "arguments": {}})
+    assert r_ov.status_code == 200
+    ov = r_ov.json()["result"]
+    assert len(ov["models"]) >= 6 and ov["artists_summary"]["total"] >= 10
+    assert "has_api_token" in ov["config_summary"]
+
+    r_lint = client.post(
+        "/api/mcp/test",
+        json={"tool": "nai_lint_and_format_prompt", "arguments": {"prompt": "1girl, (silver_hair:1.2), {sunset|night}"}},
+    )
+    assert r_lint.status_code == 200
+    assert "dynamic_preview" in r_lint.json()["result"]
+
+    r_art = client.post(
+        "/api/mcp/test",
+        json={"tool": "nai_list_artists", "arguments": {"category": "厚涂光影", "limit": 4}},
+    )
+    assert r_art.status_code == 200
+    art_res = r_art.json()["result"]
+    assert art_res["returned"] <= 4 and art_res["total_matched"] >= art_res["returned"]
+
+    r_gal = client.post("/api/mcp/test", json={"tool": "nai_query_gallery", "arguments": {"limit": 2}})
+    assert r_gal.status_code == 200
+    assert isinstance(r_gal.json()["result"], list)
+
+    r_sync = client.post("/api/mcp/test", json={"tool": "nai_sync_gallery", "arguments": {}})
+    assert r_sync.status_code == 200 and r_sync.json()["result"]["scanned"] is True
+
+    # Inspect missing PNG returns clean 404, omitted file_path handles fallback without error
+    r_insp_missing = client.post(
+        "/api/mcp/test",
+        json={"tool": "nai_inspect_png", "arguments": {"file_path": "nonexistent_mcp_file_999.png"}},
+    )
+    assert r_insp_missing.status_code == 404
+    r_insp_latest = client.post("/api/mcp/test", json={"tool": "nai_inspect_png", "arguments": {}})
+    assert r_insp_latest.status_code == 200
+
+    # OC cards save -> list -> delete + validation 400
+    r_oc_bad = client.post("/api/mcp/test", json={"tool": "nai_manage_oc_cards", "arguments": {"action": "save", "name": ""}})
+    assert r_oc_bad.status_code == 400
+    r_oc_save = client.post(
+        "/api/mcp/test",
+        json={"tool": "nai_manage_oc_cards", "arguments": {"action": "save", "name": "_MCP测试角色", "prompt": "1girl, red scarf"}},
+    )
+    assert r_oc_save.status_code == 200
+    saved_id = r_oc_save.json()["result"]["id"]
+    r_oc_del = client.post(
+        "/api/mcp/test",
+        json={"tool": "nai_manage_oc_cards", "arguments": {"action": "delete", "card_id": saved_id}},
+    )
+    assert r_oc_del.status_code == 200 and r_oc_del.json()["result"]["ok"] is True
+
+    r_bad_tool = client.post("/api/mcp/test", json={"tool": "no_such_mcp_tool", "arguments": {}})
+    assert r_bad_tool.status_code == 400
+
+    # 3. Real stdio JSON-RPC 2.0 subprocess test (UTF-8, notifications silence, ping, error resilience)
+    requests_payload = [
+        {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2024-11-05"}},
+        {"jsonrpc": "2.0", "method": "notifications/initialized"},
+        {"jsonrpc": "2.0", "id": 2, "method": "ping"},
+        {"jsonrpc": "2.0", "id": 3, "method": "tools/list"},
+        {"jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": {"name": "nai_studio_overview", "arguments": {}}},
+        {"jsonrpc": "2.0", "id": 5, "method": "tools/call", "params": {"name": "nai_list_artists", "arguments": {"limit": 5}}},
+        {"jsonrpc": "2.0", "id": 6, "method": "tools/call", "params": {"name": "nai_inspect_png", "arguments": {"file_path": "nonexistent_stdio.png"}}},
+        {"jsonrpc": "2.0", "id": 7, "method": "unknown/method"},
+    ]
+    stdin_text = "\n".join(json.dumps(r, ensure_ascii=False) for r in requests_payload) + "\n{bad_json\n"
+    proc = subprocess.run(
+        [sys.executable, str(Path(mcp_server.__file__).resolve())],
+        input=stdin_text.encode("utf-8"),
+        capture_output=True,
+        timeout=20,
+    )
+    assert proc.returncode == 0
+    lines = [json.loads(ln) for ln in proc.stdout.decode("utf-8").splitlines() if ln.strip()]
+    by_id = {ln.get("id"): ln for ln in lines}
+    # Expected 8 responses (ids 1..7 + invalid-json id None); notification produced zero output
+    assert len(lines) == 8
+    assert by_id[1]["result"]["serverInfo"]["name"] == "nai-studio-mcp"
+    assert by_id[2]["result"] == {}
+    assert len(by_id[3]["result"]["tools"]) == 11
+    ov_text = json.loads(by_id[4]["result"]["content"][0]["text"])
+    assert ov_text["artists_summary"]["total"] >= 10
+    assert by_id[5]["result"]["isError"] is False
+    assert by_id[6]["result"]["isError"] is True
+    assert by_id[7]["error"]["code"] == -32601
+    assert by_id[None]["error"]["code"] == -32700
+
+
+
 
 
 

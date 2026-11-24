@@ -4405,6 +4405,7 @@ function populateSettingsForm() {
   }
   renderLlmModelSelect();
   updatePromptWorkspaceModeButtons();
+  loadMcpConsoleInfo();
 }
 
 function selectLlmModel(val) {
@@ -4543,15 +4544,43 @@ function updatePromptWorkspaceModeButtons() {
   }
 }
 
+async function _copyTextWithFallback(txt) {
+  if (!txt) return false;
+  try {
+    await navigator.clipboard.writeText(txt);
+    return true;
+  } catch (e) {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = txt;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return ok;
+    } catch (_) {
+      return false;
+    }
+  }
+}
+
 async function copyMcpConfigJson() {
   const pre = document.getElementById("mcp-config-pre");
   const txt = pre?.textContent?.trim() || "";
-  if (!txt) return;
-  try {
-    await navigator.clipboard.writeText(txt);
+  if (await _copyTextWithFallback(txt)) {
     showToast("已复制 MCP 客户端配置 JSON");
-  } catch (e) {
+  } else {
     showToast("请手动选中代码块复制");
+  }
+}
+
+async function copyMcpTestOutput() {
+  const out = document.getElementById("mcp-test-output");
+  const txt = out?.textContent?.trim() || "";
+  if (await _copyTextWithFallback(txt)) {
+    showToast("已复制 MCP 输出结果");
   }
 }
 
@@ -4695,19 +4724,120 @@ async function saveSettingsConfig() {
   });
 }
 
-async function runMcpTest(tool, args) {
+let _mcpCatalogCache = null;
+
+async function loadMcpConsoleInfo() {
+  try {
+    const res = await fetch("/api/mcp/info");
+    if (!res.ok) return;
+    const info = await res.json();
+    _mcpCatalogCache = info;
+
+    const pill = document.getElementById("mcp-tool-count-pill");
+    if (pill) {
+      pill.textContent = `${info.tool_count || 0} Tools · ${info.protocol_version || "JSON-RPC 2.0"}`;
+    }
+    const pre = document.getElementById("mcp-config-pre");
+    if (pre && info.client_config) {
+      pre.textContent = JSON.stringify(info.client_config, null, 2);
+    }
+    const sel = document.getElementById("mcp-tool-select");
+    if (sel && Array.isArray(info.tools) && info.tools.length) {
+      const prev = sel.value;
+      sel.innerHTML = info.tools
+        .map(t => `<option value="${escapeHtml(t.name)}">${escapeHtml(t.name)}</option>`)
+        .join("");
+      if (info.tools.some(t => t.name === prev)) sel.value = prev;
+      onMcpToolSelectChange(false);
+    }
+  } catch (e) {}
+}
+
+function onMcpToolSelectChange(updateArgs = true) {
+  const sel = document.getElementById("mcp-tool-select");
+  const descEl = document.getElementById("mcp-tool-desc");
+  const argsEl = document.getElementById("mcp-args-input");
+  const name = sel?.value || "";
+  const toolMeta = _mcpCatalogCache?.tools?.find(t => t.name === name);
+  if (descEl && toolMeta) {
+    descEl.textContent = toolMeta.description || "";
+  }
+  if (updateArgs && argsEl && _mcpCatalogCache?.example_args) {
+    const ex = _mcpCatalogCache.example_args[name] || {};
+    argsEl.value = JSON.stringify(ex);
+  }
+}
+
+function runCustomMcpTest() {
+  const sel = document.getElementById("mcp-tool-select");
+  const argsEl = document.getElementById("mcp-args-input");
+  const tool = sel?.value || "nai_studio_overview";
+  const raw = (argsEl?.value || "{}").trim() || "{}";
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error("参数必须是 JSON 对象，例如 {}");
+    }
+    runMcpTest(tool, parsed);
+  } catch (err) {
+    const statusEl = document.getElementById("mcp-test-status");
+    const out = document.getElementById("mcp-test-output");
+    if (statusEl) {
+      statusEl.textContent = "参数解析错误";
+      statusEl.className = "font-mono text-[11px] text-[var(--status-danger)]";
+    }
+    if (out) out.textContent = `JSON 参数格式有误: ${err.message}`;
+  }
+}
+
+async function runMcpTest(tool, args = {}) {
   const out = document.getElementById("mcp-test-output");
+  const statusEl = document.getElementById("mcp-test-status");
+  const customBtn = document.getElementById("mcp-run-custom-btn");
+  const sel = document.getElementById("mcp-tool-select");
+  const argsEl = document.getElementById("mcp-args-input");
+  if (sel && _mcpCatalogCache?.tools?.some(t => t.name === tool)) {
+    sel.value = tool;
+    onMcpToolSelectChange(false);
+  }
+  if (argsEl) argsEl.value = JSON.stringify(args || {});
   if (out) out.textContent = `正在调用 MCP 工具 ${tool}...`;
+  if (statusEl) {
+    statusEl.textContent = `执行中 · ${tool}`;
+    statusEl.className = "font-mono text-[11px] text-[var(--accent-primary)]";
+  }
+  if (customBtn) customBtn.disabled = true;
+
+  const t0 = performance.now();
   try {
     const res = await fetch("/api/mcp/test", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tool, arguments: args }),
+      body: JSON.stringify({ tool, arguments: args || {} }),
     });
+    const elapsed = Math.round(performance.now() - t0);
     const data = await res.json();
+    if (!res.ok) {
+      if (statusEl) {
+        statusEl.textContent = `失败 · HTTP ${res.status} (${elapsed} ms)`;
+        statusEl.className = "font-mono text-[11px] text-[var(--status-danger)]";
+      }
+      if (out) out.textContent = JSON.stringify(data, null, 2);
+      return;
+    }
+    if (statusEl) {
+      statusEl.textContent = `成功 · ${tool} (${elapsed} ms)`;
+      statusEl.className = "font-mono text-[11px] text-[var(--status-success)]";
+    }
     if (out) out.textContent = JSON.stringify(data, null, 2);
   } catch (err) {
+    if (statusEl) {
+      statusEl.textContent = "网络异常";
+      statusEl.className = "font-mono text-[11px] text-[var(--status-danger)]";
+    }
     if (out) out.textContent = `调用失败: ${err.message}`;
+  } finally {
+    if (customBtn) customBtn.disabled = false;
   }
 }
 
