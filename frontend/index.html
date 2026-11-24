@@ -6,7 +6,7 @@
   <title>NAI Studio — 个人创作工作台</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23111318'/%3E%3Cpath d='M20 44V20l24 24V20' stroke='%23ffffff' stroke-width='6' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E" />
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="/static/styles.css?v=p2-23" />
+  <link rel="stylesheet" href="/static/styles.css?v=p2-24" />
 </head>
 <body class="lg:h-screen min-h-screen flex flex-col lg:overflow-hidden overflow-y-auto">
 
@@ -60,6 +60,7 @@
       <symbol id="ic-chevron-right" viewBox="0 0 16 16"><path d="M6 4l4 4-4 4"/></symbol>
       <symbol id="ic-back" viewBox="0 0 16 16"><path d="M9.8 3.8 5.6 8l4.2 4.2"/></symbol>
       <symbol id="ic-dock-right" viewBox="0 0 16 16"><rect x="2" y="2.5" width="12" height="11" rx="1.5"/><path d="M9.5 2.5v11"/><rect x="9.5" y="2.5" width="4.5" height="11" rx="1" fill="currentColor" fill-opacity="0.22" stroke="none"/></symbol>
+      <symbol id="ic-compare" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M8 1.5v13"/><path d="M5.5 6.5 4 8l1.5 1.5M10.5 6.5 12 8l-1.5 1.5"/></symbol>
       <symbol id="ic-float-win" viewBox="0 0 16 16"><rect x="2" y="3" width="9" height="8" rx="1.5" opacity="0.45"/><rect x="5" y="5.5" width="9" height="8" rx="1.5"/></symbol>
       <symbol id="ic-sparkles" viewBox="0 0 16 16"><path d="M8 2l1.2 3.3L12.5 6.5 9.2 7.7 8 11 6.8 7.7 3.5 6.5 6.8 5.3 8 2Z"/><path d="M12.5 11v2.5M11.25 12.25h2.5"/></symbol>
     </defs>
@@ -810,7 +811,15 @@
 
           <span class="h-3.5 w-px bg-[var(--border-hairline)] mx-1 shrink-0"></span>
 
-          <!-- 画布视图 -->
+          <!-- 画布视图与对比/审图 -->
+          <button id="stage-review-btn" type="button" onclick="sendStageToAgentReview()" class="spring-btn h-7 px-2 rounded-[5px] ui-btn-ghost inline-flex items-center gap-1 text-[12px] whitespace-nowrap" title="把当前画布成图与配方发给 Studio Agent 视觉审图与修图">
+            <svg class="ui-ic-sm ui-ic text-[var(--accent-primary)]" aria-hidden="true"><use href="#ic-agent"/></svg>
+            <span class="hidden xl:inline">审图</span>
+          </button>
+          <button id="stage-compare-btn" type="button" onclick="openDiffModalWithStage()" class="spring-btn h-7 px-2 rounded-[5px] ui-btn-ghost inline-flex items-center gap-1 text-[12px] whitespace-nowrap" title="A/B 卷帘对比与配方差异 (快捷键 C)">
+            <svg class="ui-ic" aria-hidden="true"><use href="#ic-compare"/></svg>
+            <span class="hidden xl:inline">对比</span>
+          </button>
           <button id="checkerboard-btn" type="button" onclick="toggleCheckerboard()" aria-pressed="false" class="spring-btn w-7 h-7 rounded-[5px] ui-btn-ghost flex items-center justify-center" title="切换透明底棋盘格">
             <svg class="ui-ic" aria-hidden="true"><use href="#ic-checkerboard"/></svg>
           </button>
@@ -824,7 +833,7 @@
 
           <span class="h-3.5 w-px bg-[var(--border-hairline)] mx-1 shrink-0"></span>
 
-          <!-- 图像导入与导出 -->
+          <!-- 图像导入、导出与快捷键 -->
           <label class="spring-btn w-7 h-7 rounded-[5px] ui-btn-ghost flex items-center justify-center cursor-pointer" title="导入 NovelAI PNG 读取生成参数">
             <svg class="ui-ic" aria-hidden="true"><use href="#ic-import-img"/></svg>
             <input type="file" accept="image/png,image/webp,image/jpeg" class="hidden" onchange="handleInspectPngUpload(event)" />
@@ -835,6 +844,7 @@
           <button id="stage-download-btn" type="button" onclick="downloadCurrentStageImage()" class="spring-btn w-7 h-7 rounded-[5px] ui-btn-ghost flex items-center justify-center" title="下载高清原图">
             <svg class="ui-ic" aria-hidden="true"><use href="#ic-download"/></svg>
           </button>
+          <button id="shortcuts-help-btn" type="button" onclick="toggleShortcutsModal(true)" class="spring-btn w-7 h-7 rounded-[5px] ui-btn-ghost flex items-center justify-center font-mono text-[12px] font-semibold" title="桌面快捷键速查 (按 ?)">?</button>
         </div>
       </div>
 
@@ -1619,12 +1629,26 @@
 
         <div id="gd-specs" class="grid grid-cols-2 gap-1.5 text-[12px] font-mono p-2.5 rounded-[8px] ui-subgroup"></div>
 
-        <div class="flex items-center flex-wrap gap-1.5 pt-2 mt-auto border-t border-[var(--border-hairline)]">
-          <button type="button" onclick="applyGalleryDetail('all')" class="liquid-cta spring-btn px-2.5 py-1 rounded-[6px] text-[12px] font-semibold whitespace-nowrap">全参数载入</button>
-          <button type="button" onclick="applyGalleryDetail('prompt')" class="spring-btn px-2 py-1 rounded-[6px] ui-btn text-[12px] whitespace-nowrap">仅提示词</button>
-          <button type="button" onclick="applyGalleryDetail('i2i')" class="spring-btn px-2 py-1 rounded-[6px] ui-btn text-[12px] whitespace-nowrap">图生图</button>
-          <a id="gd-download-link" href="#" download class="spring-btn px-2 py-1 rounded-[6px] ui-btn text-[12px] whitespace-nowrap">下载</a>
-          <button type="button" onclick="deleteDetailGalleryItem()" class="spring-btn px-2 py-1 rounded-[6px] ui-btn text-[12px] text-[var(--status-danger)] ml-auto whitespace-nowrap">删除</button>
+        <div class="space-y-2 pt-2 mt-auto border-t border-[var(--border-hairline)]">
+          <div class="flex items-center flex-wrap gap-1.5">
+            <button type="button" onclick="applyGalleryDetail('all')" class="liquid-cta spring-btn px-2.5 py-1 rounded-[6px] text-[12px] font-semibold whitespace-nowrap">全参数载入</button>
+            <button type="button" onclick="applyGalleryDetail('artist')" class="spring-btn px-2 py-1 rounded-[6px] ui-btn text-[12px] whitespace-nowrap" title="仅提取并套用该作品的画师标签串，保留当前人物与场景">仅画师串</button>
+            <button type="button" onclick="applyGalleryDetail('prompt')" class="spring-btn px-2 py-1 rounded-[6px] ui-btn text-[12px] whitespace-nowrap">仅提示词</button>
+            <button type="button" onclick="applyGalleryDetail('params')" class="spring-btn px-2 py-1 rounded-[6px] ui-btn text-[12px] whitespace-nowrap" title="仅载入模型、尺寸、采样器、CFG 与种子，保留当前提示词">仅参数/种子</button>
+            <button type="button" onclick="applyGalleryDetail('i2i')" class="spring-btn px-2 py-1 rounded-[6px] ui-btn text-[12px] whitespace-nowrap">图生图</button>
+          </div>
+          <div class="flex items-center flex-wrap gap-1.5">
+            <button type="button" onclick="compareGalleryDetailWithStage()" class="spring-btn inline-flex items-center gap-1 px-2 py-1 rounded-[6px] ui-btn text-[12px] whitespace-nowrap">
+              <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-compare"/></svg>
+              <span>与当前图对比</span>
+            </button>
+            <button type="button" onclick="sendGalleryDetailToAgent()" class="spring-btn inline-flex items-center gap-1 px-2 py-1 rounded-[6px] ui-btn-accent text-[12px] whitespace-nowrap">
+              <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-agent"/></svg>
+              <span>Agent 审图</span>
+            </button>
+            <a id="gd-download-link" href="#" download class="spring-btn px-2 py-1 rounded-[6px] ui-btn text-[12px] whitespace-nowrap">下载</a>
+            <button type="button" onclick="deleteDetailGalleryItem()" class="spring-btn px-2 py-1 rounded-[6px] ui-btn text-[12px] text-[var(--status-danger)] ml-auto whitespace-nowrap">删除</button>
+          </div>
         </div>
       </div>
     </div>
@@ -1642,15 +1666,51 @@
     </div>
   </div>
 
-  <div id="diff-modal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="w-full max-w-3xl max-h-[90vh] overflow-y-auto custom-scroll rounded-[14px] liquid-popover p-6 space-y-4 ui-body">
-      <div class="flex items-center justify-between">
-        <h3 class="ui-title">卷帘对比与生成参数差异</h3>
-        <button onclick="document.getElementById('diff-modal').classList.add('hidden')" aria-label="关闭" class="w-6 h-6 rounded-[6px] ui-btn flex items-center justify-center text-[var(--text-secondary)]">
+  <div id="diff-modal" class="hidden fixed inset-0 z-50 bg-black/65 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="w-full max-w-4xl max-h-[92vh] overflow-y-auto custom-scroll rounded-[14px] liquid-popover p-5 sm:p-6 space-y-4 ui-body">
+      <div class="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-[var(--border-hairline)]">
+        <div class="flex items-center gap-2.5">
+          <h3 class="ui-title">A/B 作品对比与配方差异</h3>
+          <div class="ui-segmented p-0.5 rounded-[7px] inline-flex items-center text-[11.5px]">
+            <button id="diff-mode-swipe" type="button" onclick="setDiffViewMode('swipe')" class="px-2.5 py-0.5 rounded-[5px] seg-pill-active">卷帘对比</button>
+            <button id="diff-mode-side" type="button" onclick="setDiffViewMode('side')" class="px-2.5 py-0.5 rounded-[5px] text-[var(--text-muted)] hover:text-[var(--text-primary)]">并排对比</button>
+          </div>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <button type="button" onclick="swapDiffItems()" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[11.5px]" title="交换 A 与 B 的位置">交换 A↔B</button>
+          <button onclick="document.getElementById('diff-modal').classList.add('hidden')" aria-label="关闭" class="w-7 h-7 rounded-[6px] ui-btn flex items-center justify-center text-[var(--text-secondary)]">
+            <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-close"/></svg>
+          </button>
+        </div>
+      </div>
+      <div id="diff-content" class="space-y-3.5 text-[12.5px]"></div>
+    </div>
+  </div>
+
+  <!-- 桌面快捷键速查面板 (按 ? 呼出) -->
+  <div id="shortcuts-modal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="w-full max-w-lg rounded-[14px] liquid-popover p-5 space-y-4 ui-body">
+      <div class="flex items-center justify-between pb-2 border-b border-[var(--border-hairline)]">
+        <div>
+          <h3 class="ui-title">桌面创作快捷键</h3>
+          <p class="text-[11.5px] text-[var(--text-muted)] mt-0.5">焦点不在输入框时可直接单键触发，提升高频出图与选图节奏</p>
+        </div>
+        <button type="button" onclick="toggleShortcutsModal(false)" aria-label="关闭" class="w-7 h-7 rounded-[6px] ui-btn flex items-center justify-center text-[var(--text-secondary)]">
           <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-close"/></svg>
         </button>
       </div>
-      <div id="diff-content" class="space-y-3 text-[12.5px]"></div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[12px]">
+        <div class="flex items-center justify-between p-2 rounded-[8px] ui-subgroup"><span>开始生成图片</span><span class="flex items-center gap-1"><kbd class="ui-kbd">Ctrl</kbd><kbd class="ui-kbd">Enter</kbd></span></div>
+        <div class="flex items-center justify-between p-2 rounded-[8px] ui-subgroup"><span>呼出 / 隐藏 Studio Agent</span><span class="flex items-center gap-1"><kbd class="ui-kbd">Alt</kbd><kbd class="ui-kbd">A</kbd></span></div>
+        <div class="flex items-center justify-between p-2 rounded-[8px] ui-subgroup"><span>折叠左侧参数 / 右侧历史</span><span class="flex items-center gap-1"><kbd class="ui-kbd">[</kbd><kbd class="ui-kbd">]</kbd></span></div>
+        <div class="flex items-center justify-between p-2 rounded-[8px] ui-subgroup"><span>上下切换历史作品</span><span class="flex items-center gap-1"><kbd class="ui-kbd">↑</kbd><kbd class="ui-kbd">↓</kbd></span></div>
+        <div class="flex items-center justify-between p-2 rounded-[8px] ui-subgroup"><span>A/B 卷帘对比 (含当前图)</span><kbd class="ui-kbd">C</kbd></div>
+        <div class="flex items-center justify-between p-2 rounded-[8px] ui-subgroup"><span>收藏 / 取消当前作品</span><kbd class="ui-kbd">F</kbd></div>
+        <div class="flex items-center justify-between p-2 rounded-[8px] ui-subgroup"><span>随机化 Seed 种子</span><kbd class="ui-kbd">R</kbd></div>
+        <div class="flex items-center justify-between p-2 rounded-[8px] ui-subgroup"><span>光标选中词条微调权重</span><span class="flex items-center gap-1"><kbd class="ui-kbd">Ctrl</kbd><kbd class="ui-kbd">↑/↓</kbd></span></div>
+        <div class="flex items-center justify-between p-2 rounded-[8px] ui-subgroup"><span>对比弹窗微调卷帘 / 切并排</span><span class="flex items-center gap-1"><kbd class="ui-kbd">←/→</kbd><kbd class="ui-kbd">S</kbd></span></div>
+        <div class="flex items-center justify-between p-2 rounded-[8px] ui-subgroup"><span>关闭弹窗 / 退出沉浸</span><kbd class="ui-kbd">Esc</kbd></div>
+      </div>
     </div>
   </div>
 
@@ -1744,6 +1804,7 @@
       <div id="inspect-png-summary" class="rounded-[10px] ui-subgroup p-3 space-y-1 max-h-48 overflow-y-auto custom-scroll font-mono text-[12.5px]"></div>
       <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
         <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restore-chk-prompt" checked /> 正向提示词</label>
+        <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restore-chk-artist-only" /> 仅提取画师串</label>
         <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restore-chk-uc" checked /> 负面提示词 (UC)</label>
         <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restore-chk-params" checked /> 模型/采样器/CFG</label>
         <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restore-chk-seed" checked /> 锁定 Seed</label>
@@ -2027,7 +2088,7 @@
 
   <div id="studio-tooltip" role="tooltip" aria-hidden="true"></div>
 
-  <script src="/static/app.js?v=p2-23"></script>
-  <script src="/static/agent_window.js?v=p2-23"></script>
+  <script src="/static/app.js?v=p2-24"></script>
+  <script src="/static/agent_window.js?v=p2-24"></script>
 </body>
 </html>

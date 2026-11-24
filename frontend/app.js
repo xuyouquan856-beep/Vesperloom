@@ -1571,42 +1571,79 @@ function appendCharInteraction(idx, tag) {
   renderCharacterSlots();
 }
 
+const CHAR_SLOT_COLORS = ["#6366f1", "#ec4899", "#10b981", "#f59e0b", "#06b6d4", "#a855f7"];
+
+function applyOcToCharacterSlot(idx, ocId) {
+  const ch = state.characters[idx];
+  const oc = (state.ocCards || []).find(c => Number(c.id) === Number(ocId));
+  if (!ch || !oc) return;
+  ch.oc_name = oc.name || "";
+  ch.prompt = oc.prompt || "";
+  ch.uc = oc.uc || "";
+  ch.avatar_url = oc.avatar_url || "";
+  if (oc.default_x !== undefined && oc.default_x !== null) ch.x = Number(oc.default_x);
+  if (oc.default_y !== undefined && oc.default_y !== null) ch.y = Number(oc.default_y);
+  renderCharacterSlots();
+  showToast(`已将 OC「${oc.name}」载入角色 #${idx + 1}`);
+}
+
+function clearAllCharacterSlots() {
+  state.characters = [];
+  renderCharacterSlots();
+  showToast("已清空多角色槽位");
+}
+
 function renderCharacterSlots() {
   const wrap = document.getElementById("char-slots-list");
   if (!wrap) return;
   if (!state.characters.length) {
-    wrap.innerHTML = `<div class="text-[12.5px] text-[var(--text-muted)]">尚未添加角色分控。</div>`;
+    wrap.innerHTML = `<div class="text-[12.5px] text-[var(--text-muted)]">尚未添加角色分控。添加后可在画布上直接拖拽站位圆点或一键载入 OC。</div>`;
     renderCharStageOverlay();
     updateLeftRefsBadge();
     return;
   }
+  const ocOptions = (state.ocCards || [])
+    .map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`)
+    .join("");
+
   wrap.innerHTML = state.characters
     .map((ch, idx) => {
+      const slotColor = CHAR_SLOT_COLORS[idx % CHAR_SLOT_COLORS.length];
       let gridHtml = "";
       if (state.useCoords) {
-        gridHtml = `<div class="grid grid-cols-5 gap-1 p-2 rounded-[10px] ui-subgroup shrink-0" title="点击格子指定角色在画布中的 5×5 站位坐标">`;
+        gridHtml = `<div class="grid grid-cols-5 gap-1 p-2 rounded-[10px] ui-subgroup shrink-0" title="点击格子指定角色 #${idx + 1} 的 5×5 站位坐标">`;
         for (const gy of GRID_COORDS) {
           for (const gx of GRID_COORDS) {
             const act = Math.abs(ch.x - gx) < 0.08 && Math.abs(ch.y - gy) < 0.08;
-            const cls = act ? "bg-[var(--cta-bg)] border border-[var(--cta-bg)]" : "bg-[var(--border-control)] hover:bg-[var(--border-hover)]";
-            gridHtml += `<button type="button" onclick="setCharCoord(${idx}, ${gx}, ${gy})" class="w-3 h-3 rounded-[3px] ${cls}"></button>`;
+            const style = act ? `style="background:${slotColor};border-color:${slotColor};"` : "";
+            const cls = act ? "border" : "bg-[var(--border-control)] hover:bg-[var(--border-hover)]";
+            gridHtml += `<button type="button" onclick="setCharCoord(${idx}, ${gx}, ${gy})" ${style} class="w-3 h-3 rounded-[3px] ${cls}"></button>`;
           }
         }
         gridHtml += `</div>`;
       }
       return `
         <div class="rounded-[10px] ui-card p-3 space-y-2">
-          <div class="flex items-center justify-between text-[12px]">
-            <div class="flex items-center gap-2">
-              ${ch.avatar_url ? `<img src="${escapeHtml(ch.avatar_url)}" alt="" class="w-5 h-5 rounded-[6px] object-cover border border-[var(--border-control)]" />` : ""}
-              <span class="font-semibold text-[var(--text-primary)]">角色 #${idx + 1}${ch.oc_name ? ` · ${escapeHtml(ch.oc_name)}` : ""} ${state.useCoords ? `(X:${Number(ch.x).toFixed(2)} Y:${Number(ch.y).toFixed(2)})` : "(自动站位)"}</span>
+          <div class="flex items-center justify-between gap-1.5 flex-wrap text-[12px]">
+            <div class="flex items-center gap-1.5 min-w-0">
+              <span class="w-4 h-4 rounded-full text-[10px] font-bold text-white inline-flex items-center justify-center shrink-0" style="background:${slotColor}">${idx + 1}</span>
+              ${ch.avatar_url ? `<img src="${escapeHtml(ch.avatar_url)}" alt="" class="w-5 h-5 rounded-[6px] object-cover border border-[var(--border-control)] shrink-0" />` : ""}
+              <span class="font-semibold text-[var(--text-primary)] truncate">${ch.oc_name ? escapeHtml(ch.oc_name) : `角色 #${idx + 1}`}</span>
+              <span class="font-mono text-[10.5px] text-[var(--text-muted)] shrink-0">${state.useCoords ? `${Number(ch.x).toFixed(2)},${Number(ch.y).toFixed(2)}` : "自动"}</span>
             </div>
-            <div class="flex items-center gap-1 text-[12px]">
-              <button type="button" onclick="appendCharInteraction(${idx}, 'source#hugging')" class="px-2 py-1 rounded-[6px] ui-btn" title="主动动作">source#</button>
-              <button type="button" onclick="appendCharInteraction(${idx}, 'target#hugging')" class="px-2 py-1 rounded-[6px] ui-btn" title="被动动作">target#</button>
-              <button type="button" onclick="appendCharInteraction(${idx}, 'mutual#holding hands')" class="px-2 py-1 rounded-[6px] ui-btn" title="双方互动">mutual#</button>
-              <button type="button" onclick="removeCharacterSlot(${idx})" class="ml-1 text-[var(--status-danger)] hover:underline">删除</button>
+            <div class="flex items-center gap-1 text-[11.5px]">
+              ${
+                ocOptions
+                  ? `<select onchange="if(this.value){applyOcToCharacterSlot(${idx}, this.value); this.value='';}" class="px-1.5 py-0.5 rounded-[5px] ui-well text-[11px] max-w-[104px]" title="从已保存 OC 角色卡快捷载入"><option value="">载入 OC...</option>${ocOptions}</select>`
+                  : ""
+              }
+              <button type="button" onclick="removeCharacterSlot(${idx})" class="px-1.5 py-0.5 rounded-[5px] text-[var(--status-danger)] hover:bg-[var(--status-danger-tint)] transition-colors">删除</button>
             </div>
+          </div>
+          <div class="flex items-center gap-1 text-[11px]">
+            <button type="button" onclick="appendCharInteraction(${idx}, 'source#hugging')" class="px-2 py-0.5 rounded-[5px] ui-btn" title="主动动作">source#</button>
+            <button type="button" onclick="appendCharInteraction(${idx}, 'target#hugging')" class="px-2 py-0.5 rounded-[5px] ui-btn" title="被动动作">target#</button>
+            <button type="button" onclick="appendCharInteraction(${idx}, 'mutual#holding hands')" class="px-2 py-0.5 rounded-[5px] ui-btn" title="双方互动">mutual#</button>
           </div>
           <div class="flex items-start gap-2">
             ${gridHtml}
@@ -2396,24 +2433,89 @@ function setStageFromGalleryItem(item, restoreRecipe = false) {
   }
 }
 
-function restoreRecipeToWorkbench(item) {
+function extractArtistTagsFromPrompt(promptStr) {
+  const knownArtists = new Set((state.artists || []).map(a => String(a.tag || "").trim().toLowerCase()));
+  const artistSegs = [];
+  const otherSegs = [];
+  parsePromptSegments(promptStr || "").forEach(seg => {
+    const clean = seg.replace(/^\{+|\[+|\}+|\]+$/g, "").replace(/^-?\d+(?:\.\d+)?::|::$/g, "").trim().toLowerCase();
+    if (clean.startsWith("artist:") || knownArtists.has(clean)) {
+      artistSegs.push(seg);
+    } else {
+      otherSegs.push(seg);
+    }
+  });
+  return { artistSegs, otherSegs };
+}
+
+function applyArtistTagsOnlyToWorkbench(sourcePrompt, sourceMix = null) {
+  const { artistSegs } = extractArtistTagsFromPrompt(sourcePrompt || "");
+  if (!artistSegs.length && (!Array.isArray(sourceMix) || !sourceMix.length)) {
+    showToast("该作品提示词中未检测到画师标签");
+    return false;
+  }
+  const ta = document.getElementById("prompt-input");
+  const curVal = ta?.value || "";
+  const { otherSegs } = extractArtistTagsFromPrompt(curVal);
+  const combined = [...artistSegs, ...otherSegs].filter(Boolean).join(", ");
+  if (ta) ta.value = combined;
+  if (Array.isArray(sourceMix) && sourceMix.length) {
+    state.activeArtistMix = JSON.parse(JSON.stringify(sourceMix));
+    renderActiveArtistMixBar();
+  }
+  if (state.promptWorkspaceMode === "structured") syncClassicToStructured();
+  syncPromptImmediateVisuals("pos");
+  runPromptLinter("pos");
+  switchTab("workbench");
+  switchInspectorTab("prompts");
+  showToast(`已套用画师串（${artistSegs.length} 个标签），保留当前人物与场景`);
+  return true;
+}
+
+function restoreRecipeToWorkbench(item, opts = {}) {
+  const partial = Boolean(opts.partial);
   if (item.model && state.models[item.model]) {
     selectModel(item.model, false);
   }
-  document.getElementById("prompt-input").value = item.prompt || "";
-  document.getElementById("uc-input").value = item.uc || "";
-  state.width = item.width || 832;
-  state.height = item.height || 1216;
-  state.steps = Math.min(28, item.steps || 28);
-  state.scale = item.scale || 5.0;
-  state.sampler = item.sampler || "k_euler_ancestral";
-  state.scheduler = item.scheduler || "karras";
-  state.characters = Array.isArray(item.characters) ? JSON.parse(JSON.stringify(item.characters)) : [];
-  state.activeArtistMix = Array.isArray(item.artist_mix) ? JSON.parse(JSON.stringify(item.artist_mix)) : [];
+  if (!partial || item.prompt !== undefined) {
+    const ta = document.getElementById("prompt-input");
+    if (ta) ta.value = item.prompt || "";
+  }
+  if (!partial || item.uc !== undefined) {
+    const uc = document.getElementById("uc-input");
+    if (uc) uc.value = item.uc || "";
+  }
+  if (!partial || (item.width && item.height)) {
+    state.width = item.width || state.width || 832;
+    state.height = item.height || state.height || 1216;
+  }
+  if (!partial || item.steps !== undefined) {
+    state.steps = Math.min(28, item.steps || 28);
+  }
+  if (!partial || item.scale !== undefined) {
+    state.scale = item.scale ?? 5.0;
+  }
+  if (!partial || item.sampler !== undefined) {
+    state.sampler = item.sampler || "k_euler_ancestral";
+  }
+  if (!partial || item.scheduler !== undefined) {
+    state.scheduler = item.scheduler || "karras";
+  }
+  if (!partial || item.characters !== undefined) {
+    state.characters = Array.isArray(item.characters) ? JSON.parse(JSON.stringify(item.characters)) : [];
+  }
+  if (!partial || item.artist_mix !== undefined) {
+    state.activeArtistMix = Array.isArray(item.artist_mix) ? JSON.parse(JSON.stringify(item.artist_mix)) : [];
+  }
 
-  document.getElementById("steps-val").textContent = String(state.steps);
-  document.getElementById("scale-val").textContent = Number(state.scale).toFixed(1);
-  document.getElementById("seed-input").value = String(item.seed || 0);
+  const stepsEl = document.getElementById("steps-val");
+  const scaleEl = document.getElementById("scale-val");
+  const seedEl = document.getElementById("seed-input");
+  if (stepsEl) stepsEl.textContent = String(state.steps);
+  if (scaleEl) scaleEl.textContent = Number(state.scale).toFixed(1);
+  if (!partial || item.seed !== undefined) {
+    if (seedEl) seedEl.value = String(item.seed || 0);
+  }
   if (state.promptWorkspaceMode === "structured") syncClassicToStructured();
 
   renderResolutionButtons();
@@ -2426,7 +2528,9 @@ function restoreRecipeToWorkbench(item) {
   updateStageInfoPill();
   updateCostEstimate();
   switchTab("workbench");
-  showToast(`已载入生成参数 (Seed: ${item.seed || "随机"})`);
+  if (!opts.silent) {
+    showToast(`已载入生成参数 (Seed: ${item.seed || "随机"})`);
+  }
 }
 
 function renderWorkbenchHistory() {
@@ -2455,6 +2559,9 @@ function renderWorkbenchHistory() {
             <div class="flex items-center justify-between gap-1 pt-0.5 ${isActive ? "opacity-100" : "opacity-65 group-hover:opacity-100"} transition-opacity">
               <button type="button" onclick="event.stopPropagation();setStageFromGalleryItem(state.gallery.find(x=>x.id===${item.id}), true)" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn-ghost text-[11px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-well-hover)]" title="载入此图的提示词与采样参数">载入配方</button>
               <div class="flex items-center gap-0.5">
+                <button type="button" onclick="event.stopPropagation();openDiffModalWithStage(${item.id})" class="spring-btn w-6 h-6 rounded-[5px] ui-btn-ghost flex items-center justify-center" title="与当前画布图进行 A/B 对比">
+                  ${uiIcon("compare", "ui-ic-sm")}
+                </button>
                 <button type="button" onclick="event.stopPropagation();sendGalleryItemToI2I(${item.id})" class="spring-btn w-6 h-6 rounded-[5px] ui-btn-ghost flex items-center justify-center" title="设为图生图底图">
                   ${uiIcon("image", "ui-ic-sm")}
                 </button>
@@ -2556,13 +2663,16 @@ function confirmInspectPngRestore() {
   if (!meta) return closeInspectPngModal();
 
   const usePrompt = document.getElementById("restore-chk-prompt")?.checked;
+  const useArtistOnly = document.getElementById("restore-chk-artist-only")?.checked;
   const useUc = document.getElementById("restore-chk-uc")?.checked;
   const useParams = document.getElementById("restore-chk-params")?.checked;
   const useSeed = document.getElementById("restore-chk-seed")?.checked;
   const useI2I = document.getElementById("restore-chk-i2i")?.checked;
 
   const filtered = {};
-  if (usePrompt) {
+  if (useArtistOnly) {
+    applyArtistTagsOnlyToWorkbench(meta.prompt || "");
+  } else if (usePrompt) {
     filtered.prompt = meta.prompt || "";
     filtered.characters = meta.characters || [];
   }
@@ -2582,7 +2692,9 @@ function confirmInspectPngRestore() {
     filtered.seed = meta.seed;
   }
 
-  restoreRecipeToWorkbench(filtered);
+  if (Object.keys(filtered).length > 0) {
+    restoreRecipeToWorkbench(filtered, { partial: true, silent: true });
+  }
   if (useSeed && meta.seed) {
     state.seedLocked = true;
     updateSeedLockBtn();
@@ -2594,7 +2706,7 @@ function confirmInspectPngRestore() {
   }
 
   closeInspectPngModal();
-  showToast("已按勾选项应用生成参数");
+  showToast("已按勾选项精准应用生成参数");
 }
 
 function downloadCurrentStageImage() {
@@ -2607,6 +2719,51 @@ function downloadCurrentStageImage() {
   a.href = url;
   a.download = `nai_studio_${Date.now()}.png`;
   a.click();
+}
+
+function openDiffModalWithStage(otherId = null) {
+  const list = state.gallery || [];
+  if (list.length < 2) {
+    showToast("至少需要 2 条生成记录才能进行 A/B 对比");
+    return;
+  }
+  state._diffSourceList = list;
+  let idxA = list.findIndex(x => Number(x.id) === Number(state.stageItemId));
+  if (idxA < 0) idxA = 0;
+  let idxB = otherId != null ? list.findIndex(x => Number(x.id) === Number(otherId)) : -1;
+  if (idxB < 0 || idxB === idxA) {
+    idxB = idxA === 0 ? 1 : 0;
+  }
+  openDiffModal(idxA, idxB, list);
+}
+
+function setDiffViewMode(mode) {
+  state._diffViewMode = mode === "side" ? "side" : "swipe";
+  openDiffModal(state._diffIdxA ?? 0, state._diffIdxB ?? 1, state._diffSourceList);
+}
+
+function swapDiffItems() {
+  openDiffModal(state._diffIdxB ?? 1, state._diffIdxA ?? 0, state._diffSourceList);
+}
+
+function applyDiffSideRecipe(side) {
+  const source = state._diffSourceList || state.gallery || [];
+  const idx = side === "B" ? (state._diffIdxB ?? 1) : (state._diffIdxA ?? 0);
+  const item = source[idx];
+  if (!item) return;
+  document.getElementById("diff-modal")?.classList.add("hidden");
+  setStageFromGalleryItem(item, true);
+}
+
+function sendDiffToAgent() {
+  const source = state._diffSourceList || state.gallery || [];
+  const a = source[state._diffIdxA ?? 0];
+  const b = source[state._diffIdxB ?? 1];
+  if (!a || !b) return;
+  document.getElementById("diff-modal")?.classList.add("hidden");
+  window.toggleAgentWindow?.(true);
+  const msg = `请帮我对比分析本地图库中的两张作品（ID #${a.id} 与 ID #${b.id}）：\n- 作品 A (#${a.id}, ${a.model_short}, Seed ${a.seed}, Steps ${a.steps}, CFG ${a.scale}, ${a.sampler})\n- 作品 B (#${b.id}, ${b.model_short}, Seed ${b.seed}, Steps ${b.steps}, CFG ${b.scale}, ${b.sampler})\n请先用视觉工具查看两张图并结合它们的提示词差异，告诉我哪张表现更好、差异原因是什么，以及如何取长补短优化当前工作台配方。`;
+  window.quickSendAgent?.(msg);
 }
 
 function openDiffModal(idxA = 0, idxB = 1, customList = null) {
@@ -2625,48 +2782,137 @@ function openDiffModal(idxA = 0, idxB = 1, customList = null) {
   state._diffSourceList = source;
   const safeA = Math.min(Math.max(0, idxA), source.length - 1);
   const safeB = Math.min(Math.max(0, idxB), source.length - 1);
+  state._diffIdxA = safeA;
+  state._diffIdxB = safeB;
+  const viewMode = state._diffViewMode === "side" ? "side" : "swipe";
+  const pct = typeof state._diffSwipePct === "number" ? state._diffSwipePct : 50;
+
+  const swipeBtn = document.getElementById("diff-mode-swipe");
+  const sideBtn = document.getElementById("diff-mode-side");
+  if (swipeBtn) {
+    swipeBtn.className = viewMode === "swipe"
+      ? "px-2.5 py-0.5 rounded-[5px] seg-pill-active"
+      : "px-2.5 py-0.5 rounded-[5px] text-[var(--text-muted)] hover:text-[var(--text-primary)]";
+  }
+  if (sideBtn) {
+    sideBtn.className = viewMode === "side"
+      ? "px-2.5 py-0.5 rounded-[5px] seg-pill-active"
+      : "px-2.5 py-0.5 rounded-[5px] text-[var(--text-muted)] hover:text-[var(--text-primary)]";
+  }
+
   const a = source[safeA];
   const b = source[safeB];
-  const tagsA = new Set((a.prompt || "").split(",").map(s => s.trim()).filter(Boolean));
-  const tagsB = new Set((b.prompt || "").split(",").map(s => s.trim()).filter(Boolean));
-  const added = [...tagsA].filter(x => !tagsB.has(x));
-  const removed = [...tagsB].filter(x => !tagsA.has(x));
+  const tagsA = parsePromptSegments(a.prompt || "");
+  const tagsB = parsePromptSegments(b.prompt || "");
+  const setA = new Set(tagsA.map(t => t.toLowerCase()));
+  const setB = new Set(tagsB.map(t => t.toLowerCase()));
+  const onlyA = tagsA.filter(t => !setB.has(t.toLowerCase()));
+  const onlyB = tagsB.filter(t => !setA.has(t.toLowerCase()));
+  const sharedCount = tagsA.length - onlyA.length;
+
+  const paramRows = [
+    ["模型", a.model_short || a.model, b.model_short || b.model],
+    ["分辨率", `${a.width}×${a.height}`, `${b.width}×${b.height}`],
+    ["步数", String(a.steps), String(b.steps)],
+    ["CFG", String(a.scale), String(b.scale)],
+    ["采样器", a.sampler || "-", b.sampler || "-"],
+    ["Seed", `#${a.seed}`, `#${b.seed}`],
+  ];
 
   const optHtml = (selIdx) =>
     source
-      .slice(0, 30)
+      .slice(0, 40)
       .map((it, i) => `<option value="${i}" ${i === selIdx ? "selected" : ""}>#${it.seed} · ${escapeHtml(it.model_short)} (${it.notes ? escapeHtml(it.notes) : escapeHtml(it.filename)})</option>`)
       .join("");
 
+  const viewportHtml =
+    viewMode === "side"
+      ? `
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div class="relative rounded-[10px] border border-[var(--border-control)] bg-[var(--bg-canvas-well)] h-[380px] flex items-center justify-center overflow-hidden p-2">
+          <img src="${a.image_url}" alt="Image A" class="max-h-full max-w-full object-contain rounded-[6px]" />
+          <span class="absolute top-2 left-2 px-2 py-0.5 rounded-[5px] liquid-popover text-[11px] font-mono">A · #${a.seed}</span>
+        </div>
+        <div class="relative rounded-[10px] border border-[var(--border-control)] bg-[var(--bg-canvas-well)] h-[380px] flex items-center justify-center overflow-hidden p-2">
+          <img src="${b.image_url}" alt="Image B" class="max-h-full max-w-full object-contain rounded-[6px]" />
+          <span class="absolute top-2 left-2 px-2 py-0.5 rounded-[5px] liquid-popover text-[11px] font-mono">B · #${b.seed}</span>
+        </div>
+      </div>`
+      : `
+      <div id="diff-swipe-box" class="diff-compare-wrap" onpointerdown="startDiffSwipe(event)" onpointermove="moveDiffSwipe(event)">
+        <img src="${b.image_url}" alt="Image B" />
+        <img id="diff-top-img" src="${a.image_url}" alt="Image A" style="clip-path: inset(0 ${100 - pct}% 0 0);" />
+        <div id="diff-divider" class="diff-compare-divider" style="left: ${pct}%;"></div>
+        <div id="diff-handle" class="diff-compare-handle" style="left: ${pct}%;">⇆</div>
+        <span class="absolute top-2 left-2 px-2 py-0.5 rounded-[5px] liquid-popover text-[11.5px] font-mono">A · #${a.seed}</span>
+        <span class="absolute top-2 right-2 px-2 py-0.5 rounded-[5px] liquid-popover text-[11.5px] font-mono">B · #${b.seed}</span>
+      </div>`;
+
+  const renderDiffChips = (arr, cls) =>
+    arr.length
+      ? arr.map(t => `<span class="inline-block px-1.5 py-0.5 rounded-[4px] font-mono text-[11px] ${cls}">${escapeHtml(t)}</span>`).join(" ")
+      : `<span class="text-[11.5px] text-[var(--text-muted)]">无差异</span>`;
+
   document.getElementById("diff-content").innerHTML = `
-    <div class="grid grid-cols-2 gap-3">
-      <div class="p-3 rounded-[10px] ui-subgroup space-y-1">
-        <div class="text-[var(--text-primary)] font-semibold">左侧图 A</div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div class="p-2.5 rounded-[10px] ui-subgroup space-y-1.5">
+        <div class="flex items-center justify-between">
+          <span class="text-[var(--text-primary)] font-semibold text-[12px]">左侧图 A</span>
+          <button type="button" onclick="applyDiffSideRecipe('A')" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn text-[11px]">采用 A 配方</button>
+        </div>
         <select onchange="openDiffModal(Number(this.value), ${safeB})" class="w-full ui-well rounded-[6px] px-2 py-1 text-[12px]">${optHtml(safeA)}</select>
-        <div class="text-[12px] text-[var(--text-muted)] font-mono">${a.width}×${a.height} · Steps ${a.steps} · CFG ${a.scale} · ${escapeHtml(a.sampler)}</div>
       </div>
-      <div class="p-3 rounded-[10px] ui-subgroup space-y-1">
-        <div class="text-[var(--text-primary)] font-semibold">右侧图 B</div>
+      <div class="p-2.5 rounded-[10px] ui-subgroup space-y-1.5">
+        <div class="flex items-center justify-between">
+          <span class="text-[var(--text-primary)] font-semibold text-[12px]">右侧图 B</span>
+          <button type="button" onclick="applyDiffSideRecipe('B')" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn text-[11px]">采用 B 配方</button>
+        </div>
         <select onchange="openDiffModal(${safeA}, Number(this.value))" class="w-full ui-well rounded-[6px] px-2 py-1 text-[12px]">${optHtml(safeB)}</select>
-        <div class="text-[12px] text-[var(--text-muted)] font-mono">${b.width}×${b.height} · Steps ${b.steps} · CFG ${b.scale} · ${escapeHtml(b.sampler)}</div>
       </div>
     </div>
 
-    <div id="diff-swipe-box" class="diff-compare-wrap" onpointerdown="startDiffSwipe(event)" onpointermove="moveDiffSwipe(event)">
-      <img src="${b.image_url}" alt="Image B" />
-      <img id="diff-top-img" src="${a.image_url}" alt="Image A" style="clip-path: inset(0 50% 0 0);" />
-      <div id="diff-divider" class="diff-compare-divider" style="left: 50%;"></div>
-      <div id="diff-handle" class="diff-compare-handle" style="left: 50%;">⇆</div>
-      <span class="absolute top-2 left-2 px-2 py-1 rounded-[6px] liquid-popover text-[12px] font-mono">A: #${a.seed}</span>
-      <span class="absolute top-2 right-2 px-2 py-1 rounded-[6px] liquid-popover text-[12px] font-mono">B: #${b.seed}</span>
+    ${viewportHtml}
+
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-1.5">
+      ${paramRows
+        .map(([lbl, va, vb]) => {
+          const changed = va !== vb;
+          return `
+          <div class="p-2 rounded-[8px] border border-[var(--border-hairline)] ${changed ? "diff-param-changed" : "ui-subgroup"}">
+            <div class="text-[10.5px] text-[var(--text-muted)]">${lbl}${changed ? " · 变动" : ""}</div>
+            <div class="font-mono text-[11px] text-[var(--text-primary)] truncate" title="A: ${escapeHtml(va)}">A: ${escapeHtml(va)}</div>
+            <div class="font-mono text-[11px] ${changed ? "text-[var(--accent-primary)] font-semibold" : "text-[var(--text-secondary)]"} truncate" title="B: ${escapeHtml(vb)}">B: ${escapeHtml(vb)}</div>
+          </div>`;
+        })
+        .join("")}
     </div>
 
-    <div class="p-3 rounded-[10px] ui-subgroup space-y-1 font-mono">
-      <div class="text-[var(--status-success)]">+ A 相比 B 新增 (${added.length})：${added.length ? escapeHtml(added.join(", ")) : "无变化"}</div>
-      <div class="text-[var(--status-danger)]">− A 相比 B 移除 (${removed.length})：${removed.length ? escapeHtml(removed.join(", ")) : "无变化"}</div>
+    <div class="p-3 rounded-[10px] ui-subgroup space-y-2">
+      <div class="flex items-center justify-between text-[11.5px] text-[var(--text-muted)]">
+        <span>提示词标签差异（共有 ${sharedCount} 项相同）</span>
+        <button type="button" onclick="sendDiffToAgent()" class="spring-btn inline-flex items-center gap-1 px-2.5 py-1 rounded-[6px] ui-btn-accent text-[11.5px] font-medium">
+          ${uiIcon("agent", "ui-ic-sm")}
+          <span>发给 Agent 对比分析</span>
+        </button>
+      </div>
+      <div class="space-y-1.5">
+        <div class="flex flex-wrap items-center gap-1"><span class="text-[11px] font-medium text-[var(--status-warning)] mr-1">仅在 A (${onlyA.length}):</span>${renderDiffChips(onlyA, "bg-[var(--status-warning-tint)] text-[var(--status-warning)]")}</div>
+        <div class="flex flex-wrap items-center gap-1"><span class="text-[11px] font-medium text-[var(--status-success)] mr-1">仅在 B (${onlyB.length}):</span>${renderDiffChips(onlyB, "bg-[var(--status-success-tint)] text-[var(--status-success)]")}</div>
+      </div>
     </div>
   `;
   document.getElementById("diff-modal").classList.remove("hidden");
+}
+
+function setDiffSwipePct(pct) {
+  const clamped = Math.max(2, Math.min(98, pct));
+  state._diffSwipePct = clamped;
+  const topImg = document.getElementById("diff-top-img");
+  const div = document.getElementById("diff-divider");
+  const hdl = document.getElementById("diff-handle");
+  if (topImg) topImg.style.clipPath = `inset(0 ${100 - clamped}% 0 0)`;
+  if (div) div.style.left = `${clamped}%`;
+  if (hdl) hdl.style.left = `${clamped}%`;
 }
 
 let _swipingDiff = false;
@@ -2689,13 +2935,7 @@ function moveDiffSwipe(e) {
   const box = document.getElementById("diff-swipe-box");
   if (!box) return;
   const r = box.getBoundingClientRect();
-  const pct = Math.max(2, Math.min(98, ((e.clientX - r.left) / r.width) * 100));
-  const topImg = document.getElementById("diff-top-img");
-  const div = document.getElementById("diff-divider");
-  const hdl = document.getElementById("diff-handle");
-  if (topImg) topImg.style.clipPath = `inset(0 ${100 - pct}% 0 0)`;
-  if (div) div.style.left = `${pct}%`;
-  if (hdl) hdl.style.left = `${pct}%`;
+  setDiffSwipePct(((e.clientX - r.left) / r.width) * 100);
 }
 
 // ================= Tab 2: Artist Catalog & Mixer =================
@@ -4142,6 +4382,31 @@ function applyGalleryDetail(mode) {
   const item = findGalleryItemById(state.galleryDetailId);
   if (!item) return;
   closeGalleryDetailModal();
+  if (mode === "artist") {
+    applyArtistTagsOnlyToWorkbench(item.prompt || "", item.artist_mix || null);
+    return;
+  }
+  if (mode === "params") {
+    restoreRecipeToWorkbench(
+      {
+        model: item.model,
+        width: item.width,
+        height: item.height,
+        steps: item.steps,
+        scale: item.scale,
+        sampler: item.sampler,
+        scheduler: item.scheduler,
+        seed: item.seed,
+      },
+      { partial: true, silent: true }
+    );
+    if (item.seed) {
+      state.seedLocked = true;
+      updateSeedLockBtn();
+    }
+    showToast(`已仅载入模型、采样参数与种子 (#${item.seed || "随机"})，保留当前提示词`);
+    return;
+  }
   if (mode === "prompt") {
     const ta = document.getElementById("prompt-input");
     const uc = document.getElementById("uc-input");
@@ -4164,6 +4429,34 @@ function applyGalleryDetail(mode) {
     return;
   }
   setStageFromGalleryItem(item, true);
+}
+
+function compareGalleryDetailWithStage() {
+  const targetId = state.galleryDetailId;
+  if (!targetId) return;
+  closeGalleryDetailModal();
+  openDiffModalWithStage(targetId);
+}
+
+function sendGalleryDetailToAgent() {
+  const item = findGalleryItemById(state.galleryDetailId);
+  if (!item) return;
+  closeGalleryDetailModal();
+  window.toggleAgentWindow?.(true);
+  window.quickSendAgent?.(
+    `请用视觉工具查看本地图库作品 #${item.id}（${item.model_short}，Seed ${item.seed}），从构图、人物五官与手部细节、光影氛围和画师还原度四个维度做专业审图，指出最值得改进的 1–3 个问题，并给出可直接应用到工作台的提示词/参数优化方案。`
+  );
+}
+
+function sendStageToAgentReview() {
+  if (!hasStageImage()) {
+    showToast("当前画布暂无成图可审阅，请先生成或选中一张作品");
+    return;
+  }
+  window.toggleAgentWindow?.(true);
+  window.quickSendAgent?.(
+    "请结合当前画布成图和我的提示词配方，先用视觉工具观察当前画布成图，从构图、人物五官/手部细节、光影氛围与画师风格还原度四个维度做快速审图，指出最影响观感的 1–3 个问题，并直接给出可一键应用的提示词与参数修正建议。"
+  );
 }
 
 async function deleteDetailGalleryItem() {
@@ -5969,15 +6262,15 @@ function renderCharStageOverlay() {
     overlay.innerHTML = "";
     return;
   }
-  const colors = [];
   overlay.innerHTML = state.characters
-    .map(
-      (ch, idx) => `
-      <div class="char-stage-dot" data-cidx="${idx}" style="left:${(ch.x * 100).toFixed(1)}%;top:${(ch.y * 100).toFixed(1)}%;" title="拖拽调整角色 #${idx + 1} 在画布中的位置">
+    .map((ch, idx) => {
+      const slotColor = CHAR_SLOT_COLORS[idx % CHAR_SLOT_COLORS.length];
+      return `
+      <div class="char-stage-dot" data-cidx="${idx}" style="left:${(ch.x * 100).toFixed(1)}%;top:${(ch.y * 100).toFixed(1)}%;background-color:${slotColor};" title="拖拽调整角色 #${idx + 1}${ch.oc_name ? ` (${escapeHtml(ch.oc_name)})` : ""} 站位">
         ${idx + 1}
       </div>
-    `
-    )
+    `;
+    })
     .join("");
 
   overlay.querySelectorAll(".char-stage-dot").forEach(dot => {
@@ -6005,6 +6298,33 @@ function renderCharStageOverlay() {
   });
 }
 
+function toggleShortcutsModal(force) {
+  const m = document.getElementById("shortcuts-modal");
+  if (!m) return;
+  const nextHidden = typeof force === "boolean" ? !force : !m.classList.contains("hidden");
+  m.classList.toggle("hidden", nextHidden);
+}
+
+function stepStageHistory(delta) {
+  const list = state.gallery || [];
+  if (!list.length) return;
+  let idx = list.findIndex(x => Number(x.id) === Number(state.stageItemId));
+  if (idx < 0) idx = 0;
+  const nextIdx = Math.max(0, Math.min(list.length - 1, idx + delta));
+  if (nextIdx === idx && state.stageItemId != null) return;
+  setStageFromGalleryItem(list[nextIdx], false);
+  const el = document.querySelector(`.history-film-item[data-id="${list[nextIdx].id}"]`);
+  el?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+
+async function toggleCurrentStageFav() {
+  if (!state.stageItemId) {
+    showToast("当前画布暂无可收藏的图库作品");
+    return;
+  }
+  await toggleGalleryFav(state.stageItemId);
+}
+
 // ================= V2.1 Global Hotkeys & Clipboard PNG Paste =================
 function setupGlobalHotkeys() {
   window.addEventListener("keydown", e => {
@@ -6016,6 +6336,7 @@ function setupGlobalHotkeys() {
     if (e.key === "Escape") {
       const overlayIds = [
         "studio-confirm-modal",
+        "shortcuts-modal",
         "artist-detail-modal",
         "gallery-detail-modal",
         "lightbox-modal",
@@ -6036,6 +6357,7 @@ function setupGlobalHotkeys() {
         return el && !el.classList.contains("hidden");
       });
       resolveStudioConfirm(false);
+      toggleShortcutsModal(false);
       closeArtistDetailModal();
       closeGalleryDetailModal();
       closeLightbox();
@@ -6055,6 +6377,20 @@ function setupGlobalHotkeys() {
         clearGallerySelection();
       } else if (!anyOverlayOpen && state.immersionMode) {
         toggleImmersionMode(false);
+      }
+      return;
+    }
+    const diffOpen = !document.getElementById("diff-modal")?.classList.contains("hidden");
+    if (diffOpen) {
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        setDiffSwipePct((state._diffSwipePct ?? 50) - 5);
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        setDiffSwipePct((state._diffSwipePct ?? 50) + 5);
+      } else if (e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        setDiffViewMode(state._diffViewMode === "side" ? "swipe" : "side");
       }
       return;
     }
@@ -6089,9 +6425,29 @@ function setupGlobalHotkeys() {
       }
     }
     const activeTag = document.activeElement?.tagName;
-    if (!e.ctrlKey && !e.metaKey && !e.altKey && activeTag !== "INPUT" && activeTag !== "TEXTAREA" && activeTag !== "SELECT") {
-      if (e.key === "[") toggleLeftPanel();
-      else if (e.key === "]") toggleRightPanel();
+    const isEditable = activeTag === "INPUT" || activeTag === "TEXTAREA" || activeTag === "SELECT" || document.activeElement?.isContentEditable;
+    if (!e.ctrlKey && !e.metaKey && !e.altKey && !isEditable) {
+      if (e.key === "?" || (e.shiftKey && e.key === "/")) {
+        e.preventDefault();
+        toggleShortcutsModal();
+      } else if (e.key === "[") {
+        toggleLeftPanel();
+      } else if (e.key === "]") {
+        toggleRightPanel();
+      } else if (e.key === "ArrowUp" && !document.getElementById("view-workbench")?.classList.contains("hidden")) {
+        e.preventDefault();
+        stepStageHistory(-1);
+      } else if (e.key === "ArrowDown" && !document.getElementById("view-workbench")?.classList.contains("hidden")) {
+        e.preventDefault();
+        stepStageHistory(1);
+      } else if (e.key.toLowerCase() === "c") {
+        openDiffModalWithStage();
+      } else if (e.key.toLowerCase() === "f") {
+        toggleCurrentStageFav();
+      } else if (e.key.toLowerCase() === "r") {
+        randomizeSeed();
+        showToast("已随机化 Seed 种子 (0)");
+      }
     }
   });
 
@@ -6514,6 +6870,7 @@ function setupModalBackdropClose() {
     "gallery-detail-modal": () => closeGalleryDetailModal(),
     "custom-artist-modal": () => toggleCustomArtistModal(false),
     "diff-modal": () => document.getElementById("diff-modal")?.classList.add("hidden"),
+    "shortcuts-modal": () => toggleShortcutsModal(false),
     "oc-modal": () => toggleOcModal(false),
     "wildcard-modal": () => toggleWildcardModal(false),
     "inspect-png-modal": () => closeInspectPngModal(),

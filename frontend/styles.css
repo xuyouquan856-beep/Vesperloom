@@ -1336,35 +1336,42 @@ html.light .checkerboard-bg {
 /* Canvas Draggable Multi-Character Dots */
 .char-stage-dot {
   position: absolute;
-  width: 26px;
-  height: 26px;
-  border-radius: var(--radius-sm);
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
   transform: translate(-50%, -50%);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 700;
-  color: var(--cta-fg);
-  background-color: var(--cta-bg);
-  border: 2px solid var(--surface-panel);
+  color: #ffffff;
+  background-color: var(--accent-primary);
+  border: 2px solid rgba(255, 255, 255, 0.92);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.42);
   cursor: grab;
   pointer-events: auto;
+  transition: transform 0.12s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.12s ease;
+}
+.char-stage-dot:hover {
+  transform: translate(-50%, -50%) scale(1.1);
 }
 .char-stage-dot:active {
   cursor: grabbing;
+  transform: translate(-50%, -50%) scale(1.14);
 }
 
-/* Before/After Swipe Comparison Slider */
+/* Before/After Swipe & Side-by-Side Comparison */
 .diff-compare-wrap {
   position: relative;
   width: 100%;
-  height: 360px;
-  border-radius: var(--radius-lg);
+  height: 400px;
+  border-radius: var(--radius-md);
   overflow: hidden;
   border: 1px solid var(--border-control);
   background: var(--bg-canvas-well);
   cursor: ew-resize;
+  touch-action: none;
 }
 .diff-compare-wrap img {
   position: absolute;
@@ -1379,24 +1386,47 @@ html.light .checkerboard-bg {
   top: 0;
   bottom: 0;
   width: 2px;
-  background: var(--cta-bg);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
   pointer-events: none;
 }
 .diff-compare-handle {
   position: absolute;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-sm);
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
   background: var(--cta-bg);
-  border: 1px solid var(--border-control);
+  border: 2px solid var(--surface-panel);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.38);
   color: var(--cta-fg);
-  font-size: 11px;
+  font-size: 12px;
+  font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
   pointer-events: none;
+}
+.diff-param-changed {
+  background-color: var(--accent-primary-tint);
+  border-color: var(--accent-primary-border) !important;
+}
+.ui-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 5px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+  background-color: var(--surface-elevated);
+  border: 1px solid var(--border-control);
+  box-shadow: 0 1px 0 var(--border-hairline);
 }
 
 /* Inpaint Follow Brush Cursor Ring */
@@ -1548,6 +1578,7 @@ html.light .agent-float-window {
 #gallery-detail-modal > div,
 #studio-confirm-modal > div,
 #diff-modal > div,
+#shortcuts-modal > div,
 #oc-modal > div,
 #wildcard-modal > div,
 #inspect-png-modal > div,
