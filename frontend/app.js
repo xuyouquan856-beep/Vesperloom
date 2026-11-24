@@ -2518,6 +2518,11 @@ function restoreRecipeToWorkbench(item, opts = {}) {
   }
   if (state.promptWorkspaceMode === "structured") syncClassicToStructured();
 
+  const spec = state.models[state.currentModel];
+  if (spec) {
+    renderSamplerSelectMenu(spec);
+    renderSchedulerSelectMenu(spec);
+  }
   renderResolutionButtons();
   renderCharacterSlots();
   renderActiveArtistMixBar();
@@ -2547,12 +2552,12 @@ function renderWorkbenchHistory() {
       return `
       <div data-id="${item.id}" class="history-film-item group rounded-[9px] p-2 transition-all ${isActive ? "is-active-stage" : ""}">
         <div class="flex gap-2.5 cursor-pointer" onclick="setStageFromGalleryItem(state.gallery.find(x=>x.id===${item.id}), false)">
-          <div class="relative w-13 h-16 rounded-[6px] overflow-hidden shrink-0 artwork-inner-frame bg-[var(--bg-canvas-well)]">
+          <div class="relative w-12 h-16 rounded-[6px] overflow-hidden shrink-0 artwork-inner-frame bg-[var(--bg-canvas-well)]">
             <img src="${item.image_url}" alt="" onerror="this.onerror=null;this.style.opacity='0.28';" class="w-12 h-16 object-cover object-top" />
           </div>
           <div class="min-w-0 flex-1 flex flex-col justify-between py-0.5">
             <div class="flex items-center justify-between gap-1">
-              <span class="text-[10.5px] px-1.5 py-0.2 rounded-[4px] ui-badge text-[var(--text-secondary)] font-mono truncate">${escapeHtml(item.model_short)}</span>
+              <span class="text-[10.5px] px-1.5 py-[1px] rounded-[4px] ui-badge text-[var(--text-secondary)] font-mono truncate">${escapeHtml(item.model_short)}</span>
               <span class="text-[10.5px] font-mono text-[var(--text-muted)]">#${item.seed}</span>
             </div>
             <p class="text-[11.5px] text-[var(--text-secondary)] line-clamp-1 font-mono leading-snug">${escapeHtml(item.prompt)}</p>
@@ -2728,6 +2733,8 @@ function openDiffModalWithStage(otherId = null) {
     return;
   }
   state._diffSourceList = list;
+  state._diffFilterQuery = "";
+  state._diffFavOnly = false;
   let idxA = list.findIndex(x => Number(x.id) === Number(state.stageItemId));
   if (idxA < 0) idxA = 0;
   let idxB = otherId != null ? list.findIndex(x => Number(x.id) === Number(otherId)) : -1;
@@ -2856,7 +2863,7 @@ function renderDiffFilmstrip() {
           <img src="${it.image_url}" alt="" loading="lazy" class="w-[62px] h-[76px] object-cover object-top block" />
           ${isA ? `<span class="absolute top-1 left-1 px-1 py-0 rounded-[3px] text-[9.5px] font-bold bg-[var(--status-warning)] text-black leading-tight">A</span>` : ""}
           ${isB ? `<span class="absolute top-1 right-1 px-1 py-0 rounded-[3px] text-[9.5px] font-bold bg-[var(--status-success)] text-black leading-tight">B</span>` : ""}
-          <div class="absolute inset-x-0 bottom-0 bg-black/72 px-1 py-0.5 flex items-center justify-between gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div class="absolute inset-x-0 bottom-0 bg-black/75 px-1 py-0.5 flex items-center justify-between gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
             <button type="button" onclick="event.stopPropagation();assignDiffThumb(${origIdx}, 'A')" class="flex-1 rounded-[3px] bg-amber-400/90 text-black text-[9.5px] font-bold leading-tight py-0.5 hover:bg-amber-300" title="设为左侧图 A">A</button>
             <button type="button" onclick="event.stopPropagation();assignDiffThumb(${origIdx}, 'B')" class="flex-1 rounded-[3px] bg-emerald-400/90 text-black text-[9.5px] font-bold leading-tight py-0.5 hover:bg-emerald-300" title="设为右侧图 B">B</button>
           </div>
@@ -2910,6 +2917,13 @@ function openDiffModal(idxA = 0, idxB = 1, customList = null) {
   const onlyA = tagsA.filter(t => !setB.has(t.toLowerCase()));
   const onlyB = tagsB.filter(t => !setA.has(t.toLowerCase()));
   const sharedCount = tagsA.length - onlyA.length;
+  const ucA = parsePromptSegments(a.uc || "");
+  const ucB = parsePromptSegments(b.uc || "");
+  const ucSetA = new Set(ucA.map(t => t.toLowerCase()));
+  const ucSetB = new Set(ucB.map(t => t.toLowerCase()));
+  const ucOnlyA = ucA.filter(t => !ucSetB.has(t.toLowerCase()));
+  const ucOnlyB = ucB.filter(t => !ucSetA.has(t.toLowerCase()));
+  const hasUcDiff = ucOnlyA.length > 0 || ucOnlyB.length > 0;
 
   const paramRows = [
     ["模型", a.model_short || a.model, b.model_short || b.model],
@@ -2955,7 +2969,7 @@ function openDiffModal(idxA = 0, idxB = 1, customList = null) {
         <img src="${a.image_url}" alt="A" class="w-10 h-12 rounded-[6px] object-cover object-top shrink-0 border border-[var(--border-control)]" />
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-1.5">
-            <span class="px-1.5 py-0 rounded-[4px] text-[10px] font-bold bg-[var(--status-warning-tint)] text-[var(--status-warning)]">左侧图 A</span>
+            <span class="px-1.5 py-0 rounded-[4px] text-[10px] font-bold bg-[var(--status-warning-tint)] text-[var(--status-warning)] whitespace-nowrap shrink-0">左侧图 A</span>
             <span class="font-mono text-[11px] text-[var(--text-primary)] truncate">#${a.seed} · ${escapeHtml(a.model_short)}</span>
           </div>
           <div class="text-[11px] text-[var(--text-muted)] truncate mt-0.5">${escapeHtml(a.notes || a.prompt || a.filename)}</div>
@@ -2971,7 +2985,7 @@ function openDiffModal(idxA = 0, idxB = 1, customList = null) {
         <img src="${b.image_url}" alt="B" class="w-10 h-12 rounded-[6px] object-cover object-top shrink-0 border border-[var(--border-control)]" />
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-1.5">
-            <span class="px-1.5 py-0 rounded-[4px] text-[10px] font-bold bg-[var(--status-success-tint)] text-[var(--status-success)]">右侧图 B</span>
+            <span class="px-1.5 py-0 rounded-[4px] text-[10px] font-bold bg-[var(--status-success-tint)] text-[var(--status-success)] whitespace-nowrap shrink-0">右侧图 B</span>
             <span class="font-mono text-[11px] text-[var(--text-primary)] truncate">#${b.seed} · ${escapeHtml(b.model_short)}</span>
           </div>
           <div class="text-[11px] text-[var(--text-muted)] truncate mt-0.5">${escapeHtml(b.notes || b.prompt || b.filename)}</div>
@@ -3026,6 +3040,15 @@ function openDiffModal(idxA = 0, idxB = 1, customList = null) {
       <div class="space-y-1.5">
         <div class="flex flex-wrap items-center gap-1"><span class="text-[11px] font-medium text-[var(--status-warning)] mr-1">仅在 A (${onlyA.length}):</span>${renderDiffChips(onlyA, "bg-[var(--status-warning-tint)] text-[var(--status-warning)]")}</div>
         <div class="flex flex-wrap items-center gap-1"><span class="text-[11px] font-medium text-[var(--status-success)] mr-1">仅在 B (${onlyB.length}):</span>${renderDiffChips(onlyB, "bg-[var(--status-success-tint)] text-[var(--status-success)]")}</div>
+        ${
+          hasUcDiff
+            ? `<div class="pt-1.5 mt-1.5 border-t border-[var(--border-hairline)] space-y-1">
+                <div class="text-[10.5px] text-[var(--text-muted)]">负面词 (UC) 差异</div>
+                <div class="flex flex-wrap items-center gap-1"><span class="text-[10.5px] text-[var(--status-warning)] mr-1">UC 仅 A (${ucOnlyA.length}):</span>${renderDiffChips(ucOnlyA, "bg-[var(--status-warning-tint)] text-[var(--status-warning)]")}</div>
+                <div class="flex flex-wrap items-center gap-1"><span class="text-[10.5px] text-[var(--status-success)] mr-1">UC 仅 B (${ucOnlyB.length}):</span>${renderDiffChips(ucOnlyB, "bg-[var(--status-success-tint)] text-[var(--status-success)]")}</div>
+              </div>`
+            : ""
+        }
       </div>
     </div>
   `;
@@ -4336,7 +4359,7 @@ async function renderFullGallery(reloadFromServer = false) {
         return `
           <div class="studio-grid-card-compact rounded-[8px] ui-card overflow-hidden flex flex-col group ${ringCls}">
             <div class="relative shrink-0 overflow-hidden bg-[var(--bg-canvas-well)] aspect-[3/4] artwork-inner-frame flex items-center justify-center">
-              <img src="${it.image_url}" alt="" loading="lazy" decoding="async" onerror="this.onerror=null;this.style.opacity='0.22';" class="w-full h-full object-cover object-top transition-opacity duration-150 group-hover:opacity-92 cursor-pointer" onclick="openGalleryDetailModal(${it.id})" />
+              <img src="${it.image_url}" alt="" loading="lazy" decoding="async" onerror="this.onerror=null;this.style.opacity='0.22';" class="w-full h-full object-cover object-top transition-opacity duration-150 group-hover:opacity-90 cursor-pointer" onclick="openGalleryDetailModal(${it.id})" />
               <button type="button" onclick="toggleSelectGalleryItem(${it.id}, event)" aria-label="选择作品" class="spring-btn absolute top-1.5 left-1.5 w-5 h-5 rounded-[5px] studio-hud flex items-center justify-center text-[10px] font-bold ${selected ? "bg-[var(--text-primary)] text-[var(--cta-fg)] opacity-100" : "opacity-0 group-hover:opacity-100"} transition-opacity">
                 ${selected ? "✓" : ""}
               </button>
@@ -5239,7 +5262,7 @@ async function handleBackupFileSelected(event) {
   }
 }
 
-async function _refreshStateAfterBackupRestore() {
+async function _refreshStateAfterBackupRestore(applyPrefs = false) {
   try {
     const res = await fetch("/api/bootstrap");
     if (!res.ok) return;
@@ -5249,6 +5272,11 @@ async function _refreshStateAfterBackupRestore() {
     state.snippets = data.snippets || state.snippets;
     state.mixPresets = data.mix_presets || state.mixPresets;
     state.wildcards = data.wildcards || state.wildcards;
+    if (applyPrefs && data.config) {
+      state.config = data.config;
+      initAppearanceSettings(state.config);
+      populateSettingsForm();
+    }
     renderArtistsGrid?.();
     renderMixPresets?.();
     renderSnippetsBar?.();
@@ -5287,7 +5315,7 @@ async function confirmBackupRestore() {
     showToast(`恢复完成：画师 ${r.artists} · OC ${r.oc_cards} · 混搭 ${r.mix_presets} · Skills ${r.skills}（已自动保存恢复前快照）`);
     _pendingBackupFile = null;
     document.getElementById("backup-preview-box")?.classList.add("hidden");
-    await _refreshStateAfterBackupRestore();
+    await _refreshStateAfterBackupRestore(Boolean(data.restored?.preferences));
   } catch (err) {
     showToast(err.message || "备份恢复失败");
   } finally {
@@ -6728,11 +6756,33 @@ function setupGlobalHotkeys() {
     }
     const activeTag = document.activeElement?.tagName;
     const isEditable = activeTag === "INPUT" || activeTag === "TEXTAREA" || activeTag === "SELECT" || document.activeElement?.isContentEditable;
+    const modalIds = [
+      "studio-confirm-modal",
+      "artist-detail-modal",
+      "gallery-detail-modal",
+      "lightbox-modal",
+      "diff-modal",
+      "oc-modal",
+      "wildcard-modal",
+      "inspect-png-modal",
+      "xyz-modal",
+      "snapshot-modal",
+      "snippet-modal",
+      "custom-artist-modal",
+    ];
+    const anyModalOpen = modalIds.some(id => {
+      const el = document.getElementById(id);
+      return el && !el.classList.contains("hidden");
+    });
     if (!e.ctrlKey && !e.metaKey && !e.altKey && !isEditable) {
       if (e.key === "?" || (e.shiftKey && e.key === "/")) {
         e.preventDefault();
         toggleShortcutsModal();
-      } else if (e.key === "[") {
+        return;
+      }
+      const shortcutsOpen = !document.getElementById("shortcuts-modal")?.classList.contains("hidden");
+      if (anyModalOpen || shortcutsOpen) return;
+      if (e.key === "[") {
         toggleLeftPanel();
       } else if (e.key === "]") {
         toggleRightPanel();

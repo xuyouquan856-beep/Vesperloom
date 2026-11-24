@@ -1517,7 +1517,7 @@ function renderAgentSkillsList() {
           <div class="flex items-center justify-between gap-2">
             <div class="min-w-0 flex items-center gap-2">
               <span class="text-[12.5px] font-semibold text-[var(--text-primary)] group-hover:text-[var(--accent-primary)] transition-colors truncate">${escapeHtml(s.title)}</span>
-              <span class="px-1.5 py-0.2 rounded-[4px] ui-badge font-mono text-[10px] text-[var(--text-muted)] shrink-0">/${escapeHtml(s.name)}</span>
+              <span class="px-1.5 py-[1px] rounded-[4px] ui-badge font-mono text-[10px] text-[var(--text-muted)] shrink-0">/${escapeHtml(s.name)}</span>
             </div>
             <div class="flex items-center gap-1 shrink-0" onclick="event.stopPropagation()">
               <button type="button" onclick="togglePinSkill('${escapeHtml(s.name)}')" class="spring-btn inline-flex items-center gap-1 px-2 py-0.5 rounded-[5px] ui-btn text-[11px] ${pinned ? "is-active" : "text-[var(--text-secondary)]"}" title="${pinned ? "已挂载至对话上下文，点击取消" : "固定挂载至每轮对话"}">

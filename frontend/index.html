@@ -443,7 +443,7 @@
             <div id="block-card-artist" class="rounded-[8px] py-1.5 space-y-1.5">
               <div class="flex items-center justify-between gap-1 text-[12px]">
                 <div class="inline-flex items-center gap-1.5">
-                  <span class="px-1.5 py-0.2 rounded-[4px] bg-[var(--accent-primary-tint)] text-[var(--accent-primary)] font-mono text-[10.5px] font-semibold">01</span>
+                  <span class="px-1.5 py-[1px] rounded-[4px] bg-[var(--accent-primary-tint)] text-[var(--accent-primary)] font-mono text-[10.5px] font-semibold">01</span>
                   <span class="font-medium text-[var(--text-primary)]">画师串</span>
                   <span id="block-artist-count" class="font-mono text-[11px] text-[var(--text-muted)]">0</span>
                 </div>
@@ -459,7 +459,7 @@
             <div id="block-card-character" class="rounded-[8px] pt-2 border-t border-[var(--border-hairline)] space-y-1.5">
               <div class="flex items-center justify-between gap-1 text-[12px]">
                 <div class="inline-flex items-center gap-1.5">
-                  <span class="px-1.5 py-0.2 rounded-[4px] bg-[var(--accent-primary-tint)] text-[var(--accent-primary)] font-mono text-[10.5px] font-semibold">02</span>
+                  <span class="px-1.5 py-[1px] rounded-[4px] bg-[var(--accent-primary-tint)] text-[var(--accent-primary)] font-mono text-[10.5px] font-semibold">02</span>
                   <span class="font-medium text-[var(--text-primary)]">主体与角色</span>
                   <span id="block-character-count" class="font-mono text-[11px] text-[var(--text-muted)]">0</span>
                 </div>
@@ -475,7 +475,7 @@
             <div id="block-card-lighting" class="rounded-[8px] pt-2 border-t border-[var(--border-hairline)] space-y-1.5">
               <div class="flex items-center justify-between gap-1 text-[12px]">
                 <div class="inline-flex items-center gap-1.5">
-                  <span class="px-1.5 py-0.2 rounded-[4px] bg-[var(--accent-primary-tint)] text-[var(--accent-primary)] font-mono text-[10.5px] font-semibold">03</span>
+                  <span class="px-1.5 py-[1px] rounded-[4px] bg-[var(--accent-primary-tint)] text-[var(--accent-primary)] font-mono text-[10.5px] font-semibold">03</span>
                   <span class="font-medium text-[var(--text-primary)]">光影与场景</span>
                   <span id="block-lighting-count" class="font-mono text-[11px] text-[var(--text-muted)]">0</span>
                 </div>
@@ -490,7 +490,7 @@
             <div id="block-card-negative" class="rounded-[8px] pt-2 border-t border-[var(--border-hairline)] space-y-1.5">
               <div class="flex items-center justify-between gap-1 text-[12px]">
                 <div class="inline-flex items-center gap-1.5">
-                  <span class="px-1.5 py-0.2 rounded-[4px] ui-badge font-mono text-[10.5px] font-semibold text-[var(--text-muted)]">04</span>
+                  <span class="px-1.5 py-[1px] rounded-[4px] ui-badge font-mono text-[10.5px] font-semibold text-[var(--text-muted)]">04</span>
                   <span class="font-medium text-[var(--text-primary)]">负面规避 (UC)</span>
                   <span id="block-negative-count" class="font-mono text-[11px] text-[var(--text-muted)]">0</span>
                 </div>
@@ -1871,8 +1871,8 @@
       </div>
       <div id="inspect-png-summary" class="rounded-[10px] ui-subgroup p-3 space-y-1 max-h-48 overflow-y-auto custom-scroll font-mono text-[12.5px]"></div>
       <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
-        <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restore-chk-prompt" checked /> 正向提示词</label>
-        <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restore-chk-artist-only" /> 仅提取画师串</label>
+        <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restore-chk-prompt" checked onchange="if(this.checked){const a=document.getElementById('restore-chk-artist-only');if(a)a.checked=false;}" /> 正向提示词</label>
+        <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restore-chk-artist-only" onchange="if(this.checked){const p=document.getElementById('restore-chk-prompt');if(p)p.checked=false;}" /> 仅提取画师串</label>
         <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restore-chk-uc" checked /> 负面提示词 (UC)</label>
         <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restore-chk-params" checked /> 模型/采样器/CFG</label>
         <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restore-chk-seed" checked /> 锁定 Seed</label>
@@ -1971,7 +1971,7 @@
     </div>
   </div>
 
-  <div id="lightbox-modal" class="hidden fixed inset-0 z-50 bg-black/88 backdrop-blur-md flex flex-col p-4">
+  <div id="lightbox-modal" class="hidden fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex flex-col p-4">
     <div class="flex items-center justify-between gap-2 pb-3 text-[13px] text-white">
       <div id="lightbox-caption" class="font-mono text-[12.5px] truncate opacity-85"></div>
       <div class="flex items-center gap-2 shrink-0">

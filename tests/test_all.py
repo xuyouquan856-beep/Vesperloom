@@ -1124,6 +1124,14 @@ def test_offline_assets_cache_headers_and_backup_restore():
         assert res_replace["ok"] is True
         assert len(db_mod.list_artists()) == 1
         assert len(bm.list_local_snapshots()) == 2
+
+        # Guard: replace mode must refuse empty artists list to prevent accidental wipe
+        empty_artists_backup = json.dumps({"schema_version": 1, "artists": []}).encode("utf-8")
+        try:
+            bm.restore_backup_bytes(empty_artists_backup, "empty.json", mode="replace", create_safety_snapshot=False)
+            assert False, "Expected ValueError when replacing with empty artists"
+        except ValueError:
+            pass
     finally:
         db_mod.DB_PATH = orig_db
         bm.BACKUPS_DIR = orig_bak
