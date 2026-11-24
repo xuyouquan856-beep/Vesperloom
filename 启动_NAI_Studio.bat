@@ -1,7 +1,7 @@
 @echo off
 setlocal enabledelayedexpansion
 chcp 65001 >nul
-title NAI Studio — Obsidian Atelier 个人创作工作台
+title NAI Studio - Obsidian Atelier
 
 set "ROOT_DIR=%~dp0"
 if "%ROOT_DIR:~-1%"=="\" set "ROOT_DIR=%ROOT_DIR:~0,-1%"
@@ -26,20 +26,34 @@ if %errorlevel%==0 (
   exit /b 0
 )
 
-REM 自动定位 Python 解释器（优先虚拟环境 -> PATH -> 本机默认路径）
+REM 自动定位真正安装了 uvicorn + fastapi 的 Python（跳过 WindowsApps 占位符与其他无关 venv）
 set "PY_EXE="
-if exist "%ROOT_DIR%\.venv\Scripts\python.exe" set "PY_EXE=%ROOT_DIR%\.venv\Scripts\python.exe"
-if not defined PY_EXE if exist "%ROOT_DIR%\venv\Scripts\python.exe" set "PY_EXE=%ROOT_DIR%\venv\Scripts\python.exe"
-if not defined PY_EXE (
-  for /f "delims=" %%P in ('where python 2^>nul') do (
-    if not defined PY_EXE set "PY_EXE=%%P"
+for %%C in (
+  "%ROOT_DIR%\.venv\Scripts\python.exe"
+  "%ROOT_DIR%\venv\Scripts\python.exe"
+  "C:\Users\21815\AppData\Local\Python\bin\python.exe"
+) do (
+  if not defined PY_EXE if exist "%%~C" (
+    "%%~C" -c "import uvicorn, fastapi" >nul 2>&1
+    if !errorlevel!==0 set "PY_EXE=%%~C"
   )
 )
-if not defined PY_EXE if exist "C:\Users\21815\AppData\Local\Python\bin\python.exe" (
-  set "PY_EXE=C:\Users\21815\AppData\Local\Python\bin\python.exe"
-)
+
 if not defined PY_EXE (
-  echo [错误] 未找到可用的 Python 解释器，请安装 Python 3.10+ 或创建 .venv 后重试。
+  for /f "delims=" %%P in ('where python 2^>nul') do (
+    if not defined PY_EXE (
+      echo "%%P" | findstr /I "WindowsApps" >nul
+      if !errorlevel! neq 0 (
+        "%%P" -c "import uvicorn, fastapi" >nul 2>&1
+        if !errorlevel!==0 set "PY_EXE=%%P"
+      )
+    )
+  )
+)
+
+if not defined PY_EXE (
+  echo [错误] 未找到已安装 uvicorn 与 fastapi 的 Python 解释器。
+  echo 请运行: pip install -r requirements.txt
   pause
   exit /b 1
 )
@@ -53,3 +67,8 @@ echo ========================================================
 
 start "" cmd /c "timeout /t 2 >nul & (start msedge --app=%URL% 2>nul || start %URL%)"
 "%PY_EXE%" -m uvicorn backend.app:app --host 127.0.0.1 --port %PORT%
+if errorlevel 1 (
+  echo.
+  echo [错误] NAI Studio 启动失败，请查看上方报错信息。
+  pause
+)
