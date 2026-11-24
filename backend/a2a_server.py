@@ -389,7 +389,7 @@ async def run_delegated_art_task(
         "\n\n[外部 Agent 委派约束]"
         f"\n- 目标画幅：{w}x{h}，目标模型：{spec['short_name']} ({spec['id']})"
         f"\n- 本次允许直接生图：{'是（最多 ' + str(max_images) + ' 张）' if effective_allow_gen else '否（仅构思配方与提案，不要触发生图）'}"
-        "\n- 请优先调用 patch_prompt_blocks 写入完整四区块提示词；若允许直接生图且需求明确，请调用 trigger_generate。"
+        "\n- 请优先调用 patch_prompt_blocks 写入完整四区块提示词；若允许直接生图且需求明确，请调用 trigger_generate_image。"
     )
 
     llm_ready = bool(str(cfg.get("llm_api_key") or "").strip())
@@ -449,13 +449,17 @@ async def run_delegated_art_task(
                             blocks[k] = str(payload["blocks"][k] or "").strip()
                         elif k in payload:
                             blocks[k] = str(payload[k] or "").strip()
-                elif atype == "update_params":
+                elif atype in ("set_workbench_params", "update_params"):
                     for pk in ("model", "width", "height", "steps", "scale", "sampler", "scheduler", "seed"):
                         if payload.get(pk) is not None:
                             params[pk] = payload[pk]
+                elif atype == "load_oc_character":
+                    card_obj = payload.get("card") if isinstance(payload.get("card"), dict) else {}
+                    if payload.get("apply_to_character_block", True) and card_obj.get("prompt"):
+                        blocks["character"] = str(card_obj["prompt"]).strip()
                 elif atype == "proposals":
                     proposals = list(payload.get("proposals") or [])
-                elif atype == "trigger_generate":
+                elif atype in ("trigger_generate_image", "trigger_generate"):
                     wants_generate = True
             elif etype == "error":
                 final_text = final_text or f"内置 Agent 调用受限：{ev.get('message') or '未知错误'}"

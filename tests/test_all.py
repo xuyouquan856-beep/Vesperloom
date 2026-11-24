@@ -1457,6 +1457,118 @@ def test_stage3_streamable_http_mcp_and_a2a_server(tmp_path, monkeypatch):
     assert client.post("/mcp", headers=auth_h, json={"jsonrpc": "2.0", "id": 10, "method": "ping"}).status_code == 200
     assert client.post("/a2a", headers=auth_h, json={"jsonrpc": "2.0", "id": 11, "method": "tasks/list"}).status_code == 200
 
+    # 6. Regression test: trigger_generate_image + set_workbench_params SSE events must actually invoke generate_image & return FilePart artifact
+    cfg_with_keys = {
+        **base_cfg,
+        "api_token": "fake-nai-token-for-mock",
+        "llm_api_key": "fake-llm-key-for-mock",
+        "external_agent_auth_enabled": False,
+    }
+    cfg_mod.save_config(cfg_with_keys)
+
+    async def _fake_studio_stream(**kwargs):
+        def _sse(et, pl):
+            return f"event: {et}\ndata: {json.dumps(pl, ensure_ascii=False)}\n\n"
+        yield _sse("tool_start", {"name": "patch_prompt_blocks"})
+        yield _sse("ui_action", {
+            "action": {
+                "type": "patch_prompt_blocks",
+                "payload": {
+                    "blocks": {
+                        "artist": "0.8::artist:rella::",
+                        "character": "red panda, drinking tea, rainy window",
+                        "lighting": "warm indoor lighting, rain drops",
+                        "negative": "lowres, worst quality",
+                    }
+                },
+            }
+        })
+        yield _sse("ui_action", {
+            "action": {
+                "type": "set_workbench_params",
+                "payload": {"model": "nai-diffusion-4-5-full", "width": 1024, "height": 1024, "steps": 28, "scale": 5.0},
+            }
+        })
+        yield _sse("ui_action", {"action": {"type": "trigger_generate_image", "payload": {"reason": "生成最终作品"}}})
+        yield _sse("delta", {"text": "已为你完成配词并触发出图。"})
+
+    gen_calls = []
+
+    async def _fake_generate_image(req, cfg=None):
+        gen_calls.append(dict(req))
+        return {
+            "id": 999,
+            "filename": "mock_panda.png",
+            "rel_path": "2026-11-24/mock_panda.png",
+            "seed": 424242,
+            "width": req["width"],
+            "height": req["height"],
+            "model": req["model"],
+        }
+
+    monkeypatch.setattr(a2a_mod, "stream_studio_agent", _fake_studio_stream)
+    monkeypatch.setattr(a2a_mod, "generate_image", _fake_generate_image)
+
+    # 6a. Via A2A message/send (plan_only=False) -> MUST generate image & attach generated_image FilePart artifact
+    r_a2a_gen = client.post(
+        "/a2a",
+        json={
+            "jsonrpc": "2.0",
+            "id": "a2a-gen-1",
+            "method": "message/send",
+            "params": {
+                "message": {
+                    "role": "user",
+                    "parts": [{"kind": "text", "text": "画一只在雨窗边喝茶的小熊猫，直接生图"}],
+                }
+            },
+        },
+    )
+    assert r_a2a_gen.status_code == 200
+    t_gen = r_a2a_gen.json()["result"]
+    assert t_gen["status"]["state"] == "completed"
+    assert t_gen["metadata"]["generated_count"] == 1
+    assert any(a["name"] == "generated_image" for a in t_gen["artifacts"])
+    assert len(gen_calls) == 1
+    assert gen_calls[0]["model"] == "nai-diffusion-4-5-full" and gen_calls[0]["width"] == 1024
+
+    # 6b. Via MCP nai_delegate_art_task (plan_only=False) -> MUST also generate image
+    r_mcp_gen = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 99,
+            "method": "tools/call",
+            "params": {
+                "name": "nai_delegate_art_task",
+                "arguments": {"brief": "画一只在雨窗边喝茶的小熊猫，直接生图", "plan_only": False},
+            },
+        },
+    )
+    assert r_mcp_gen.status_code == 200
+    mcp_gen_data = json.loads(r_mcp_gen.json()["result"]["content"][0]["text"])
+    assert len(mcp_gen_data["generated_images"]) == 1
+    assert mcp_gen_data["generated_images"][0]["seed"] == 424242
+    assert len(gen_calls) == 2
+
+    # 6c. plan_only=True MUST NOT call generate_image even if agent emits trigger_generate_image
+    r_plan = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 100,
+            "method": "tools/call",
+            "params": {
+                "name": "nai_delegate_art_task",
+                "arguments": {"brief": "画一只在雨窗边喝茶的小熊猫，只出方案", "plan_only": True},
+            },
+        },
+    )
+    assert r_plan.status_code == 200
+    assert len(json.loads(r_plan.json()["result"]["content"][0]["text"])["generated_images"]) == 0
+    assert len(gen_calls) == 2
+
+
 
 
 
