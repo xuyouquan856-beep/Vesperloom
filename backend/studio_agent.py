@@ -385,6 +385,27 @@ STUDIO_AGENT_TOOLS: List[Dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "lookup_danbooru_character",
+            "description": "Query Danbooru public API for an anime/game character or series (supports Romaji/English/Japanese names like 'tachibana_sherry', '橘シェリー', 'mahou_shoujo_no_majo_saiban') to retrieve the exact canonical character tag, copyright tag, wiki excerpt, and top recurring real appearance/costume tags from high-score artworks. ALWAYS call this when drawing a specific anime/game character so you never hallucinate hair color or outfit.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "character_query": {
+                        "type": "string",
+                        "description": "Character name in Romaji, English, or Japanese (e.g. 'tachibana_sherry' or '橘シェリー').",
+                    },
+                    "series_query": {
+                        "type": "string",
+                        "description": "Optional anime/game title in Romaji, English, or Japanese (e.g. 'mahou_shoujo_no_majo_saiban').",
+                    },
+                },
+                "required": ["character_query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "inspect_artist_previews",
             "description": "Visually inspect generated local artist preview cards (up to 6 artist_ids per call) using multimodal vision to analyze brushwork, color palette, lighting, and recommend category/desc/tags.",
             "parameters": {
@@ -1650,6 +1671,149 @@ async def _lookup_danbooru_artists_async(tags: List[str]) -> Tuple[str, str, Opt
         )
 
 
+async def _lookup_danbooru_character_async(character_query: str, series_query: str = "") -> Tuple[str, str, Optional[Dict[str, Any]]]:
+    cq = str(character_query or "").strip()
+    sq = str(series_query or "").strip()
+    if not cq:
+        return json.dumps({"ok": False, "error": "character_query 不能为空"}, ensure_ascii=False), "缺少角色名", None
+
+    def _to_slug(txt: str) -> str:
+        s = txt.strip().lower().replace(" ", "_")
+        return re.sub(r"[^\w\u3040-\u30ff\u4e00-\u9fff()_-]", "", s)
+
+    c_slug = _to_slug(cq)
+    s_slug = _to_slug(sq) if sq else ""
+    matched_chars: List[Dict[str, Any]] = []
+    matched_series: List[Dict[str, Any]] = []
+    wiki_excerpt = ""
+    top_appearance_tags: List[str] = []
+
+    try:
+        async with httpx.AsyncClient(
+            timeout=15.0,
+            headers={"User-Agent": "NAI-Studio-Agent/3.0"},
+            follow_redirects=True,
+        ) as dclient:
+            tasks = [
+                dclient.get(
+                    "https://danbooru.donmai.us/tags.json",
+                    params={"search[category]": 4, "search[name_matches]": f"*{c_slug}*", "search[order]": "count", "limit": 6},
+                ),
+                dclient.get(
+                    "https://danbooru.donmai.us/wiki_pages.json",
+                    params={"search[other_names_match]": cq, "limit": 5},
+                ),
+            ]
+            if s_slug:
+                tasks.append(
+                    dclient.get(
+                        "https://danbooru.donmai.us/tags.json",
+                        params={"search[category]": 3, "search[name_matches]": f"*{s_slug}*", "search[order]": "count", "limit": 4},
+                    )
+                )
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            seen_c = set()
+            if isinstance(results[0], httpx.Response) and results[0].status_code == 200:
+                for row in (results[0].json() or []):
+                    nm = str(row.get("name") or "")
+                    if nm and nm not in seen_c:
+                        seen_c.add(nm)
+                        matched_chars.append({"tag": nm.replace("_", " "), "raw_tag": nm, "post_count": int(row.get("post_count") or 0)})
+
+            # Japanese / alias match via wiki_pages other_names
+            if isinstance(results[1], httpx.Response) and results[1].status_code == 200:
+                for w in (results[1].json() or []):
+                    title = str(w.get("title") or "")
+                    if title and title not in seen_c:
+                        seen_c.add(title)
+                        matched_chars.append({"tag": title.replace("_", " "), "raw_tag": title, "post_count": 0, "from_wiki": True})
+                    if not wiki_excerpt and w.get("body"):
+                        body = re.sub(r"\[\[([^\]|]+)(?:\|[^\]]+)?\]\]", r"\1", str(w["body"]))
+                        body = re.sub(r"https?://\S+", "", body)
+                        wiki_excerpt = re.sub(r"\s+", " ", body).strip()[:280]
+
+            if len(results) > 2 and isinstance(results[2], httpx.Response) and results[2].status_code == 200:
+                for row in (results[2].json() or []):
+                    nm = str(row.get("name") or "")
+                    if nm:
+                        matched_series.append({"tag": nm.replace("_", " "), "raw_tag": nm, "post_count": int(row.get("post_count") or 0)})
+
+            # Also try reversed romaji order (e.g. "sherry_tachibana" vs "tachibana_sherry") if nothing found
+            if not matched_chars and "_" in c_slug:
+                parts = [p for p in c_slug.split("_") if p]
+                if len(parts) == 2:
+                    rev = f"{parts[1]}_{parts[0]}"
+                    r_rev = await dclient.get(
+                        "https://danbooru.donmai.us/tags.json",
+                        params={"search[category]": 4, "search[name_matches]": f"*{rev}*", "search[order]": "count", "limit": 5},
+                    )
+                    if r_rev.status_code == 200:
+                        for row in (r_rev.json() or []):
+                            nm = str(row.get("name") or "")
+                            if nm and nm not in seen_c:
+                                seen_c.add(nm)
+                                matched_chars.append({"tag": nm.replace("_", " "), "raw_tag": nm, "post_count": int(row.get("post_count") or 0)})
+
+            # Fetch real appearance/costume tags from top-scored posts for the primary matched character
+            primary_raw = matched_chars[0]["raw_tag"] if matched_chars else ""
+            if primary_raw:
+                r_posts, r_wiki = await asyncio.gather(
+                    dclient.get(
+                        "https://danbooru.donmai.us/posts.json",
+                        params={"tags": f"{primary_raw} order:score", "limit": 6, "only": "tag_string_general,tag_string_copyright"},
+                    ),
+                    dclient.get(
+                        "https://danbooru.donmai.us/wiki_pages.json",
+                        params={"search[title]": primary_raw, "limit": 1},
+                    ),
+                    return_exceptions=True,
+                )
+                if isinstance(r_wiki, httpx.Response) and r_wiki.status_code == 200 and not wiki_excerpt:
+                    arr = r_wiki.json() or []
+                    if arr and arr[0].get("body"):
+                        body = re.sub(r"\[\[([^\]|]+)(?:\|[^\]]+)?\]\]", r"\1", str(arr[0]["body"]))
+                        body = re.sub(r"https?://\S+", "", body)
+                        wiki_excerpt = re.sub(r"\s+", " ", body).strip()[:280]
+                if isinstance(r_posts, httpx.Response) and r_posts.status_code == 200:
+                    posts = r_posts.json() or []
+                    freq: Dict[str, int] = {}
+                    c_freq: Dict[str, int] = {}
+                    for p in posts:
+                        for t in str(p.get("tag_string_general") or "").split():
+                            if t and t not in _DANBOORU_GENERIC_IGNORE:
+                                freq[t] = freq.get(t, 0) + 1
+                        for ct in str(p.get("tag_string_copyright") or "").split():
+                            if ct:
+                                c_freq[ct] = c_freq.get(ct, 0) + 1
+                    ranked = sorted(freq.items(), key=lambda kv: (-kv[1], kv[0]))
+                    top_appearance_tags = [k.replace("_", " ") for k, _ in ranked[:18]]
+                    if not matched_series and c_freq:
+                        top_c = sorted(c_freq.items(), key=lambda kv: -kv[1])[:3]
+                        matched_series = [{"tag": k.replace("_", " "), "raw_tag": k, "post_count": v} for k, v in top_c]
+
+        payload = {
+            "ok": True,
+            "query": {"character": cq, "series": sq},
+            "matched_characters": matched_chars[:6],
+            "matched_series": matched_series[:4],
+            "top_appearance_tags": top_appearance_tags,
+            "wiki_excerpt": wiki_excerpt,
+        }
+        hit_label = matched_chars[0]["tag"] if matched_chars else "未命中"
+        return (
+            json.dumps(payload, ensure_ascii=False),
+            f"Danbooru 角色考据({hit_label}, {len(top_appearance_tags)} 项实测特征)",
+            None,
+        )
+    except Exception as exc:
+        return (
+            json.dumps({"ok": False, "error": f"Danbooru 角色查询失败: {exc}"}, ensure_ascii=False),
+            "Danbooru 角色查询失败",
+            None,
+        )
+
+
 def _encode_pil_to_jpeg_data_url(im: Image.Image, max_dim: int = 512) -> str:
     rgb = im.convert("RGB")
     rgb.thumbnail((max_dim, max_dim))
@@ -1898,6 +2062,11 @@ async def _execute_studio_tool_async(
 ) -> Tuple[str, str, Optional[Dict[str, Any]]]:
     if name == "lookup_danbooru_artists":
         return await _lookup_danbooru_artists_async(args.get("tags") or [])
+    if name == "lookup_danbooru_character":
+        return await _lookup_danbooru_character_async(
+            str(args.get("character_query") or ""),
+            str(args.get("series_query") or ""),
+        )
     if name == "inspect_artist_previews":
         return await _inspect_artist_previews_async(args.get("artist_ids") or [], llm_client, endpoint, headers, llm_model)
     if name == "inspect_canvas_stage":

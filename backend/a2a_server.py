@@ -191,6 +191,7 @@ description: Delegate anime/illustration image creation, prompt crafting, and ar
 - Streamable HTTP MCP: `{root}/mcp`
 
 ## 4. 验收与防失控约定
+- **严禁凭记忆脑补角色外貌**：当用户只给出作品名/角色名（如“魔法少女的魔女审判里的橘雪莉”）时，不要自己编造发色、瞳色或服装细节，直接原样把角色名与用户要求传给 NAI Studio，由 NAI Studio 自行查 Danbooru 角色词条并考据还原。
 - 收到返回的 `artifacts` 后，优先检查其中的 `file_path`（本地 PNG 路径）与 `recipe`（Prompt/Seed/参数）。
 - 如果返回状态为 `input-required`，把追问转达给用户或补充明确约束后再带着同一 `context_id` 继续调用。
 """
@@ -386,10 +387,12 @@ async def run_delegated_art_task(
     }
 
     directive_suffix = (
-        "\n\n[外部 Agent 委派约束]"
+        "\n\n[外部 Agent 委派约束 — 请严格遵守]"
         f"\n- 目标画幅：{w}x{h}，目标模型：{spec['short_name']} ({spec['id']})"
         f"\n- 本次允许直接生图：{'是（最多 ' + str(max_images) + ' 张）' if effective_allow_gen else '否（仅构思配方与提案，不要触发生图）'}"
-        "\n- 请优先调用 patch_prompt_blocks 写入完整四区块提示词；若允许直接生图且需求明确，请调用 trigger_generate_image。"
+        "\n- **角色考据铁律**：若需求涉及具体动漫/游戏角色，必须先调用 `lookup_danbooru_character` 查询官方 Danbooru 角色 Tag、作品 Tag 与高分作品真实外貌/服装特征，禁止凭空编造。"
+        "\n- **画风美学铁律**：除非需求明确要求“不加画师/纯白模”，否则必须调用 `search_artist_catalog` 从本地画师图鉴挑选 1~2 位契合题材与氛围的高质量画师并合理配权写入 `artist` 区块（严禁将 `artist` 区块留空导致画风平庸）。"
+        "\n- **无头出图时序**：写入完整四区块并设好参数后，若允许直接生图请调用 `trigger_generate_image` 后直接结束并给出简洁中文总结（不要调用 `inspect_canvas_stage`，后端会在你结束后立即执行真实出图并交付 Artifact）；不要输出 `[QUICK_REPLIES: ...]`。"
     )
 
     llm_ready = bool(str(cfg.get("llm_api_key") or "").strip())
@@ -507,6 +510,11 @@ async def run_delegated_art_task(
         else:
             await _emit("working", f"正在调用 NovelAI ({fin_model}, {fin_w}x{fin_h}) 生成作品...")
             try:
+                # Prevent double-stacking quality tags & Heavy UC when Studio Agent already wrote them
+                pos_lower = combined_prompt.lower()
+                uc_lower = combined_uc.lower()
+                has_quality_tags = any(q in pos_lower for q in ("masterpiece", "very aesthetic", "best quality"))
+                has_heavy_uc = ("lowres" in uc_lower) and ("worst quality" in uc_lower)
                 gen_res = await generate_image(
                     {
                         "prompt": combined_prompt,
@@ -519,8 +527,8 @@ async def run_delegated_art_task(
                         "sampler": str(params.get("sampler") or "k_euler_ancestral"),
                         "scheduler": str(params.get("scheduler") or "karras"),
                         "seed": int(params.get("seed") or 0),
-                        "quality_toggle": True,
-                        "uc_preset": 0,
+                        "quality_toggle": not has_quality_tags,
+                        "uc_preset": 3 if has_heavy_uc else 0,
                         "opus_free_guard": opus_guard,
                     }
                 )
@@ -581,7 +589,7 @@ async def run_delegated_art_task(
         }
     )
 
-    summary_text = final_text.strip() or "已完成创作规划并生成结构化配方。"
+    summary_text = re.sub(r"\n?\[QUICK_REPLIES:[^\]]*\]\s*$", "", final_text.strip()).strip() or "已完成创作规划并生成结构化配方。"
     history = [
         user_msg_obj,
         {"role": "agent", "messageId": f"agt_{uuid.uuid4().hex[:10]}", "parts": [{"kind": "text", "text": summary_text}]},

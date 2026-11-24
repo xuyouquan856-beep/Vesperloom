@@ -604,6 +604,7 @@ def test_agent_v2_skills_and_library_curation_tools(tmp_path, monkeypatch):
         "manage_mix_presets",
         "manage_gallery_items",
         "lookup_danbooru_artists",
+        "lookup_danbooru_character",
         "inspect_artist_previews",
         "inspect_canvas_stage",
         "inspect_gallery_images",
@@ -612,7 +613,7 @@ def test_agent_v2_skills_and_library_curation_tools(tmp_path, monkeypatch):
         "save_oc_character",
         "run_xyz_matrix",
     }.issubset(tool_names)
-    assert len(STUDIO_AGENT_TOOLS) == 25
+    assert len(STUDIO_AGENT_TOOLS) == 26
 
     skills = sk_mod.list_skills()
     names = {s["name"] for s in skills}
@@ -1200,8 +1201,9 @@ def test_studio_agent_v3_memory_modes_mentions_proposals_and_compact(tmp_path, m
     # 2. Ask vs Agent tool gating
     ask_names = {t["function"]["name"] for t in sa_mod.get_tools_for_mode("ask")}
     agent_names = {t["function"]["name"] for t in sa_mod.get_tools_for_mode("agent")}
-    assert len(agent_names) == 25
+    assert len(agent_names) == 26
     assert ask_names.isdisjoint(sa_mod.MUTATING_AGENT_TOOLS)
+    assert "lookup_danbooru_character" in ask_names
     assert "present_creative_proposals" in ask_names
     assert "get_current_model_rules" in ask_names
     assert "patch_prompt_blocks" not in ask_names
