@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>NAI Studio — 个人创作工作台</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23111318'/%3E%3Cpath d='M20 44V20l24 24V20' stroke='%23ffffff' stroke-width='6' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E" />
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="/static/styles.css?v=p2-25" />
+  <link rel="stylesheet" href="/static/tailwind.generated.css" />
+  <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body class="lg:h-screen min-h-screen flex flex-col lg:overflow-hidden overflow-y-auto">
 
@@ -1213,6 +1213,10 @@
           <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-shield"/></svg>
           <span>NovelAI 接口与存储</span>
         </button>
+        <button type="button" data-sec="sec-settings-backup" onclick="scrollToSettingsSection('sec-settings-backup', this)" class="settings-nav-btn w-full text-left flex items-center gap-2 px-2.5 py-1.5 rounded-[7px] text-[12.5px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subgroup)] border border-transparent transition-colors">
+          <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-folder"/></svg>
+          <span>数据备份与迁移</span>
+        </button>
         <button type="button" data-sec="sec-settings-mcp" onclick="scrollToSettingsSection('sec-settings-mcp', this)" class="settings-nav-btn w-full text-left flex items-center gap-2 px-2.5 py-1.5 rounded-[7px] text-[12.5px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subgroup)] border border-transparent transition-colors">
           <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-layers"/></svg>
           <span>原生 MCP 控制台</span>
@@ -1358,6 +1362,70 @@
           <div class="flex gap-2 pt-1">
             <button onclick="saveSettingsConfig()" class="liquid-cta px-4 py-1.5 rounded-[6px] text-[12.5px] font-semibold">保存并验证连接</button>
             <button onclick="refreshAccountStatus(true)" class="spring-btn px-3 py-1.5 rounded-[6px] ui-btn text-[12.5px]">刷新订阅与算力</button>
+          </div>
+        </div>
+
+        <div id="sec-settings-backup" class="min-w-0 studio-panel rounded-[12px] border border-[var(--border-hairline)] p-5 space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-[var(--border-hairline)]">
+            <div class="min-w-0">
+              <div class="flex flex-wrap items-center gap-2">
+                <h3 class="ui-title">数据备份、本地快照与无损迁移</h3>
+                <span id="backup-summary-pill" class="ui-badge px-2 py-0.5 rounded-[6px] text-[11px] font-mono text-[var(--text-secondary)]">加载中...</span>
+              </div>
+              <p class="text-[12px] text-[var(--text-muted)] mt-0.5">涵盖画师档案、OC 角色卡、混搭方案、词条积木、Wildcards 与 Agent Skills；严格不包含任何 API Key / Token。</p>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2">
+            <button type="button" onclick="downloadStudioBackup('json')" class="spring-btn inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[7px] ui-btn text-[12px] font-medium">
+              <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-download"/></svg>
+              <span>导出轻量备份 (.json)</span>
+            </button>
+            <button type="button" onclick="downloadStudioBackup('zip')" class="spring-btn inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[7px] ui-btn-accent text-[12px] font-medium">
+              <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-folder"/></svg>
+              <span>导出完整迁移包 (.zip 含预览图)</span>
+            </button>
+            <button id="backup-snapshot-btn" type="button" onclick="createBackupSnapshotNow()" class="spring-btn inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[7px] ui-btn text-[12px]">
+              <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-history"/></svg>
+              <span>立即创建本地快照</span>
+            </button>
+          </div>
+
+          <div class="rounded-[10px] ui-subgroup p-3.5 space-y-2.5 border border-[var(--border-hairline)]">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div class="text-[12.5px] font-medium">从备份文件恢复（恢复前自动创建安全快照）</div>
+              <label class="spring-btn inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] ui-btn text-[12px] cursor-pointer">
+                <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-import-img"/></svg>
+                <span>选择 .json / .zip 备份文件</span>
+                <input id="backup-file-input" type="file" accept=".json,.zip" class="hidden" onchange="handleBackupFileSelected(event)" />
+              </label>
+            </div>
+            <div id="backup-preview-box" class="hidden rounded-[8px] ui-well p-3 space-y-2.5 text-[12px]">
+              <div id="backup-preview-text" class="font-mono text-[11.5px] text-[var(--text-primary)] leading-relaxed"></div>
+              <div class="flex flex-wrap items-center gap-3 pt-1 border-t border-[var(--border-hairline)]">
+                <label class="inline-flex items-center gap-1.5 cursor-pointer text-[12px]">
+                  <input type="radio" name="backup-restore-mode" value="merge" checked />
+                  <span>智能合并（保留现有数据）</span>
+                </label>
+                <label class="inline-flex items-center gap-1.5 cursor-pointer text-[12px]">
+                  <input type="radio" name="backup-restore-mode" value="replace" />
+                  <span>完整覆盖（以备份为准）</span>
+                </label>
+                <label class="inline-flex items-center gap-1.5 cursor-pointer text-[12px]">
+                  <input id="backup-restore-prefs-chk" type="checkbox" />
+                  <span>同时恢复界面偏好</span>
+                </label>
+                <button id="backup-confirm-restore-btn" type="button" onclick="confirmBackupRestore()" class="liquid-cta spring-btn px-3 py-1 rounded-[6px] text-[12px] font-semibold ml-auto">确认恢复备份</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-1.5 pt-1">
+            <div class="flex items-center justify-between text-[12px] text-[var(--text-muted)]">
+              <span>本地快照记录 (<code>D:\NAI-Studio\data\backups</code>)</span>
+              <button type="button" onclick="loadBackupStatus()" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn-ghost text-[11px]">刷新</button>
+            </div>
+            <div id="backup-snapshots-list" class="space-y-1.5 max-h-44 overflow-y-auto custom-scroll"></div>
           </div>
         </div>
 
@@ -2088,7 +2156,7 @@
 
   <div id="studio-tooltip" role="tooltip" aria-hidden="true"></div>
 
-  <script src="/static/app.js?v=p2-25"></script>
-  <script src="/static/agent_window.js?v=p2-25"></script>
+  <script src="/static/app.js"></script>
+  <script src="/static/agent_window.js"></script>
 </body>
 </html>

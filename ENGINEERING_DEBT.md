@@ -4,33 +4,21 @@
 
 ---
 
-## 1. 前端静态资源缓存失效机制（硬编码版本参数）
+## 1. 前端静态资源缓存失效机制（已解决）
 
-- **现状**：[frontend/index.html](file:///D:/NAI-Studio/frontend/index.html) 中手动使用硬编码查询参数（当前为 `?v=p2-18`）加载 `/static/styles.css` 与 `/static/app.js`，FastAPI 仅通过默认 `StaticFiles` 挂载 `/static`，浏览器易命中强缓存或 `304 Not Modified`。
-- **影响**：每次更新 `styles.css` 或 `app.js` 均需人工同步修改 `index.html` 的 `?v=...` 参数；遗漏时本地 Edge / Chrome 会静默加载旧前端资源。
-- **建议方案**：后续由后端在渲染入口注入基于文件 mtime / SHA-256 短哈希的版本参数，或对 `/static/*.css`、`/static/*.js` 设置 `Cache-Control: no-cache`（协商缓存 / ETag 验证）。
+- **解决状态**：已通过 [backend/app.py](file:///D:/NAI-Studio/backend/app.py) 实现 `NoCacheStaticFiles`（对 `/static/*.css`、`/static/*.js` 返回 `Cache-Control: no-cache`）并在 `GET /` 响应时自动注入文件 `mtime` 短哈希（`?v=<hex>`），彻底消除手动维护 `?v=...` 版本号与旧缓存问题。
 
 ---
 
-## 2. Tailwind Play CDN 运行时依赖与离线可用性
+## 2. Tailwind Play CDN 运行时依赖与离线可用性（已解决）
 
-- **现状**：[frontend/index.html](file:///D:/NAI-Studio/frontend/index.html) 第 8 行直接通过 `<script src="https://cdn.tailwindcss.com"></script>` 在浏览器端运行时扫描 DOM 并动态注入 `<style>` 规则。
-- **影响**：
-  - 强依赖外网 CDN 可达性；无网或代理受限环境下页面排版会完全退化。
-  - 首屏存在运行时 CSS 编译开销，且动态模板字符串（[frontend/app.js](file:///D:/NAI-Studio/frontend/app.js)）中的类名需依赖 Play CDN `MutationObserver` 实时生成。
-  - 与 `styles.css` 的原生语义类混用，部分间距、字号等布局工具类仍依赖 CDN 运行时扫描，离线环境下会失去网格/响应式布局能力。
-- **建议方案**：在确认合适阶段时改为预编译产出的本地静态 `tailwind.generated.css`（无需引入重型前端框架），减少外网 CDN 强依赖。
+- **解决状态**：已新增 [tailwind.config.js](file:///D:/NAI-Studio/tailwind.config.js) 与 [frontend/tailwind.input.css](file:///D:/NAI-Studio/frontend/tailwind.input.css)，预编译产出本地静态精简包 [frontend/tailwind.generated.css](file:///D:/NAI-Studio/frontend/tailwind.generated.css)（~27 KB），并在 [frontend/index.html](file:///D:/NAI-Studio/frontend/index.html) 中彻底移除 `https://cdn.tailwindcss.com`，实现 100% 离线秒开且无首屏布局抖动。
 
 ---
 
-## 3. 缺失 Python / 开发环境依赖清单
+## 3. Python / 开发环境依赖清单与启动脚本健壮性（已解决）
 
-- **现状**：仓库根目录（`D:\NAI-Studio`）缺少 `requirements.txt`、`pyproject.toml` 或锁文件，[启动_NAI_Studio.bat](file:///D:/NAI-Studio/启动_NAI_Studio.bat) 直接调用本机绝对路径 `"C:\Users\21815\AppData\Local\Python\bin\python.exe"`。
-- **观测到的实际第三方依赖**：
-  - 运行时：`fastapi`、`uvicorn`、`httpx`、`pillow`（`PIL`）、`starlette`（FastAPI 传递依赖）
-  - 测试：`pytest`（`tests/test_all.py`）
-- **影响**：更换机器、重建 Python 环境或交由他人部署时，缺乏可复现的环境安装清单与版本约束。
-- **建议方案**：补充 `requirements.txt`（区分运行依赖与测试依赖或提供 `requirements-dev.txt`），并在启动脚本中支持通过 `PATH` / 虚拟环境优先解析 Python 路径。
+- **解决状态**：已补充 [requirements.txt](file:///D:/NAI-Studio/requirements.txt) 与 [requirements-dev.txt](file:///D:/NAI-Studio/requirements-dev.txt)；[启动_NAI_Studio.bat](file:///D:/NAI-Studio/启动_NAI_Studio.bat) 已升级为基于 `%~dp0` 自动探测 `.venv` / `PATH` Python，并在端口 `8780` 已被监听时直接唤起浏览器而不重复启动冲突。
 
 ---
 

@@ -1017,6 +1017,134 @@ def test_mcp_server_stdio_and_api_tools():
     assert by_id[None]["error"]["code"] == -32700
 
 
+def test_offline_assets_cache_headers_and_backup_restore():
+    import os
+    import zipfile
+    import backend.database as db_mod
+    import backend.backup_manager as bm
+    from backend.config import TMP_DIR
+
+    client = TestClient(app)
+
+    # 1. Offline local Tailwind CSS + automatic mtime cache-busting + no-cache headers
+    r_idx = client.get("/")
+    assert r_idx.status_code == 200
+    assert "cdn.tailwindcss.com" not in r_idx.text
+    assert "/static/tailwind.generated.css?v=" in r_idx.text
+    assert "/static/styles.css?v=" in r_idx.text
+    assert "/static/app.js?v=" in r_idx.text
+    assert "no-cache" in r_idx.headers.get("cache-control", "").lower()
+
+    r_tw = client.get("/static/tailwind.generated.css")
+    assert r_tw.status_code == 200
+    assert len(r_tw.content) > 10000
+    assert "no-cache" in r_tw.headers.get("cache-control", "").lower()
+
+    # 2. Backup status & export (strictly zero API secrets in payload)
+    r_stat = client.get("/api/backup/status")
+    assert r_stat.status_code == 200
+    assert r_stat.json()["counts"]["artists"] >= 10
+
+    r_json = client.get("/api/backup/export?format=json")
+    assert r_json.status_code == 200
+    exported_text = r_json.content.decode("utf-8")
+    assert "api_token" not in exported_text
+    assert "llm_api_key" not in exported_text
+    exported_obj = json.loads(exported_text)
+    assert exported_obj["schema_version"] == 1
+    assert len(exported_obj["artists"]) >= 10
+
+    r_zip = client.get("/api/backup/export?format=zip")
+    assert r_zip.status_code == 200
+    with zipfile.ZipFile(io.BytesIO(r_zip.content), "r") as zf:
+        assert "backup.json" in zf.namelist()
+
+    # 3. Preview endpoint (valid JSON & invalid file -> 400)
+    r_prev = client.post(
+        "/api/backup/preview",
+        files={"file": ("test_backup.json", r_json.content, "application/json")},
+    )
+    assert r_prev.status_code == 200
+    assert r_prev.json()["valid"] is True
+    assert r_prev.json()["counts"]["artists"] == len(exported_obj["artists"])
+
+    r_bad = client.post(
+        "/api/backup/preview",
+        files={"file": ("broken.json", b"{not valid", "application/json")},
+    )
+    assert r_bad.status_code == 400
+
+    # 4. Isolated DB round-trip restore (merge + replace + pre-restore safety snapshot)
+    orig_db = db_mod.DB_PATH
+    orig_bak = bm.BACKUPS_DIR
+    tmp_db = TMP_DIR / f"test_backup_restore_{os.getpid()}.db"
+    tmp_bak = TMP_DIR / f"test_backup_snaps_{os.getpid()}"
+    try:
+        if tmp_db.exists():
+            tmp_db.unlink()
+        db_mod.DB_PATH = tmp_db
+        bm.BACKUPS_DIR = tmp_bak
+        tmp_bak.mkdir(parents=True, exist_ok=True)
+        db_mod.init_db()
+
+        sample_backup = json.dumps({
+            "schema_version": 1,
+            "exported_at_iso": "2026-11-24T19:30:00",
+            "artists": [
+                {
+                    "name": "BackupTester",
+                    "tag": "artist:backup_tester_xyz",
+                    "category": "厚涂光影",
+                    "desc": "备份恢复测试画师",
+                    "style_tags": ["厚涂立体", "测试维度"],
+                    "post_count": 321,
+                    "weight_hint": "主用 0.85",
+                    "notes": "完整测试档案",
+                    "favorite": True,
+                    "is_custom": True,
+                }
+            ],
+            "oc_cards": [{"name": "BackupOC", "prompt": "1girl, silver hair", "uc": "lowres"}],
+            "mix_presets": [{"name": "BackupMix", "items": [{"tag": "artist:backup_tester_xyz", "name": "BackupTester", "weight": 0.9}]}],
+            "snippets": [{"label": "BackupSnip", "tags": "cinematic lighting", "cat": "custom"}],
+            "wildcards": [],
+            "skills": [],
+            "preferences": {"theme": "dark"},
+        }, ensure_ascii=False).encode("utf-8")
+
+        res_merge = bm.restore_backup_bytes(sample_backup, "sample.json", mode="merge", create_safety_snapshot=True)
+        assert res_merge["ok"] is True
+        assert res_merge["restored"]["artists"] == 1
+        assert res_merge["restored"]["oc_cards"] == 1
+        assert res_merge["safety_snapshot"] is not None
+        assert any(a["tag"] == "artist:backup_tester_xyz" for a in db_mod.list_artists())
+        assert len(bm.list_local_snapshots()) == 1
+
+        res_replace = bm.restore_backup_bytes(sample_backup, "sample.json", mode="replace", create_safety_snapshot=True)
+        assert res_replace["ok"] is True
+        assert len(db_mod.list_artists()) == 1
+        assert len(bm.list_local_snapshots()) == 2
+    finally:
+        db_mod.DB_PATH = orig_db
+        bm.BACKUPS_DIR = orig_bak
+        if tmp_db.exists():
+            try:
+                tmp_db.unlink()
+            except Exception:
+                pass
+        if tmp_bak.exists():
+            for f in tmp_bak.glob("*"):
+                try:
+                    f.unlink()
+                except Exception:
+                    pass
+            try:
+                tmp_bak.rmdir()
+            except Exception:
+                pass
+
+
+
 
 
 

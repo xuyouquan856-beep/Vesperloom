@@ -2041,6 +2041,11 @@ html.light #lightbox-modal .text-white {
   color: #f8fafc;
 }
 
+/* Utility Guard: .hidden must always win over custom component display rules */
+.hidden {
+  display: none !important;
+}
+
 /* Atomic Single-Frame Theme Switch */
 html.theme-sync,
 html.theme-sync * {

@@ -4828,6 +4828,7 @@ function populateSettingsForm() {
   renderLlmModelSelect();
   updatePromptWorkspaceModeButtons();
   loadMcpConsoleInfo();
+  loadBackupStatus();
 }
 
 function selectLlmModel(val) {
@@ -5144,6 +5145,176 @@ async function saveSettingsConfig() {
       showToast(err.message || "保存配置失败");
     }
   });
+}
+
+let _pendingBackupFile = null;
+
+async function loadBackupStatus() {
+  try {
+    const res = await fetch("/api/backup/status");
+    if (!res.ok) return;
+    const data = await res.json();
+    const c = data.counts || {};
+    const pill = document.getElementById("backup-summary-pill");
+    if (pill) {
+      pill.textContent = `${c.artists || 0} 画师 · ${c.oc_cards || 0} OC · ${c.mix_presets || 0} 混搭 · ${c.skills || 0} Skills`;
+    }
+    renderBackupSnapshotsList(data.snapshots || []);
+  } catch (e) {}
+}
+
+function renderBackupSnapshotsList(snaps) {
+  const wrap = document.getElementById("backup-snapshots-list");
+  if (!wrap) return;
+  if (!snaps.length) {
+    wrap.innerHTML = `<div class="text-[12px] text-[var(--text-muted)] py-2">暂无本地快照，点击上方「立即创建本地快照」即可存档。</div>`;
+    return;
+  }
+  wrap.innerHTML = snaps
+    .map(s => {
+      const isAuto = String(s.filename || "").startsWith("auto_pre_restore");
+      return `
+      <div class="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-[7px] ui-subgroup border border-[var(--border-hairline)] text-[12px]">
+        <div class="min-w-0 flex items-center gap-2">
+          <span class="px-1.5 py-0.5 rounded-[4px] font-mono text-[10px] ${isAuto ? "bg-[var(--status-warning-tint)] text-[var(--status-warning)]" : "ui-badge text-[var(--text-secondary)]"}">${isAuto ? "恢复前保护" : "手动快照"}</span>
+          <span class="font-mono text-[11.5px] text-[var(--text-primary)] truncate" title="${escapeHtml(s.filename)}">${escapeHtml(s.filename)}</span>
+          <span class="font-mono text-[10.5px] text-[var(--text-muted)] shrink-0">${s.artists_count} 画师 · ${s.size_kb} KB</span>
+        </div>
+        <button type="button" onclick="rollbackToLocalSnapshot('${escapeHtml(s.filename)}')" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn text-[11px] shrink-0">回滚恢复</button>
+      </div>`;
+    })
+    .join("");
+}
+
+function downloadStudioBackup(fmt = "json") {
+  const url = `/api/backup/export?format=${encodeURIComponent(fmt)}`;
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  showToast(fmt === "zip" ? "正在打包完整迁移包 (.zip)..." : "正在导出轻量配置备份 (.json)...");
+}
+
+async function createBackupSnapshotNow() {
+  const btn = document.getElementById("backup-snapshot-btn");
+  if (btn) btn.disabled = true;
+  try {
+    const res = await fetch("/api/backup/snapshot", { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "创建快照失败");
+    renderBackupSnapshotsList(data.snapshots || []);
+    showToast(`已创建本地快照：${data.snapshot?.filename || ""}`);
+  } catch (err) {
+    showToast(err.message || "创建本地快照失败");
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function handleBackupFileSelected(event) {
+  const file = event.target?.files?.[0];
+  const box = document.getElementById("backup-preview-box");
+  const txt = document.getElementById("backup-preview-text");
+  if (!file) return;
+  _pendingBackupFile = file;
+  if (box) box.classList.remove("hidden");
+  if (txt) txt.textContent = `正在校验备份文件 ${file.name}...`;
+  try {
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch("/api/backup/preview", { method: "POST", body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "备份校验失败");
+    const c = data.counts || {};
+    if (txt) {
+      txt.textContent = `✓ 有效备份 (${String(data.format || "json").toUpperCase()} · ${data.exported_at_iso || "未知时间"})：画师 ${c.artists} 条 · OC ${c.oc_cards} 条 · 混搭 ${c.mix_presets} 条 · 积木 ${c.snippets} 条 · 通配符 ${c.wildcards} 个 · Skills ${c.skills} 个${c.artist_previews ? ` · 画师预览图 ${c.artist_previews} 张` : ""}`;
+    }
+  } catch (err) {
+    _pendingBackupFile = null;
+    if (txt) txt.textContent = `✕ 无法解析备份文件：${err.message}`;
+  } finally {
+    if (event.target) event.target.value = "";
+  }
+}
+
+async function _refreshStateAfterBackupRestore() {
+  try {
+    const res = await fetch("/api/bootstrap");
+    if (!res.ok) return;
+    const data = await res.json();
+    state.artists = data.artists || state.artists;
+    state.ocCards = data.oc_cards || state.ocCards;
+    state.snippets = data.snippets || state.snippets;
+    state.mixPresets = data.mix_presets || state.mixPresets;
+    state.wildcards = data.wildcards || state.wildcards;
+    renderArtistsGrid?.();
+    renderMixPresets?.();
+    renderSnippetsBar?.();
+    renderOcCardsList?.();
+    renderCharacterSlots?.();
+    loadBackupStatus();
+  } catch (e) {}
+}
+
+async function confirmBackupRestore() {
+  if (!_pendingBackupFile) {
+    showToast("请先选择有效的 .json 或 .zip 备份文件");
+    return;
+  }
+  const mode = document.querySelector('input[name="backup-restore-mode"]:checked')?.value || "merge";
+  const restorePrefs = Boolean(document.getElementById("backup-restore-prefs-chk")?.checked);
+  if (mode === "replace") {
+    const ok = await openStudioConfirm(
+      "确认完整覆盖恢复",
+      "系统会在覆盖前自动在 data/backups 生成一份安全快照，确定用所选备份完整替换画师/OC/混搭/积木数据吗？",
+      "确认覆盖恢复"
+    );
+    if (!ok) return;
+  }
+  const btn = document.getElementById("backup-confirm-restore-btn");
+  if (btn) btn.disabled = true;
+  try {
+    const fd = new FormData();
+    fd.append("file", _pendingBackupFile);
+    fd.append("mode", mode);
+    fd.append("restore_preferences", String(restorePrefs));
+    const res = await fetch("/api/backup/restore", { method: "POST", body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "恢复失败");
+    const r = data.restored || {};
+    showToast(`恢复完成：画师 ${r.artists} · OC ${r.oc_cards} · 混搭 ${r.mix_presets} · Skills ${r.skills}（已自动保存恢复前快照）`);
+    _pendingBackupFile = null;
+    document.getElementById("backup-preview-box")?.classList.add("hidden");
+    await _refreshStateAfterBackupRestore();
+  } catch (err) {
+    showToast(err.message || "备份恢复失败");
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function rollbackToLocalSnapshot(filename) {
+  const ok = await openStudioConfirm(
+    "回滚本地快照",
+    `确定回滚到快照 ${filename} 吗？（回滚前系统同样会自动备份当前状态，随时可撤回）`,
+    "确认回滚"
+  );
+  if (!ok) return;
+  try {
+    const res = await fetch(`/api/backup/snapshots/${encodeURIComponent(filename)}/restore`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "replace" }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "回滚失败");
+    showToast(`已回滚至快照 ${filename}（画师 ${data.restored?.artists || 0} 条）`);
+    await _refreshStateAfterBackupRestore();
+  } catch (err) {
+    showToast(err.message || "回滚快照失败");
+  }
 }
 
 let _mcpCatalogCache = null;

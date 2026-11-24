@@ -22,6 +22,8 @@ data/*.sqlite
 data/*.sqlite3
 data/oc_avatars/
 data/skills/
+data/backups/
+node_modules/
 
 # === Generated Artworks, Artist Previews & Large Media ===
 outputs/

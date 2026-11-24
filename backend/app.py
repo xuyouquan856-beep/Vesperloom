@@ -3,9 +3,9 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 import io
@@ -60,6 +60,17 @@ from .prompt_agent import fetch_llm_models, run_prompt_agent, test_llm_connectio
 from .skills_manager import delete_skill, ensure_builtin_skills, get_skill, list_skills, save_skill
 from .studio_agent import stream_studio_agent
 from .mcp_tools import MCP_EXAMPLE_ARGS, MCP_TOOLS, execute_mcp_tool
+from .backup_manager import (
+    BACKUPS_DIR,
+    build_backup_payload,
+    create_local_snapshot,
+    export_backup_json_bytes,
+    export_backup_zip_bytes,
+    list_local_snapshots,
+    preview_backup_bytes,
+    restore_backup_bytes,
+    restore_local_snapshot,
+)
 from .prompt_engine import (
     adjust_tag_weight,
     delete_wildcard_file,
@@ -843,12 +854,117 @@ async def api_mcp_test(body: Dict[str, Any]) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+@app.get("/api/backup/status")
+async def api_backup_status() -> Dict[str, Any]:
+    payload = build_backup_payload()
+    art_previews = len([p for p in ARTISTS_DIR.glob("*") if p.is_file() and p.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp")])
+    return {
+        "backups_dir": str(BACKUPS_DIR),
+        "counts": {
+            "artists": len(payload["artists"]),
+            "oc_cards": len(payload["oc_cards"]),
+            "mix_presets": len(payload["mix_presets"]),
+            "snippets": len(payload["snippets"]),
+            "wildcards": len(payload["wildcards"]),
+            "skills": len(payload["skills"]),
+            "artist_previews": art_previews,
+        },
+        "snapshots": list_local_snapshots(),
+    }
+
+
+@app.get("/api/backup/export")
+async def api_backup_export(format: str = Query("json")) -> Response:
+    fmt = format.strip().lower()
+    if fmt == "zip":
+        raw, fname = export_backup_zip_bytes()
+        media = "application/zip"
+    else:
+        raw, fname = export_backup_json_bytes()
+        media = "application/json; charset=utf-8"
+    return Response(
+        content=raw,
+        media_type=media,
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
+@app.post("/api/backup/snapshot")
+async def api_backup_create_snapshot() -> Dict[str, Any]:
+    snap = create_local_snapshot("manual")
+    return {"ok": True, "snapshot": snap, "snapshots": list_local_snapshots()}
+
+
+@app.post("/api/backup/preview")
+async def api_backup_preview(file: UploadFile = File(...)) -> Dict[str, Any]:
+    raw = await file.read()
+    try:
+        return preview_backup_bytes(raw, file.filename or "")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/api/backup/restore")
+async def api_backup_restore(
+    file: UploadFile = File(...),
+    mode: str = Form("merge"),
+    restore_preferences: bool = Form(False),
+) -> Dict[str, Any]:
+    raw = await file.read()
+    try:
+        return restore_backup_bytes(
+            raw,
+            filename=file.filename or "",
+            mode=mode,
+            restore_preferences=restore_preferences,
+            create_safety_snapshot=True,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/api/backup/snapshots/{filename}/restore")
+async def api_backup_restore_snapshot(filename: str, body: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    mode = str((body or {}).get("mode") or "replace")
+    try:
+        return restore_local_snapshot(filename, mode=mode)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+class NoCacheStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope: Any) -> Response:
+        resp = await super().get_response(path, scope)
+        if path.endswith((".css", ".js", ".html")):
+            resp.headers["Cache-Control"] = "no-cache"
+        return resp
+
+
+def _asset_mtime_tag(rel_name: str) -> str:
+    p = FRONTEND_DIR / rel_name
+    try:
+        return hex(int(p.stat().st_mtime))[2:]
+    except Exception:
+        return "0"
+
+
 app.mount("/outputs", StaticFiles(directory=str(OUTPUTS_DIR)), name="outputs")
 app.mount("/artists", StaticFiles(directory=str(ARTISTS_DIR)), name="artists")
 app.mount("/avatars", StaticFiles(directory=str(OC_AVATARS_DIR)), name="avatars")
-app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
+app.mount("/static", NoCacheStaticFiles(directory=str(FRONTEND_DIR)), name="static")
 
 
 @app.get("/")
-async def serve_index() -> FileResponse:
-    return FileResponse(str(FRONTEND_DIR / "index.html"))
+async def serve_index() -> HTMLResponse:
+    html = (FRONTEND_DIR / "index.html").read_text(encoding="utf-8")
+    for asset in ("tailwind.generated.css", "styles.css", "app.js", "agent_window.js"):
+        tag = _asset_mtime_tag(asset)
+        html = html.replace(f"/static/{asset}", f"/static/{asset}?v={tag}")
+    return HTMLResponse(
+        content=html,
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+    )
