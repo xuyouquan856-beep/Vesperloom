@@ -23,6 +23,7 @@ data/*.sqlite3
 data/oc_avatars/
 data/skills/
 data/backups/
+data/agent_memory.md
 node_modules/
 
 # === Generated Artworks, Artist Previews & Large Media ===

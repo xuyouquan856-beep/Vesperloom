@@ -597,7 +597,7 @@ def test_agent_v2_skills_and_library_curation_tools(tmp_path, monkeypatch):
     from backend import skills_manager as sk_mod
     from backend.studio_agent import STUDIO_AGENT_TOOLS, _execute_studio_tool
 
-    # 1. Verify all 8 built-in v4 skills & 21 Studio Agent tools (including batch curation, Danbooru & vision)
+    # 1. Verify all 8 built-in v4 skills & 25 Studio Agent tools (including memory, proposals, OC, XYZ, curation, Danbooru & vision)
     tool_names = {t["function"]["name"] for t in STUDIO_AGENT_TOOLS}
     assert {
         "manage_artist_catalog",
@@ -607,8 +607,12 @@ def test_agent_v2_skills_and_library_curation_tools(tmp_path, monkeypatch):
         "inspect_artist_previews",
         "inspect_canvas_stage",
         "inspect_gallery_images",
+        "update_creator_memory",
+        "present_creative_proposals",
+        "save_oc_character",
+        "run_xyz_matrix",
     }.issubset(tool_names)
-    assert len(STUDIO_AGENT_TOOLS) == 21
+    assert len(STUDIO_AGENT_TOOLS) == 25
 
     skills = sk_mod.list_skills()
     names = {s["name"] for s in skills}
@@ -1150,6 +1154,137 @@ def test_offline_assets_cache_headers_and_backup_restore():
                 tmp_bak.rmdir()
             except Exception:
                 pass
+
+
+def test_studio_agent_v3_memory_modes_mentions_proposals_and_compact(tmp_path, monkeypatch):
+    """Verify Built-in Studio Agent Evolution: Creator Memory, Ask/Agent modes, @mentions, proposals, OC/XYZ tools & session compact."""
+    from fastapi.testclient import TestClient
+    import backend.app as app_mod
+    import backend.database as db_mod
+    import backend.studio_agent as sa_mod
+
+    # Isolate DB & creator memory file so live user data is untouched
+    temp_db = tmp_path / "test_agent_v3.db"
+    temp_mem = tmp_path / "agent_memory.md"
+    monkeypatch.setattr(db_mod, "DB_PATH", temp_db)
+    monkeypatch.setattr(sa_mod, "CREATOR_MEMORY_PATH", temp_mem)
+    db_mod.init_db()
+
+    client = TestClient(app_mod.app)
+
+    # 1. GET/PUT /api/agent/memory & update_creator_memory tool + prompt injection
+    r0 = client.get("/api/agent/memory")
+    assert r0.status_code == 200 and r0.json()["content"] == ""
+
+    r1 = client.put("/api/agent/memory", json={"content": "- 偏爱清透逆光与薄涂赛璐璐"})
+    assert r1.status_code == 200 and "清透逆光" in r1.json()["content"]
+
+    wb = {"model": "nai-diffusion-5-full", "stage_has_image": True, "width": 832, "height": 1216, "steps": 28, "scale": 5.0}
+    live_blocks = {"artist": "artist:rella", "character": "1girl, silver hair", "lighting": "sunset", "negative": "lowres"}
+
+    out_mem, _, act_mem = sa_mod._execute_studio_tool(
+        "update_creator_memory",
+        {"action": "append", "content": "忌讳过度锐化与油腻塑料感", "section": "画风忌讳"},
+        wb,
+        live_blocks,
+    )
+    mem_data = json.loads(out_mem)
+    assert mem_data["ok"] is True and act_mem and act_mem["type"] == "refresh_memory"
+    assert "过度锐化" in sa_mod.read_creator_memory()
+
+    sys_prompt_ask = sa_mod._build_agent_system_prompt(wb, [], [], agent_mode="ask")
+    assert "<creator_memory>" in sys_prompt_ask
+    assert "清透逆光" in sys_prompt_ask
+    assert "咨询模式" in sys_prompt_ask
+
+    # 2. Ask vs Agent tool gating
+    ask_names = {t["function"]["name"] for t in sa_mod.get_tools_for_mode("ask")}
+    agent_names = {t["function"]["name"] for t in sa_mod.get_tools_for_mode("agent")}
+    assert len(agent_names) == 25
+    assert ask_names.isdisjoint(sa_mod.MUTATING_AGENT_TOOLS)
+    assert "present_creative_proposals" in ask_names
+    assert "get_current_model_rules" in ask_names
+    assert "patch_prompt_blocks" not in ask_names
+
+    # 3. present_creative_proposals tool
+    out_prop, _, act_prop = sa_mod._execute_studio_tool(
+        "present_creative_proposals",
+        {
+            "proposals": [
+                {
+                    "title": "黄昏天台逆光",
+                    "subtitle": "清透电影感 · 琥珀金边光",
+                    "artist": "0.85::artist:rella::",
+                    "character": "1girl, silver hair, school uniform, rooftop",
+                    "lighting": "golden hour, backlighting, lens flare",
+                    "negative": "lowres, worst quality",
+                    "scale": 5.0,
+                    "steps": 28,
+                }
+            ]
+        },
+        wb,
+        live_blocks,
+    )
+    assert json.loads(out_prop)["count"] == 1
+    assert act_prop and act_prop["type"] == "proposals"
+    assert act_prop["payload"]["proposals"][0]["title"] == "黄昏天台逆光"
+
+    # 4. save_oc_character & run_xyz_matrix tools
+    out_oc, _, act_oc = sa_mod._execute_studio_tool(
+        "save_oc_character",
+        {"name": "银发少女·雪乃", "prompt": "1girl, silver long hair, amber eyes, white coat", "uc": "lowres"},
+        wb,
+        live_blocks,
+    )
+    oc_res = json.loads(out_oc)
+    assert oc_res["ok"] is True and act_oc and act_oc["type"] == "refresh_oc_cards"
+    oc_id = oc_res["oc_card"]["id"]
+
+    out_xyz, _, act_xyz = sa_mod._execute_studio_tool(
+        "run_xyz_matrix",
+        {"x_type": "scale", "x_values": "4.0, 5.0, 6.0", "y_type": "steps", "y_values": "24, 28"},
+        wb,
+        live_blocks,
+    )
+    assert json.loads(out_xyz)["ok"] is True
+    assert act_xyz and act_xyz["type"] == "run_xyz_matrix"
+    assert act_xyz["payload"]["x_values"] == "4.0, 5.0, 6.0"
+
+    # 5. @mentions context resolution
+    out_art, _, _ = sa_mod._execute_studio_tool(
+        "manage_artist_catalog",
+        {"action": "add", "name": "RellaTest", "tag": "artist:rella_test", "category": "测试", "desc": "清透光影"},
+        wb,
+        live_blocks,
+    )
+    artist_row = json.loads(out_art)["artist"]
+    mentions_txt = sa_mod._resolve_mentions_context([
+        {"type": "stage", "label": "当前画布"},
+        {"type": "oc", "id": oc_id, "label": "银发少女·雪乃"},
+        {"type": "artist", "id": artist_row["id"], "label": "RellaTest"},
+    ])
+    assert "<referenced_context>" in mentions_txt
+    assert "银发少女·雪乃" in mentions_txt
+    assert "artist:rella_test" in mentions_txt
+
+    # 6. Long-session compaction (offline fallback when LLM is not configured)
+    sess = db_mod.create_agent_session("压缩测试会话")
+    sid = sess["id"]
+    db_mod.append_agent_message(sid, "user", "我想画一个银发少女站在黄昏天台上")
+    db_mod.append_agent_message(sid, "assistant", "好的，我先为你检索清透逆光画师并搭建四区块提示词。")
+    db_mod.append_agent_message(sid, "user", "把构图改成广角仰拍，加强夕阳丁达尔光")
+    db_mod.append_agent_message(sid, "assistant", "已更新广角仰拍与丁达尔光标签。")
+
+    monkeypatch.setattr(sa_mod, "load_config", lambda: {"llm_api_key": "", "llm_model": "", "llm_base_url": ""})
+    r_cmp = client.post(f"/api/agent/sessions/{sid}/compact")
+    assert r_cmp.status_code == 200
+    cmp_data = r_cmp.json()
+    assert cmp_data["ok"] is True
+    assert cmp_data["before_count"] == 4 and cmp_data["after_count"] == 1
+    assert "阶段摘要" in cmp_data["summary"]
+    assert len(db_mod.get_agent_session(sid)["messages"]) == 1
+
 
 
 

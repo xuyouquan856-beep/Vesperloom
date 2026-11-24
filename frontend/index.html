@@ -2015,6 +2015,9 @@
         <button type="button" data-agent-tab="skills" onclick="toggleAgentSubPane('skills')" class="agent-icon-btn" title="Skills 技能库">
           <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-layers"/></svg>
         </button>
+        <button type="button" data-agent-tab="memory" onclick="toggleAgentSubPane('memory')" class="agent-icon-btn" title="个人审美记忆本">
+          <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-book"/></svg>
+        </button>
         <span class="h-3.5 w-px bg-[var(--border-hairline)] mx-1"></span>
         <button type="button" onclick="toggleAgentDockMode()" id="agent-dock-btn" class="agent-icon-btn hidden lg:inline-flex" title="切换右侧停靠抽屉 / 独立悬浮窗">
           <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use id="agent-dock-icon-use" href="#ic-dock-right"/></svg>
@@ -2032,7 +2035,10 @@
     <div id="agent-body-wrap" class="flex-1 min-h-0 flex flex-col">
       <div id="agent-live-strip" class="agent-telemetry-strip flex items-center justify-between gap-2 shrink-0">
         <span id="agent-live-telemetry" class="font-mono text-[11px] text-[var(--text-muted)] truncate">V5 Full · 画0 / 人0 / 光0 / 负0</span>
-        <button id="agent-live-audit-btn" type="button" onclick="quickSendAgent('请检查我当前的提示词和参数，指出可以优化或有冲突的地方并给出建议')" class="spring-btn px-2 py-0.5 rounded-[5px] text-[11px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--btn-hover-bg)] transition-colors shrink-0 whitespace-nowrap">体检</button>
+        <div class="flex items-center gap-1 shrink-0">
+          <button id="agent-compact-btn" type="button" onclick="compactCurrentAgentSession()" class="hidden spring-btn px-2 py-0.5 rounded-[5px] text-[11px] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--btn-hover-bg)] transition-colors whitespace-nowrap" title="将长对话压缩为精炼阶段摘要，节省上下文并提速">压缩</button>
+          <button id="agent-live-audit-btn" type="button" onclick="quickSendAgent('请检查我当前的提示词和参数，指出可以优化或有冲突的地方并给出建议')" class="spring-btn px-2 py-0.5 rounded-[5px] text-[11px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--btn-hover-bg)] transition-colors whitespace-nowrap">体检</button>
+        </div>
       </div>
 
       <!-- 面板 1：对话与实时操作流 -->
@@ -2055,14 +2061,27 @@
             <!-- 固定启用 Skills 胶囊栏（自然融入输入框顶部） -->
             <div id="agent-pinned-skills" class="hidden flex flex-wrap items-center gap-1 text-[11px] pb-1 border-b border-[var(--border-hairline)]"></div>
 
-            <textarea id="agent-input" rows="1" oninput="handleAgentInputChange()" onkeydown="handleAgentInputKeydown(event)" placeholder="说大白话改提示词、聊灵感、管画师/图库，输入 / 调用 Skill..." class="custom-scroll w-full bg-transparent px-1 py-0.5 text-[13px] leading-[1.5] text-[var(--text-primary)] resize-none focus:outline-none placeholder:text-[var(--placeholder)]" style="max-height: 120px;"></textarea>
+            <!-- 附带参考图缩略图条（支持粘贴/拖拽/上传） -->
+            <div id="agent-attachments-bar" class="hidden flex flex-wrap items-center gap-1.5 pb-1 border-b border-[var(--border-hairline)]"></div>
+
+            <textarea id="agent-input" rows="1" oninput="handleAgentInputChange()" onkeydown="handleAgentInputKeydown(event)" onpaste="handleAgentPaste(event)" placeholder="说大白话改提示词、聊灵感，输入 @ 引用画师/OC/图库、/ 调用 Skill 或直接粘贴参考图..." class="custom-scroll w-full bg-transparent px-1 py-0.5 text-[13px] leading-[1.5] text-[var(--text-primary)] resize-none focus:outline-none placeholder:text-[var(--placeholder)]" style="max-height: 120px;"></textarea>
 
             <div class="flex items-center justify-between gap-2 pt-0.5">
-              <div class="flex items-center gap-1.5 min-w-0">
-                <button type="button" onclick="openAgentSlashQuick()" class="spring-btn inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] text-[11px] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--btn-hover-bg)] transition-colors shrink-0" title="插入 / 调用专业 Skill">
-                  <span class="font-mono font-semibold">/</span>
-                  <span>Skills</span>
+              <div class="flex items-center gap-1 min-w-0">
+                <button id="agent-mode-toggle" type="button" onclick="toggleAgentMode()" class="spring-btn inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] text-[11px] font-medium bg-[var(--accent-primary-tint)] text-[var(--accent-primary)] border border-[var(--accent-primary-border)] transition-colors shrink-0 whitespace-nowrap" title="切换协同模式（可改工作台）与只读咨询模式（仅建议与方案卡）">
+                  <span id="agent-mode-label">协同</span>
                 </button>
+                <button type="button" onclick="openAgentMentionQuick()" class="spring-btn inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-[6px] text-[11px] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--btn-hover-bg)] transition-colors shrink-0" title="输入 @ 精确引用画师、OC、图库或当前画布">
+                  <span class="font-mono font-semibold">@</span>
+                </button>
+                <button type="button" onclick="openAgentSlashQuick()" class="spring-btn inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-[6px] text-[11px] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--btn-hover-bg)] transition-colors shrink-0" title="插入 / 调用专业 Skill">
+                  <span class="font-mono font-semibold">/</span>
+                  <span class="hidden sm:inline">Skills</span>
+                </button>
+                <label class="spring-btn inline-flex items-center justify-center w-6 h-6 rounded-[6px] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--btn-hover-bg)] transition-colors cursor-pointer shrink-0" title="附带参考图（也支持直接 Ctrl+V 粘贴或拖入）">
+                  <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-image"/></svg>
+                  <input type="file" accept="image/png,image/jpeg,image/webp" multiple class="hidden" onchange="handleAgentImageUpload(event)" />
+                </label>
                 <div id="agent-stream-status" class="hidden inline-flex items-center gap-1.5 text-[11px] font-mono text-[var(--text-muted)] truncate">
                   <span class="agent-thinking-dots" aria-hidden="true"><span></span><span></span><span></span></span>
                   <span id="agent-stream-status-text" class="truncate">思考中...</span>
@@ -2146,6 +2165,31 @@
             <button id="skill-delete-btn" type="button" onclick="deleteEditingSkill()" class="hidden spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[var(--status-danger)] text-[12px]">删除 Skill</button>
             <button type="button" onclick="saveEditingSkill()" class="liquid-cta spring-btn px-3.5 py-1 rounded-[6px] text-[12px] font-semibold ml-auto">保存 SKILL.md</button>
           </div>
+        </div>
+      </div>
+
+      <!-- 面板 4：跨会话个人审美记忆本 (data/agent_memory.md) -->
+      <div id="agent-pane-memory" class="hidden flex-1 min-h-0 flex flex-col overflow-hidden p-3.5 gap-2.5">
+        <div class="flex items-center justify-between gap-2 pb-1.5 border-b border-[var(--border-hairline)] shrink-0">
+          <div class="flex items-center gap-1.5 min-w-0">
+            <button type="button" onclick="switchAgentPane('chat')" class="agent-icon-btn shrink-0" title="返回对话">
+              <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-back"/></svg>
+            </button>
+            <span class="text-[12.5px] font-semibold text-[var(--text-primary)] truncate">个人审美记忆本</span>
+          </div>
+          <span id="agent-memory-count" class="text-[10.5px] font-mono text-[var(--text-muted)] shrink-0">0 字</span>
+        </div>
+        <p class="text-[11.5px] text-[var(--text-muted)] leading-relaxed shrink-0">每次对话自动注入的长期创作偏好与雷区（也可在对话中直接说「以后记住...」让 Agent 自动记录）。</p>
+        <div class="flex flex-wrap gap-1 shrink-0">
+          <button type="button" onclick="appendMemoryQuickChip('默认偏爱通透冷暖逆光与空气感层次')" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn text-[11px]">+ 通透逆光</button>
+          <button type="button" onclick="appendMemoryQuickChip('拒绝油腻过曝、塑料感肤质与过度饱和色块')" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn text-[11px]">+ 拒绝油腻</button>
+          <button type="button" onclick="appendMemoryQuickChip('未明确要求更换画风时，保留工作台已选画师串')" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn text-[11px]">+ 保护画师串</button>
+          <button type="button" onclick="appendMemoryQuickChip('厚涂画风 CFG 建议控制在 4.5~5.5，避免过锐')" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn text-[11px]">+ 厚涂低 CFG</button>
+        </div>
+        <textarea id="agent-memory-textarea" oninput="updateAgentMemoryCounter()" placeholder="## 审美与创作偏好&#10;- 例如：喜欢清透水彩感与精致眼眸高光&#10;- 例如：画银发角色习惯带呆毛 (ahoge)&#10;&#10;## 雷区禁忌&#10;- 不要擅自替换我已选好的画师串" class="custom-scroll flex-1 min-h-[180px] w-full ui-well rounded-[8px] p-2.5 font-mono text-[12px] leading-relaxed resize-none"></textarea>
+        <div class="flex items-center justify-between pt-2 border-t border-[var(--border-hairline)] shrink-0">
+          <button type="button" onclick="clearAgentMemoryEditor()" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px] text-[var(--status-danger)]">清空</button>
+          <button id="agent-memory-save-btn" type="button" onclick="saveAgentMemoryFromEditor()" class="liquid-cta spring-btn px-3.5 py-1 rounded-[6px] text-[12px] font-semibold">保存记忆</button>
         </div>
       </div>
     </div>

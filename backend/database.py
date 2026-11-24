@@ -1123,3 +1123,26 @@ def delete_agent_session(session_id: str) -> bool:
         conn.commit()
         return bool(cur.rowcount)
 
+
+def replace_agent_session_messages(session_id: str, summary_text: str) -> Dict[str, Any]:
+    now = int(time.time())
+    with get_conn() as conn:
+        before_cnt = conn.execute(
+            "SELECT COUNT(*) FROM agent_messages WHERE session_id = ?", (session_id,)
+        ).fetchone()[0]
+        conn.execute("DELETE FROM agent_messages WHERE session_id = ?", (session_id,))
+        cur = conn.execute(
+            """
+            INSERT INTO agent_messages (session_id, role, content, tool_events_json, ui_actions_json, created_at)
+            VALUES (?, 'assistant', ?, '[]', '[]', ?)
+            """,
+            (session_id, summary_text, now),
+        )
+        conn.execute("UPDATE agent_sessions SET updated_at = ? WHERE id = ?", (now, session_id))
+        conn.commit()
+        return {
+            "before_count": int(before_cnt or 0),
+            "after_count": 1,
+            "summary_msg_id": cur.lastrowid,
+        }
+

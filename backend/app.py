@@ -58,7 +58,12 @@ from .nai_client import (
 from .png_metadata import extract_nai_metadata
 from .prompt_agent import fetch_llm_models, run_prompt_agent, test_llm_connection
 from .skills_manager import delete_skill, ensure_builtin_skills, get_skill, list_skills, save_skill
-from .studio_agent import stream_studio_agent
+from .studio_agent import (
+    compact_agent_session,
+    read_creator_memory,
+    stream_studio_agent,
+    write_creator_memory,
+)
 from .mcp_tools import MCP_EXAMPLE_ARGS, MCP_TOOLS, execute_mcp_tool
 from .backup_manager import (
     BACKUPS_DIR,
@@ -279,20 +284,45 @@ async def api_delete_agent_session(session_id: str) -> Dict[str, Any]:
     return {"ok": ok}
 
 
+@app.get("/api/agent/memory")
+async def api_get_agent_memory() -> Dict[str, Any]:
+    return {"ok": True, "content": read_creator_memory()}
+
+
+@app.put("/api/agent/memory")
+async def api_put_agent_memory(body: Dict[str, Any]) -> Dict[str, Any]:
+    saved = write_creator_memory(str(body.get("content") or ""))
+    return {"ok": True, "content": saved}
+
+
+@app.post("/api/agent/sessions/{session_id}/compact")
+async def api_compact_agent_session(session_id: str) -> Dict[str, Any]:
+    try:
+        return await compact_agent_session(session_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
 @app.post("/api/agent/chat/stream")
 async def api_agent_chat_stream(body: Dict[str, Any]) -> StreamingResponse:
     msg = str(body.get("message") or "").strip()
-    if not msg:
-        raise HTTPException(status_code=400, detail="请输入对话内容")
+    attachments = body.get("attachments") if isinstance(body.get("attachments"), list) else []
+    if not msg and not attachments:
+        raise HTTPException(status_code=400, detail="请输入对话内容或附带参考图")
     session_id = str(body.get("session_id") or "").strip() or None
     wb_state = body.get("workbench_state") if isinstance(body.get("workbench_state"), dict) else {}
     pinned = body.get("pinned_skills") if isinstance(body.get("pinned_skills"), list) else None
+    agent_mode = str(body.get("agent_mode") or "agent").strip().lower()
+    mentions = body.get("mentions") if isinstance(body.get("mentions"), list) else []
     return StreamingResponse(
         stream_studio_agent(
             user_message=msg,
             session_id=session_id,
             workbench_state=wb_state,
             pinned_skills=pinned,
+            agent_mode=agent_mode,
+            attachments=attachments,
+            mentions=mentions,
         ),
         media_type="text/event-stream",
         headers={

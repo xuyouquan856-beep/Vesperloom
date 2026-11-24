@@ -10,7 +10,7 @@ from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 import httpx
 from PIL import Image
 
-from .config import ARTISTS_DIR, OUTPUTS_DIR, load_config
+from .config import ARTISTS_DIR, DATA_DIR, OUTPUTS_DIR, load_config
 from .database import (
     add_mix_preset,
     append_agent_message,
@@ -27,6 +27,8 @@ from .database import (
     list_mix_presets,
     list_oc_cards,
     list_snippets,
+    replace_agent_session_messages,
+    save_oc_card,
     sync_outputs_folder,
     toggle_artist_favorite,
     update_agent_session_meta,
@@ -481,7 +483,150 @@ STUDIO_AGENT_TOOLS: List[Dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_creator_memory",
+            "description": "Read, append to, or update the user's persistent cross-session aesthetic preference memory (data/agent_memory.md). Call when the user says '以后记住...' or expresses a standing creative rule/taboo.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "enum": ["read", "append", "replace"], "default": "append"},
+                    "content": {"type": "string", "description": "Concise preference rule or full markdown memory text."},
+                    "section": {"type": "string", "description": "Optional heading for append (e.g. 审美偏好 / 雷区禁忌 / 参数习惯)."},
+                },
+                "required": ["action"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "present_creative_proposals",
+            "description": "Present 2-3 clickable interactive creative proposal cards in chat so the user can one-click apply any direction (artist mix, character, lighting, negative, params) to the workbench. Works in both Ask and Agent modes.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "proposals": {
+                        "type": "array",
+                        "description": "2 to 3 contrasting creative directions.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "title": {"type": "string", "description": "Short Chinese title (e.g. '清透水彩逆光')"},
+                                "subtitle": {"type": "string", "description": "1-sentence style/mood summary"},
+                                "artist": {"type": "string", "description": "Artist tags string (English)"},
+                                "character": {"type": "string", "description": "Character & action tags (English)"},
+                                "lighting": {"type": "string", "description": "Lighting, atmosphere & background tags (English)"},
+                                "negative": {"type": "string", "description": "Optional negative tags"},
+                                "scale": {"type": "number"},
+                                "steps": {"type": "integer"},
+                            },
+                            "required": ["title"],
+                        },
+                    }
+                },
+                "required": ["proposals"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "save_oc_character",
+            "description": "Save a character design directly into the user's OC Character Card library for V4/V4.5/V5 multi-character staging.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "OC name (e.g. '银发女骑士·艾琳')"},
+                    "prompt": {"type": "string", "description": "English appearance/outfit tags"},
+                    "uc": {"type": "string", "description": "Optional character-specific negative tags"},
+                    "default_x": {"type": "number", "default": 0.5},
+                    "default_y": {"type": "number", "default": 0.5},
+                },
+                "required": ["name", "prompt"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_xyz_matrix",
+            "description": "Open and pre-fill the Workbench X/Y Parameter Matrix modal so the user can compare CFG, Steps, Samplers, or Artist prefixes across a fixed seed.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "x_type": {"type": "string", "enum": ["scale", "steps", "sampler", "prompt_prepend"]},
+                    "x_values": {"type": "string", "description": "Comma-separated values (e.g. '4.5, 5.5, 6.5')"},
+                    "y_type": {"type": "string", "enum": ["none", "scale", "steps", "sampler", "prompt_prepend"], "default": "none"},
+                    "y_values": {"type": "string", "default": ""},
+                },
+                "required": ["x_type", "x_values"],
+            },
+        },
+    },
 ]
+
+CREATOR_MEMORY_PATH = DATA_DIR / "agent_memory.md"
+
+MUTATING_AGENT_TOOLS = {
+    "patch_prompt_blocks",
+    "remove_prompt_tags",
+    "set_workbench_params",
+    "set_workbench_mode",
+    "load_oc_character",
+    "save_oc_character",
+    "run_director_tool",
+    "trigger_generate_image",
+    "run_xyz_matrix",
+    "manage_artist_catalog",
+    "manage_mix_presets",
+    "manage_gallery_items",
+    "update_creator_memory",
+}
+
+
+def get_tools_for_mode(agent_mode: str = "agent") -> List[Dict[str, Any]]:
+    if str(agent_mode or "agent").strip().lower() == "ask":
+        return [
+            t for t in STUDIO_AGENT_TOOLS
+            if t.get("function", {}).get("name") not in MUTATING_AGENT_TOOLS
+        ]
+    return STUDIO_AGENT_TOOLS
+
+
+def read_creator_memory() -> str:
+    try:
+        if CREATOR_MEMORY_PATH.exists():
+            return CREATOR_MEMORY_PATH.read_text(encoding="utf-8").strip()
+    except Exception:
+        pass
+    return ""
+
+
+def write_creator_memory(content: str) -> str:
+    CREATOR_MEMORY_PATH.parent.mkdir(parents=True, exist_ok=True)
+    clean = str(content or "").strip()
+    CREATOR_MEMORY_PATH.write_text(clean + ("\n" if clean else ""), encoding="utf-8")
+    return clean
+
+
+def append_creator_memory_item(note: str, section: str = "审美与创作偏好") -> str:
+    clean_note = str(note or "").strip().lstrip("-•* ").strip()
+    if not clean_note:
+        return read_creator_memory()
+    cur = read_creator_memory()
+    sec = str(section or "审美与创作偏好").strip()
+    entry = f"- {clean_note}"
+    if clean_note in cur:
+        return cur
+    if not cur:
+        new_text = f"## {sec}\n{entry}"
+    elif f"## {sec}" in cur:
+        new_text = cur.replace(f"## {sec}", f"## {sec}\n{entry}", 1)
+    else:
+        new_text = f"{cur}\n\n## {sec}\n{entry}"
+    return write_creator_memory(new_text)
 
 
 def _split_tags(text: str) -> List[str]:
@@ -561,7 +706,12 @@ def _extract_slash_skills(user_msg: str) -> List[str]:
     return [m.group(1).lower() for m in re.finditer(r"(?:^|\s)/([a-zA-Z0-9_\-\u4e00-\u9fff]+)", user_msg or "")]
 
 
-def _build_agent_system_prompt(workbench_state: Dict[str, Any], pinned_skills: List[str], slash_skills: List[str]) -> str:
+def _build_agent_system_prompt(
+    workbench_state: Dict[str, Any],
+    pinned_skills: List[str],
+    slash_skills: List[str],
+    agent_mode: str = "agent",
+) -> str:
     all_skills = list_skills(include_content=False)
     skills_index = "\n".join(
         f"- `{s['name']}` ({s['title']}): {s['description']} [触发词: {s['triggers']}]"
@@ -579,6 +729,20 @@ def _build_agent_system_prompt(workbench_state: Dict[str, Any], pinned_skills: L
         if sk:
             eager_sections.append(f"### Active Skill: `{sk['name']}` ({sk['title']})\n{sk['content']}")
     active_skills_block = "\n\n".join(eager_sections) if eager_sections else "(None pre-loaded; call `read_skill(name)` whenever a skill matches the user's intent.)"
+
+    creator_mem = read_creator_memory()
+    mem_block = creator_mem[:3000] if creator_mem else "(No standing preferences saved yet. Call `update_creator_memory` whenever the user asks you to remember a recurring style rule or taboo.)"
+
+    is_ask = str(agent_mode or "agent").strip().lower() == "ask"
+    mode_directive = (
+        "6. **CURRENT MODE: READ-ONLY CONSULTATION (咨询模式)**:\n"
+        "   - You MUST NOT modify the workbench, gallery, or artist catalog directly.\n"
+        "   - Focus on analysis, visual critique, brainstorming, and presenting clickable **Creative Proposal Cards** via `present_creative_proposals` so the user can try any direction with one click."
+        if is_ask
+        else "6. **CURRENT MODE: ACTIVE COPILOT (协同模式)**:\n"
+        "   - You may directly patch prompts, set params, save OC cards, open X/Y matrix tests (`run_xyz_matrix`), manage libraries, or emit clickable proposal cards via `present_creative_proposals` when brainstorming multiple directions.\n"
+        "   - When the user says '以后记住...' or states a standing aesthetic rule, save it via `update_creator_memory`."
+    )
 
     wb_compact = {
         "model": workbench_state.get("model") or "nai-diffusion-5-full",
@@ -619,6 +783,11 @@ def _build_agent_system_prompt(workbench_state: Dict[str, Any], pinned_skills: L
 5. **Concise, Helpful Chinese Replies + Quick Replies**:
    - Keep replies crisp, structured, and natural in Chinese (1–4 short paragraphs or bullets).
    - Optionally end your message with a single line `[QUICK_REPLIES: 简短选项1 | 简短选项2 | 简短选项3]` (2–3 clickable follow-up suggestions) whenever helpful for the next step (e.g. offering options during brainstorming, or suggesting "直接生成图片 | 调整画师风格 | 换成夜景光影").
+{mode_directive}
+
+<creator_memory>
+{mem_block}
+</creator_memory>
 
 <available_skills>
 {skills_index}
@@ -1283,6 +1452,76 @@ def _execute_studio_tool(
 
         return json.dumps({"ok": False, "error": f"不支持的图库操作: {act}"}, ensure_ascii=False), "无效图库操作", None
 
+    if name == "update_creator_memory":
+        act = str(args.get("action") or "append").strip().lower()
+        if act == "read":
+            mem = read_creator_memory()
+            return json.dumps({"ok": True, "memory": mem}, ensure_ascii=False), "读取个人审美记忆本", None
+        content = str(args.get("content") or "").strip()
+        if not content:
+            return json.dumps({"ok": False, "error": "content 不能为空"}, ensure_ascii=False), "记忆内容为空", None
+        if act == "replace":
+            saved = write_creator_memory(content)
+            ui_action = {"type": "refresh_memory", "summary": "已更新个人审美记忆本", "payload": {"memory": saved}}
+            return json.dumps({"ok": True, "length": len(saved)}, ensure_ascii=False), "覆盖更新审美记忆本", ui_action
+        section = str(args.get("section") or "审美与创作偏好").strip()
+        saved = append_creator_memory_item(content, section=section)
+        ui_action = {"type": "refresh_memory", "summary": f"已记住偏好：{content[:26]}", "payload": {"memory": saved}}
+        return json.dumps({"ok": True, "memory_preview": saved[:400]}, ensure_ascii=False), f"记住偏好({section})", ui_action
+
+    if name == "present_creative_proposals":
+        raw_items = args.get("proposals") if isinstance(args.get("proposals"), list) else []
+        cleaned = []
+        for it in raw_items[:4]:
+            if not isinstance(it, dict):
+                continue
+            title = str(it.get("title") or "").strip()
+            if not title:
+                continue
+            cleaned.append({
+                "title": title,
+                "subtitle": str(it.get("subtitle") or "").strip(),
+                "artist": _clean_tag_field(it.get("artist") or ""),
+                "character": _clean_tag_field(it.get("character") or ""),
+                "lighting": _clean_tag_field(it.get("lighting") or ""),
+                "negative": _clean_tag_field(it.get("negative") or ""),
+                "scale": it.get("scale"),
+                "steps": it.get("steps"),
+            })
+        if not cleaned:
+            return json.dumps({"ok": False, "error": "至少提供 1 个有效方案"}, ensure_ascii=False), "空方案列表", None
+        ui_action = {"type": "proposals", "summary": f"生成 {len(cleaned)} 套可一键试套用的灵感方案", "payload": {"proposals": cleaned}}
+        return json.dumps({"ok": True, "count": len(cleaned)}, ensure_ascii=False), f"推送 {len(cleaned)} 套灵感方案卡", ui_action
+
+    if name == "save_oc_character":
+        oc_name = str(args.get("name") or "").strip()
+        oc_prompt = _clean_tag_field(args.get("prompt") or "")
+        if not oc_name or not oc_prompt:
+            return json.dumps({"ok": False, "error": "保存 OC 需要 name 和 prompt"}, ensure_ascii=False), "缺少 OC 名称或词条", None
+        saved = save_oc_card(
+            name=oc_name,
+            prompt=oc_prompt,
+            uc=_clean_tag_field(args.get("uc") or ""),
+            default_x=float(args.get("default_x") if args.get("default_x") is not None else 0.5),
+            default_y=float(args.get("default_y") if args.get("default_y") is not None else 0.5),
+        )
+        ui_action = {"type": "refresh_oc_cards", "summary": f"已保存 OC 角色卡「{oc_name}」", "payload": {"oc_card": saved}}
+        return json.dumps({"ok": True, "oc_card": saved}, ensure_ascii=False), f"保存 OC「{oc_name}」", ui_action
+
+    if name == "run_xyz_matrix":
+        x_type = str(args.get("x_type") or "scale").strip()
+        x_values = str(args.get("x_values") or "").strip()
+        y_type = str(args.get("y_type") or "none").strip()
+        y_values = str(args.get("y_values") or "").strip()
+        if not x_values:
+            return json.dumps({"ok": False, "error": "x_values 不能为空"}, ensure_ascii=False), "缺少 X 轴参数", None
+        ui_action = {
+            "type": "run_xyz_matrix",
+            "summary": f"已预填 X/Y 参数矩阵 ({x_type}: {x_values})",
+            "payload": {"x_type": x_type, "x_values": x_values, "y_type": y_type, "y_values": y_values},
+        }
+        return json.dumps({"ok": True, "opened_xyz": True}, ensure_ascii=False), f"打开 X/Y 矩阵({x_type})", ui_action
+
     return json.dumps({"error": f"Unknown tool {name}"}, ensure_ascii=False), f"未知工具({name})", None
 
 
@@ -1696,16 +1935,65 @@ def _build_history_within_budget(history_rows: List[Dict[str, Any]], budget_toke
     return picked
 
 
+def _resolve_mentions_context(mentions: Optional[List[Dict[str, Any]]]) -> str:
+    if not mentions or not isinstance(mentions, list):
+        return ""
+    lines: List[str] = []
+    for m in mentions[:8]:
+        if not isinstance(m, dict):
+            continue
+        kind = str(m.get("type") or "").strip().lower()
+        if kind == "artist":
+            tag = str(m.get("tag") or m.get("value") or "").strip()
+            found = [a for a in list_artists(search=tag) if str(a.get("tag") or "").lower() == tag.lower()]
+            if not found and m.get("id"):
+                found = [a for a in list_artists() if int(a.get("id") or 0) == int(m["id"])]
+            if found:
+                a = found[0]
+                lines.append(
+                    f"- [画师] {a['name']} (`{a['tag']}`): 分类={a.get('category','')}, 风格={','.join(a.get('style_tags') or [])}, "
+                    f"权重={a.get('weight_hint','')}, 贴文={a.get('post_count',0)}, 描述={a.get('desc','')}, 笔记={str(a.get('notes') or '')[:220]}"
+                )
+        elif kind == "oc":
+            oc_id = m.get("id")
+            oc_name = str(m.get("label") or m.get("name") or "").strip()
+            found = [c for c in list_oc_cards() if (oc_id and int(c["id"]) == int(oc_id)) or (oc_name and c["name"] == oc_name)]
+            if found:
+                c = found[0]
+                lines.append(f"- [OC角色] {c['name']}: prompt=`{c['prompt']}`, uc=`{c.get('uc','')}`, pos=({c.get('default_x',0.5)}, {c.get('default_y',0.5)})")
+        elif kind == "gallery":
+            gid = m.get("id")
+            if gid:
+                item = get_gallery_item(int(gid))
+                if item:
+                    lines.append(
+                        f"- [图库作品 #{item['id']}] {item.get('model_short','')}, Seed #{item.get('seed',0)}, "
+                        f"{item.get('width')}x{item.get('height')}, Steps {item.get('steps')}, CFG {item.get('scale')}, "
+                        f"prompt=`{str(item.get('prompt') or '')[:320]}`"
+                    )
+        elif kind == "stage":
+            lines.append("- [当前画布] 用户显式引用了当前画布成图与参数，如需观察细节请调用 inspect_canvas_stage。")
+    if not lines:
+        return ""
+    return "\n\n<referenced_context>\n" + "\n".join(lines) + "\n</referenced_context>"
+
+
 async def stream_studio_agent(
     user_message: str,
     session_id: Optional[str] = None,
     workbench_state: Optional[Dict[str, Any]] = None,
     pinned_skills: Optional[List[str]] = None,
+    agent_mode: str = "agent",
+    attachments: Optional[List[Dict[str, Any]]] = None,
+    mentions: Optional[List[Dict[str, Any]]] = None,
 ) -> AsyncIterator[str]:
     """Claude Code / Codex style multi-turn ReAct SSE stream with live tool execution & UI action dispatch."""
 
     def sse(event_type: str, payload: Dict[str, Any]) -> str:
         return f"data: {json.dumps({'type': event_type, **payload}, ensure_ascii=False)}\n\n"
+
+    norm_mode = "ask" if str(agent_mode or "agent").strip().lower() == "ask" else "agent"
+    active_tools = get_tools_for_mode(norm_mode)
 
     cfg = load_config()
     base_url = _clean_base_url(cfg.get("llm_base_url") or "")
@@ -1727,10 +2015,22 @@ async def stream_studio_agent(
     }
     wb["blocks"] = live_blocks
 
+    clean_attachments: List[Dict[str, str]] = []
+    for att in (attachments or [])[:3]:
+        if isinstance(att, dict):
+            url = str(att.get("data_url") or "").strip()
+            if url.startswith("data:image/"):
+                clean_attachments.append({"name": str(att.get("name") or "reference.jpg"), "data_url": url})
+
+    display_user_msg = user_message.strip() or ("请分析我附带的参考图并给出提示词建议" if clean_attachments else "")
+    persisted_user_msg = (
+        f"{display_user_msg}\n[附带 {len(clean_attachments)} 张参考图]" if clean_attachments else display_user_msg
+    )
+
     # Ensure persistent session
     sess = get_agent_session(session_id) if session_id else None
     if not sess:
-        auto_title = (user_message or "新创作对话").strip().splitlines()[0][:24]
+        auto_title = (display_user_msg or "新创作对话").strip().splitlines()[0][:24]
         created = create_agent_session(title=auto_title, pinned_skills=pinned_skills or [])
         sid = created["id"]
         sess = get_agent_session(sid) or {**created, "messages": []}
@@ -1739,26 +2039,35 @@ async def stream_studio_agent(
         if pinned_skills is not None:
             update_agent_session_meta(sid, pinned_skills=pinned_skills)
             sess["pinned_skills"] = pinned_skills
-        if not sess.get("messages") and user_message.strip():
-            auto_title = user_message.strip().splitlines()[0][:24]
+        if not sess.get("messages") and display_user_msg:
+            auto_title = display_user_msg.splitlines()[0][:24]
             update_agent_session_meta(sid, title=auto_title)
             sess["title"] = auto_title
 
     yield sse("session", {"session_id": sid, "title": sess.get("title", "新创作对话")})
 
     active_pinned = pinned_skills if pinned_skills is not None else list(sess.get("pinned_skills") or [])
-    slash_skills = _extract_slash_skills(user_message)
+    slash_skills = _extract_slash_skills(display_user_msg)
 
-    # Persist user message
-    append_agent_message(sid, "user", user_message)
+    # Persist user message (text summary only so SQLite stays lightweight)
+    append_agent_message(sid, "user", persisted_user_msg)
 
     # Build OpenAI conversation messages dynamically within configured context budget (default 100K tokens)
-    sys_prompt = _build_agent_system_prompt(wb, active_pinned, slash_skills)
-    sys_and_user_cost = _estimate_tokens(sys_prompt) + _estimate_tokens(user_message) + 2500
+    sys_prompt = _build_agent_system_prompt(wb, active_pinned, slash_skills, agent_mode=norm_mode)
+    mentions_block = _resolve_mentions_context(mentions)
+    enriched_user_text = display_user_msg + mentions_block
+    sys_and_user_cost = _estimate_tokens(sys_prompt) + _estimate_tokens(enriched_user_text) + 2500
     history_budget = max(4000, context_budget - sys_and_user_cost)
     messages: List[Dict[str, Any]] = [{"role": "system", "content": sys_prompt}]
     messages.extend(_build_history_within_budget(sess.get("messages") or [], history_budget))
-    messages.append({"role": "user", "content": user_message})
+
+    if clean_attachments:
+        user_content: Any = [{"type": "text", "text": enriched_user_text}] + [
+            {"type": "image_url", "image_url": {"url": att["data_url"]}} for att in clean_attachments
+        ]
+    else:
+        user_content = enriched_user_text
+    messages.append({"role": "user", "content": user_content})
 
     client = _get_llm_client()
     endpoint = f"{base_url}/chat/completions"
@@ -1809,7 +2118,7 @@ async def stream_studio_agent(
             req_body: Dict[str, Any] = {
                 "model": llm_model,
                 "messages": messages,
-                "tools": STUDIO_AGENT_TOOLS,
+                "tools": active_tools,
                 "tool_choice": "auto" if round_idx < 14 else "none",
                 "temperature": 0.45,
                 "max_tokens": active_max_out,
@@ -1960,9 +2269,17 @@ async def stream_studio_agent(
 
                 yield sse("tool_start", {"id": tc_id, "name": tname, "args": targs})
                 t0 = time.perf_counter()
-                out_json, summary, ui_action = await _execute_studio_tool_async(
-                    tname, targs, wb, live_blocks, client, endpoint, headers, llm_model
-                )
+                if norm_mode == "ask" and tname in MUTATING_AGENT_TOOLS:
+                    out_json = json.dumps(
+                        {"ok": False, "error": "当前处于只读「咨询模式」，已拦截修改操作；请向用户提供建议或使用 present_creative_proposals 输出方案卡。"},
+                        ensure_ascii=False,
+                    )
+                    summary = f"咨询模式已拦截 {tname}"
+                    ui_action = None
+                else:
+                    out_json, summary, ui_action = await _execute_studio_tool_async(
+                        tname, targs, wb, live_blocks, client, endpoint, headers, llm_model
+                    )
                 duration_ms = int((time.perf_counter() - t0) * 1000)
 
                 ev = {"id": tc_id, "name": tname, "summary": summary, "ok": '"error"' not in out_json, "duration_ms": duration_ms}
@@ -2007,3 +2324,70 @@ async def stream_studio_agent(
         )
     except Exception as exc:
         yield sse("error", {"message": str(exc) or "Agent 执行异常"})
+
+
+async def compact_agent_session(session_id: str) -> Dict[str, Any]:
+    """Compacts a long agent session into a crisp structured summary message to save context budget."""
+    sess = get_agent_session(session_id)
+    if not sess:
+        raise ValueError("对话会话不存在")
+    msgs = sess.get("messages") or []
+    if len(msgs) < 2:
+        return {"ok": True, "before_count": len(msgs), "after_count": len(msgs), "summary": "当前会话消息较少，无需压缩。"}
+
+    transcript_lines: List[str] = []
+    for m in msgs[-60:]:
+        role = "用户" if m.get("role") == "user" else "助手"
+        txt = str(m.get("content") or "").strip()
+        if txt:
+            transcript_lines.append(f"[{role}] {txt[:600]}")
+    transcript = "\n".join(transcript_lines)
+
+    summary_text = ""
+    cfg = load_config()
+    base_url = _clean_base_url(cfg.get("llm_base_url") or "")
+    api_key = str(cfg.get("llm_api_key") or "").strip()
+    llm_model = str(cfg.get("llm_model") or "qwen4-max").strip()
+
+    if base_url and api_key:
+        try:
+            client = _get_llm_client()
+            req = {
+                "model": llm_model,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "你是 NAI Studio 会话压缩器。请将以下创作对话浓缩为 250~500 字的中文结构化摘要，保留：1) 当前核心画面构思/画师配方/参数结论；2) 用户明确的偏好与否定项；3) 未完成的待办事项。禁止编造。",
+                    },
+                    {"role": "user", "content": transcript[:24000]},
+                ],
+                "temperature": 0.2,
+                "max_tokens": 1200,
+            }
+            r, _ = await post_chat_with_max_tokens_fallback(
+                client,
+                f"{base_url}/chat/completions",
+                {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                req,
+                timeout=45.0,
+            )
+            if r.status_code == 200:
+                summary_text = str(((r.json().get("choices") or [{}])[0].get("message") or {}).get("content") or "").strip()
+        except Exception:
+            summary_text = ""
+
+    if not summary_text:
+        # Fast deterministic fallback if LLM is offline/unavailable
+        user_turns = [str(m.get("content") or "").strip().splitlines()[0][:120] for m in msgs if m.get("role") == "user"]
+        last_asst = next((str(m.get("content") or "").strip()[:360] for m in reversed(msgs) if m.get("role") == "assistant"), "")
+        summary_text = (
+            "### 会话阶段摘要（已自动压缩上下文）\n"
+            + "- **历史诉求要点**：" + " / ".join(user_turns[-5:]) + "\n"
+            + (f"- **最新进展**：{last_asst}" if last_asst else "")
+        )
+    else:
+        summary_text = "### 会话阶段摘要（已压缩上下文）\n" + summary_text
+
+    res = replace_agent_session_messages(session_id, summary_text)
+    return {"ok": True, **res, "summary": summary_text}
+

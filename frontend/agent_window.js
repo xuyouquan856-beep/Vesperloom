@@ -10,11 +10,16 @@ const agentState = {
   minimized: false,
   docked: true,
   activePane: "chat",
+  mode: "agent",
+  memory: "",
   sessionId: null,
   sessions: [],
   messages: [],
   skills: [],
   pinnedSkills: [],
+  pendingAttachments: [],
+  pendingMentions: [],
+  proposalCache: {},
   editingSkillSlug: null,
   streaming: false,
   abortController: null,
@@ -29,12 +34,19 @@ const agentState = {
 function initStudioAgentWindow(bootstrapData = {}) {
   agentState.skills = Array.isArray(bootstrapData.skills) ? bootstrapData.skills : [];
   agentState.sessions = Array.isArray(bootstrapData.agent_sessions) ? bootstrapData.agent_sessions : [];
+  try {
+    const savedMode = localStorage.getItem("nai_studio_agent_mode");
+    if (savedMode === "ask" || savedMode === "agent") agentState.mode = savedMode;
+  } catch (e) {}
 
   restoreAgentWindowGeometry();
   setupAgentWindowDragAndResize();
+  setupAgentDropZone();
   renderAgentModelPill();
+  renderAgentModeButton();
   refreshAgentLiveStrip();
   renderAgentPinnedSkillsBar();
+  renderAgentAttachmentsBar();
   renderAgentSkillsList();
   renderAgentSessionsList();
 
@@ -146,10 +158,10 @@ function toggleAgentSubPane(pane) {
 
 function switchAgentPane(pane = "chat") {
   agentState.activePane = pane;
-  ["chat", "sessions", "skills"].forEach(p => {
+  ["chat", "sessions", "skills", "memory"].forEach(p => {
     document.getElementById(`agent-pane-${p}`)?.classList.toggle("hidden", p !== pane);
   });
-  // Context telemetry strip is ONLY shown in chat view, never cluttering sessions or skills
+  // Context telemetry strip is ONLY shown in chat view, never cluttering sessions, skills or memory
   document.getElementById("agent-live-strip")?.classList.toggle("hidden", pane !== "chat");
   document.querySelectorAll(".agent-icon-btn[data-agent-tab]").forEach(btn => {
     const act = btn.dataset.agentTab === pane;
@@ -160,6 +172,117 @@ function switchAgentPane(pane = "chat") {
   if (pane === "skills") {
     closeSkillEditor();
     fetchAndRenderAgentSkills();
+  }
+  if (pane === "memory") fetchAndRenderAgentMemory();
+}
+
+function toggleAgentMode() {
+  agentState.mode = agentState.mode === "ask" ? "agent" : "ask";
+  try {
+    localStorage.setItem("nai_studio_agent_mode", agentState.mode);
+  } catch (e) {}
+  renderAgentModeButton();
+  showToast(agentState.mode === "ask" ? "已切换为「咨询模式」（只读分析与方案卡，不改动工作台）" : "已切换为「协同模式」（可直接读写工作台与资源库）");
+}
+
+function renderAgentModeButton() {
+  const btn = document.getElementById("agent-mode-toggle");
+  const lbl = document.getElementById("agent-mode-label");
+  if (!btn || !lbl) return;
+  const isAsk = agentState.mode === "ask";
+  lbl.textContent = isAsk ? "咨询" : "协同";
+  btn.className = isAsk
+    ? "spring-btn inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] text-[11px] font-medium bg-[var(--status-warning-tint)] text-[var(--status-warning)] border border-[var(--border-control)] transition-colors shrink-0 whitespace-nowrap"
+    : "spring-btn inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] text-[11px] font-medium bg-[var(--accent-primary-tint)] text-[var(--accent-primary)] border border-[var(--accent-primary-border)] transition-colors shrink-0 whitespace-nowrap";
+}
+
+async function fetchAndRenderAgentMemory() {
+  try {
+    const res = await fetch("/api/agent/memory");
+    if (!res.ok) return;
+    const data = await res.json();
+    agentState.memory = data.content || "";
+    const ta = document.getElementById("agent-memory-textarea");
+    if (ta) ta.value = agentState.memory;
+    updateAgentMemoryCounter();
+  } catch (e) {}
+}
+
+function updateAgentMemoryCounter() {
+  const ta = document.getElementById("agent-memory-textarea");
+  const cnt = document.getElementById("agent-memory-count");
+  if (ta && cnt) cnt.textContent = `${ta.value.trim().length} 字`;
+}
+
+function appendMemoryQuickChip(ruleText) {
+  const ta = document.getElementById("agent-memory-textarea");
+  if (!ta || !ruleText) return;
+  if (ta.value.includes(ruleText)) {
+    showToast("该条偏好已在记忆本中");
+    return;
+  }
+  const prefix = ta.value.trim() ? `${ta.value.trim()}\n` : "## 审美与创作偏好\n";
+  ta.value = `${prefix}- ${ruleText}\n`;
+  updateAgentMemoryCounter();
+  ta.focus();
+}
+
+function clearAgentMemoryEditor() {
+  const ta = document.getElementById("agent-memory-textarea");
+  if (ta) ta.value = "";
+  updateAgentMemoryCounter();
+}
+
+async function saveAgentMemoryFromEditor() {
+  const ta = document.getElementById("agent-memory-textarea");
+  const btn = document.getElementById("agent-memory-save-btn");
+  if (!ta) return;
+  if (btn) btn.disabled = true;
+  try {
+    const res = await fetch("/api/agent/memory", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: ta.value }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "保存失败");
+    agentState.memory = data.content || "";
+    updateAgentMemoryCounter();
+    showToast("已保存个人审美记忆本，将在所有会话中自动生效");
+  } catch (err) {
+    showToast(err.message || "保存记忆失败");
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function compactCurrentAgentSession() {
+  if (!agentState.sessionId || agentState.streaming) return;
+  if (agentState.messages.length < 2) {
+    showToast("当前对话较短，无需压缩");
+    return;
+  }
+  const btn = document.getElementById("agent-compact-btn");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "压缩中...";
+  }
+  try {
+    const res = await fetch(`/api/agent/sessions/${encodeURIComponent(agentState.sessionId)}/compact`, {
+      method: "POST",
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "压缩失败");
+    agentState.messages = [{ role: "assistant", content: data.summary || "已压缩会话上下文。" }];
+    renderAgentMessages(true);
+    showToast(`已将 ${data.before_count} 条历史消息压缩为阶段摘要`);
+  } catch (err) {
+    showToast(err.message || "压缩会话失败");
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "压缩";
+    }
   }
 }
 
@@ -606,6 +729,47 @@ function applyAgentUiAction(action) {
     return { summary: action.summary };
   }
 
+  if (action.type === "refresh_memory") {
+    if (typeof p.memory === "string") {
+      agentState.memory = p.memory;
+      const ta = document.getElementById("agent-memory-textarea");
+      if (ta) {
+        ta.value = p.memory;
+        updateAgentMemoryCounter();
+      }
+    }
+    showToast(action.summary || "已更新个人审美记忆本");
+    return { summary: action.summary };
+  }
+
+  if (action.type === "refresh_oc_cards") {
+    fetch("/api/oc-cards")
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data.cards)) {
+          state.ocCards = data.cards;
+          if (typeof renderOcCardsList === "function") renderOcCardsList();
+          if (typeof renderCharacterSlots === "function") renderCharacterSlots();
+        }
+      })
+      .catch(() => {});
+    return { summary: action.summary };
+  }
+
+  if (action.type === "run_xyz_matrix") {
+    if (typeof toggleXyzModal === "function") toggleXyzModal(true);
+    const xt = document.getElementById("xyz-x-type");
+    const xv = document.getElementById("xyz-x-values");
+    const yt = document.getElementById("xyz-y-type");
+    const yv = document.getElementById("xyz-y-values");
+    if (xt && p.x_type) xt.value = p.x_type;
+    if (xv && p.x_values !== undefined) xv.value = p.x_values;
+    if (yt && p.y_type) yt.value = p.y_type;
+    if (yv && p.y_values !== undefined) yv.value = p.y_values;
+    if (typeof updateXyzPreview === "function") updateXyzPreview();
+    return { summary: action.summary };
+  }
+
   return { summary: action.summary };
 }
 
@@ -749,8 +913,56 @@ function formatAgentMarkdown(text) {
   return `<div class="agent-prose">${out.join("")}</div>`;
 }
 
+function applyAgentProposal(pid, andGenerate = false) {
+  const item = agentState.proposalCache[pid];
+  if (!item) return;
+  const snapId = snapshotCurrentPrompts();
+  const blocks = {};
+  if (item.artist) blocks.artist = item.artist;
+  if (item.character) blocks.character = item.character;
+  if (item.lighting) blocks.lighting = item.lighting;
+  if (item.negative) blocks.negative = item.negative;
+  if (Object.keys(blocks).length) {
+    applyAgentUiAction({ type: "patch_prompt_blocks", summary: `套用方案「${item.title}」`, payload: { mode: "replace", blocks } });
+  }
+  const params = {};
+  if (item.scale !== undefined && item.scale !== null) params.scale = item.scale;
+  if (item.steps !== undefined && item.steps !== null) params.steps = item.steps;
+  if (Object.keys(params).length) {
+    applyAgentUiAction({ type: "set_workbench_params", summary: "同步方案参数", payload: params });
+  }
+  showToast(`已套用方案「${item.title}」${andGenerate ? "，开始生图..." : ""}`);
+  if (andGenerate && typeof triggerGenerate === "function") {
+    setTimeout(() => triggerGenerate(), 80);
+  }
+}
+
 function renderDiffActionCard(uiAct) {
   const p = uiAct.payload || {};
+  if (uiAct.type === "proposals" && Array.isArray(p.proposals) && p.proposals.length) {
+    const cards = p.proposals
+      .map((prop, i) => {
+        const pid = `prop_${i}_${(prop.title || "").slice(0, 12)}_${(prop.artist || "").length}_${(prop.character || "").length}`;
+        agentState.proposalCache[pid] = prop;
+        const previewTags = [prop.artist, prop.character, prop.lighting].filter(Boolean).join(", ");
+        return `
+        <div class="p-2.5 rounded-[9px] border border-[var(--border-control)] bg-[var(--surface-panel-alt)] space-y-1.5">
+          <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0">
+              <div class="font-semibold text-[12px] text-[var(--text-primary)]">${escapeHtml(prop.title)}</div>
+              ${prop.subtitle ? `<div class="text-[11px] text-[var(--text-secondary)] mt-0.5">${escapeHtml(prop.subtitle)}</div>` : ""}
+            </div>
+            <div class="flex items-center gap-1 shrink-0">
+              <button type="button" onclick="applyAgentProposal('${escapeHtml(pid)}', false)" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn text-[11px] font-medium">试套用</button>
+              <button type="button" onclick="applyAgentProposal('${escapeHtml(pid)}', true)" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn-accent text-[11px] font-medium">套用生图</button>
+            </div>
+          </div>
+          ${previewTags ? `<div class="font-mono text-[10.5px] text-[var(--text-muted)] line-clamp-2 bg-[var(--code-block-bg)] rounded-[5px] px-2 py-1">${escapeHtml(previewTags)}</div>` : ""}
+        </div>`;
+      })
+      .join("");
+    return `<div class="space-y-1.5 mt-1">${cards}</div>`;
+  }
   const added = Array.isArray(p.added) ? p.added : [];
   const removed = Array.isArray(p.removed) ? p.removed : [];
   const snapId = uiAct._snapId || "";
@@ -868,7 +1080,13 @@ function renderUsageFooterHtml(m) {
 
 function renderSingleMessageInner(m, idx, totalLen, domState = {}) {
   if (m.role === "user") {
-    return escapeHtml(m.content);
+    const imgsHtml =
+      Array.isArray(m.attachments) && m.attachments.length
+        ? `<div class="flex flex-wrap gap-1.5 mb-1.5">${m.attachments
+            .map(a => `<img src="${a.data_url}" alt="${escapeHtml(a.name || "参考图")}" class="w-14 h-14 rounded-[6px] object-cover border border-[var(--border-control)]" />`)
+            .join("")}</div>`
+        : "";
+    return `${imgsHtml}${escapeHtml(m.content)}`;
   }
   const isStreamingThis = agentState.streaming && idx === totalLen - 1;
   const timelineHtml = renderToolTimelineHtml(
@@ -933,6 +1151,10 @@ function scheduleActiveAssistantRender(forceScroll = false) {
 function renderAgentMessages(forceScroll = false) {
   const box = document.getElementById("agent-messages");
   if (!box) return;
+  const compactBtn = document.getElementById("agent-compact-btn");
+  if (compactBtn) {
+    compactBtn.classList.toggle("hidden", !agentState.sessionId || agentState.messages.length < 2);
+  }
 
   if (!agentState.messages.length) {
     box.innerHTML = `
@@ -1084,10 +1306,12 @@ function openAgentSlashQuick() {
 async function sendAgentMessage(overrideText = null) {
   const inp = document.getElementById("agent-input");
   const raw = typeof overrideText === "string" ? overrideText.trim() : (inp?.value || "").trim();
-  if (!raw) return;
+  const attachmentsToSend = typeof overrideText === "string" ? [] : [...agentState.pendingAttachments];
+  const mentionsToSend = typeof overrideText === "string" ? [] : [...agentState.pendingMentions];
+  if (!raw && !attachmentsToSend.length) return;
 
   if (agentState.streaming) {
-    if (raw !== agentState.activePromptText && raw !== agentState.queuedMessage) {
+    if (raw && raw !== agentState.activePromptText && raw !== agentState.queuedMessage) {
       agentState.queuedMessage = raw;
       if (typeof overrideText !== "string" && inp) {
         inp.value = "";
@@ -1102,12 +1326,16 @@ async function sendAgentMessage(overrideText = null) {
   if (typeof overrideText !== "string" && inp) {
     inp.value = "";
     autoGrowAgentInput();
+    agentState.pendingAttachments = [];
+    agentState.pendingMentions = [];
+    renderAgentAttachmentsBar();
   }
   hideSlashMenu();
   renderQuickReplies([]);
 
-  agentState.activePromptText = raw;
-  agentState.messages.push({ role: "user", content: raw });
+  const displayRaw = raw || "请分析我附带的参考图并给出提示词建议";
+  agentState.activePromptText = displayRaw;
+  agentState.messages.push({ role: "user", content: displayRaw, attachments: attachmentsToSend });
   const assistantMsg = {
     role: "assistant",
     content: "",
@@ -1127,7 +1355,7 @@ async function sendAgentMessage(overrideText = null) {
   const stopBtn = document.getElementById("agent-stop-btn");
   sendBtn?.classList.add("hidden");
   stopBtn?.classList.remove("hidden");
-  setAgentStreamStatus("连接推理流...", true);
+  setAgentStreamStatus(agentState.mode === "ask" ? "咨询模式分析中..." : "连接推理流...", true);
   refreshAgentLiveStrip();
 
   try {
@@ -1136,10 +1364,13 @@ async function sendAgentMessage(overrideText = null) {
       signal: myAbort.signal,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        message: raw,
+        message: displayRaw,
         session_id: agentState.sessionId,
         workbench_state: collectLiveWorkbenchState(),
         pinned_skills: agentState.pinnedSkills,
+        agent_mode: agentState.mode,
+        attachments: attachmentsToSend,
+        mentions: mentionsToSend,
       }),
     });
 
@@ -1272,13 +1503,220 @@ function handleAgentSseEvent(ev, assistantMsg) {
   }
 }
 
-// ================= Slash /skill Autocomplete & Input Keybindings =================
+// ================= Slash /skill & @ Context Mention + Image Attachment Handling =================
+function openAgentMentionQuick() {
+  const inp = document.getElementById("agent-input");
+  if (!inp) return;
+  const cur = inp.value;
+  inp.value = cur && !cur.endsWith(" ") ? `${cur} @` : `${cur}@`;
+  inp.focus();
+  autoGrowAgentInput();
+  handleAgentInputChange();
+}
+
+function _buildMentionCandidates(q) {
+  const s = typeof state !== "undefined" ? state : {};
+  const out = [];
+  if (!q || "当前画布stagecanvas".includes(q)) {
+    out.push({ type: "stage", id: 0, label: "当前画布", sub: "引用画布成图与参数", tag: "stage", badge: "画布" });
+  }
+  const ocMatches = [];
+  (s.ocCards || []).forEach(c => {
+    if (!q || `${c.name} ${c.prompt}`.toLowerCase().includes(q)) {
+      ocMatches.push({ type: "oc", id: c.id, label: c.name, sub: (c.prompt || "").slice(0, 40), tag: c.name, badge: "OC" });
+    }
+  });
+  const artistMatches = [];
+  const sortedArtists = [...(s.artists || [])].sort((a, b) => Number(!!b.favorite) - Number(!!a.favorite));
+  sortedArtists.forEach(a => {
+    if (!q || `${a.name} ${a.tag} ${a.category} ${(a.style_tags || []).join(" ")}`.toLowerCase().includes(q)) {
+      artistMatches.push({
+        type: "artist",
+        id: a.id,
+        label: a.name,
+        sub: a.tag,
+        tag: a.tag,
+        thumb: a.preview_url || "",
+        badge: a.category || "画师",
+      });
+    }
+  });
+  const galleryMatches = [];
+  (s.gallery || []).slice(0, 24).forEach(g => {
+    if (!q || `图库 ${g.id} ${g.seed} ${g.model_short} ${g.notes || ""} ${g.prompt || ""}`.toLowerCase().includes(q)) {
+      galleryMatches.push({
+        type: "gallery",
+        id: g.id,
+        label: `图库#${g.id}`,
+        sub: `#${g.seed} · ${g.model_short}`,
+        tag: String(g.id),
+        thumb: g.image_url,
+        badge: "图库",
+      });
+    }
+  });
+  if (!q) {
+    out.push(...ocMatches.slice(0, 3), ...artistMatches.slice(0, 6), ...galleryMatches.slice(0, 4));
+    return out.slice(0, 14);
+  }
+  out.push(...ocMatches, ...artistMatches, ...galleryMatches);
+  return out.slice(0, 14);
+}
+
+function insertAgentMention(type, id, label, tag) {
+  const inp = document.getElementById("agent-input");
+  if (!inp) return;
+  inp.value = inp.value.replace(/(?:^|\s)@[^\s@]*$/, ` @${label} `).trimStart();
+  if (!agentState.pendingMentions.some(m => m.type === type && String(m.id) === String(id) && m.label === label)) {
+    agentState.pendingMentions.push({ type, id, label, tag });
+  }
+  hideSlashMenu();
+  autoGrowAgentInput();
+  inp.focus();
+}
+
+function _addAgentImageFile(file) {
+  if (!file || !file.type?.startsWith("image/")) return;
+  if (agentState.pendingAttachments.length >= 3) {
+    showToast("单次最多附带 3 张参考图");
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      const maxDim = 768;
+      let w = img.width, h = img.height;
+      if (Math.max(w, h) > maxDim) {
+        const ratio = maxDim / Math.max(w, h);
+        w = Math.round(w * ratio);
+        h = Math.round(h * ratio);
+      }
+      const cv = document.createElement("canvas");
+      cv.width = w;
+      cv.height = h;
+      const ctx = cv.getContext("2d");
+      ctx.drawImage(img, 0, 0, w, h);
+      const dataUrl = cv.toDataURL("image/jpeg", 0.86);
+      agentState.pendingAttachments.push({ name: file.name || "pasted_ref.jpg", data_url: dataUrl });
+      renderAgentAttachmentsBar();
+    };
+    img.src = String(reader.result || "");
+  };
+  reader.readAsDataURL(file);
+}
+
+function handleAgentPaste(e) {
+  const items = e.clipboardData?.items;
+  if (!items) return;
+  for (const it of items) {
+    if (it.type && it.type.startsWith("image/")) {
+      e.preventDefault();
+      const f = it.getAsFile();
+      if (f) _addAgentImageFile(f);
+      showToast("已粘贴参考图，发送后 Agent 将直接视觉分析");
+      return;
+    }
+  }
+}
+
+function handleAgentImageUpload(event) {
+  const files = [...(event.target?.files || [])];
+  files.forEach(f => _addAgentImageFile(f));
+  if (event.target) event.target.value = "";
+}
+
+function setupAgentDropZone() {
+  const pane = document.getElementById("agent-pane-chat");
+  if (!pane || pane.dataset.dropBound) return;
+  pane.dataset.dropBound = "1";
+  pane.addEventListener("dragover", e => {
+    if ([...(e.dataTransfer?.types || [])].includes("Files")) {
+      e.preventDefault();
+      pane.classList.add("ring-1", "ring-[var(--accent-primary)]");
+    }
+  });
+  pane.addEventListener("dragleave", () => pane.classList.remove("ring-1", "ring-[var(--accent-primary)]"));
+  pane.addEventListener("drop", e => {
+    pane.classList.remove("ring-1", "ring-[var(--accent-primary)]");
+    const files = [...(e.dataTransfer?.files || [])].filter(f => f.type?.startsWith("image/"));
+    if (!files.length) return;
+    e.preventDefault();
+    files.forEach(f => _addAgentImageFile(f));
+    showToast(`已拖入 ${files.length} 张参考图`);
+  });
+}
+
+function removeAgentAttachment(idx) {
+  agentState.pendingAttachments.splice(idx, 1);
+  renderAgentAttachmentsBar();
+}
+
+function sendAgentAttachmentToI2I(idx) {
+  const att = agentState.pendingAttachments[idx];
+  if (!att?.data_url) return;
+  if (typeof setStageLocalImage === "function" && typeof setWorkbenchAction === "function") {
+    setStageLocalImage(att.data_url);
+    setWorkbenchAction("img2img");
+    showToast("已将该参考图设为工作台图生图底图");
+  }
+}
+
+function renderAgentAttachmentsBar() {
+  const bar = document.getElementById("agent-attachments-bar");
+  if (!bar) return;
+  if (!agentState.pendingAttachments.length) {
+    bar.classList.add("hidden");
+    bar.innerHTML = "";
+    return;
+  }
+  bar.classList.remove("hidden");
+  bar.innerHTML = agentState.pendingAttachments
+    .map(
+      (att, idx) => `
+      <div class="group relative inline-flex items-center gap-1.5 pr-1.5 rounded-[7px] bg-[var(--surface-subgroup)] border border-[var(--border-control)] overflow-hidden">
+        <img src="${att.data_url}" alt="" class="w-8 h-8 object-cover shrink-0" />
+        <button type="button" onclick="sendAgentAttachmentToI2I(${idx})" class="text-[10.5px] text-[var(--text-secondary)] hover:text-[var(--text-primary)]" title="同时设为图生图底图">图生图</button>
+        <button type="button" onclick="removeAgentAttachment(${idx})" class="text-[var(--text-muted)] hover:text-[var(--status-danger)] text-[12px] leading-none px-0.5" title="移除参考图">×</button>
+      </div>`
+    )
+    .join("");
+}
+
 function handleAgentInputChange() {
   autoGrowAgentInput();
   const inp = document.getElementById("agent-input");
   const menu = document.getElementById("agent-slash-menu");
   if (!inp || !menu) return;
   const val = inp.value;
+
+  const atMatch = val.match(/(?:^|\s)@([^\s@]*)$/);
+  if (atMatch) {
+    const q = atMatch[1].toLowerCase();
+    const cands = _buildMentionCandidates(q);
+    if (!cands.length) {
+      hideSlashMenu();
+      return;
+    }
+    menu.classList.remove("hidden");
+    menu.innerHTML = cands
+      .map(
+        c => `
+        <button type="button" onclick="insertAgentMention('${escapeHtml(c.type)}', ${Number(c.id) || 0}, '${escapeHtml(c.label).replace(/'/g, "\\'")}', '${escapeHtml(c.tag || "").replace(/'/g, "\\'")}')" class="ui-menu-item w-full text-left px-2.5 py-1.5 flex items-center justify-between gap-2 text-[12px]">
+          <div class="flex items-center gap-2 min-w-0">
+            ${c.thumb ? `<img src="${c.thumb}" alt="" class="w-6 h-7 rounded-[4px] object-cover object-top shrink-0" />` : ""}
+            <div class="min-w-0 truncate">
+              <span class="font-medium text-[var(--text-primary)]">@${escapeHtml(c.label)}</span>
+              <span class="text-[11px] font-mono text-[var(--text-muted)] ml-1.5">${escapeHtml(c.sub || "")}</span>
+            </div>
+          </div>
+          <span class="text-[10px] px-1.5 py-[1px] rounded-[4px] ui-badge text-[var(--text-muted)] shrink-0">${escapeHtml(c.badge)}</span>
+        </button>`
+      )
+      .join("");
+    return;
+  }
+
   const m = val.match(/(?:^|\s)\/([a-zA-Z0-9_\-\u4e00-\u9fff]*)$/);
   if (!m) {
     hideSlashMenu();
