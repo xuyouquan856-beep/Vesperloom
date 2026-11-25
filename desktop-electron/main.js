@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, ipcMain, shell, nativeImage, dialog } = require("electron");
+const { app, BrowserWindow, WebContentsView, Tray, Menu, ipcMain, shell, nativeImage, dialog } = require("electron");
 const { spawn, execFileSync } = require("child_process");
 const fs = require("fs");
 const http = require("http");
@@ -37,7 +37,7 @@ const ICON_ICO_PATH = path.join(__dirname, "assets", "vesperloom.ico");
 const ICON_PNG_PATH = path.join(__dirname, "assets", "vesperloom_icon.png");
 const DEFAULT_SPLASH_PATH = path.join(__dirname, "assets", "default_splash.jpg");
 
-for (const d of [DATA_DIR, OUTPUTS_DIR, TMP_DIR, LOGS_DIR, ELECTRON_DATA_DIR]) {
+for (const d of [DATA_DIR, OUTPUTS_DIR, TMP_DIR, LOGS_DIR, ELECTRON_DATA_DIR, SPLASH_DIR]) {
   fs.mkdirSync(d, { recursive: true });
 }
 
@@ -71,11 +71,13 @@ const BASE_URL = `http://127.0.0.1:${PORT}`;
 const IS_DARK = String(STUDIO_CFG.theme || "dark").toLowerCase() !== "light";
 
 let mainWindow = null;
-let splashWindow = null;
+let appView = null;
+let splashView = null;
 let tray = null;
 let backendProc = null;
 let ownedBackend = false;
 let isQuitting = false;
+let splashShownAt = 0;
 
 function logDesktop(msg) {
   const line = `${new Date().toISOString()} [desktop] ${msg}\n`;
@@ -168,12 +170,6 @@ function findVerifiedPython() {
   return null;
 }
 
-function setSplashStatus(text) {
-  if (splashWindow && !splashWindow.isDestroyed()) {
-    splashWindow.webContents.send("splash:status", text);
-  }
-}
-
 async function ensureBackendRunning() {
   if (await isPortListening(PORT)) {
     logDesktop(`Backend already listening on 127.0.0.1:${PORT}; attaching.`);
@@ -186,9 +182,7 @@ async function ensureBackendRunning() {
     throw new Error("未找到已安装 uvicorn 与 fastapi 的 Python 解释器。请运行 pip install -r requirements.txt。");
   }
 
-  setSplashStatus(`正在启动本地后端 (${PORT})...`);
   logDesktop(`Spawning backend with ${pyExe} on port ${PORT}`);
-
   const logStream = fs.createWriteStream(path.join(LOGS_DIR, "desktop_backend.log"), { flags: "a" });
   backendProc = spawn(
     pyExe,
@@ -218,10 +212,9 @@ async function ensureBackendRunning() {
   const deadline = Date.now() + 20000;
   while (Date.now() < deadline) {
     if (await httpGetOk(`${BASE_URL}/api/models`)) {
-      setSplashStatus("引擎就绪，正在载入工作台...");
       return true;
     }
-    await new Promise((r) => setTimeout(r, 180));
+    await new Promise((r) => setTimeout(r, 160));
   }
   throw new Error(`本地后端启动超时（${BASE_URL} 未响应）。请查看 logs/desktop_backend.log。`);
 }
@@ -241,8 +234,6 @@ function stopBackendProcess() {
   ownedBackend = false;
 }
 
-let splashShownAt = 0;
-
 function resolveSplashArtFileUrl() {
   const cfg = readStudioConfig();
   const mode = String(cfg.splash_mode || "default").toLowerCase();
@@ -260,7 +251,6 @@ function resolveSplashArtFileUrl() {
   }
   if (mode === "favorites") {
     try {
-      // Lightweight recursive pick of recent outputs PNGs if favorites mode is enabled before backend is up
       const dayDirs = fs.readdirSync(OUTPUTS_DIR, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name).sort().reverse().slice(0, 6);
       const candidates = [];
       for (const dd of dayDirs) {
@@ -278,31 +268,48 @@ function resolveSplashArtFileUrl() {
   return pathToFileURL(DEFAULT_SPLASH_PATH).href;
 }
 
-function createSplashWindow() {
-  const cfg = readStudioConfig();
-  if (cfg.splash_enabled === false) return;
-  splashShownAt = Date.now();
-  splashWindow = new BrowserWindow({
-    width: 740,
-    height: 416,
-    frame: false,
-    transparent: true,
-    resizable: false,
-    alwaysOnTop: true,
-    skipTaskbar: true,
-    icon: ICON_ICO_PATH,
-    webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
-      contextIsolation: true,
-      nodeIntegration: false,
-    },
-  });
-  const artUrl = resolveSplashArtFileUrl();
-  splashWindow.loadFile(path.join(__dirname, "splash.html"), { query: { art: artUrl } });
+function syncChildViewBounds() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const [w, h] = mainWindow.getContentSize();
+  const rect = { x: 0, y: 0, width: w, height: h };
+  if (appView) appView.setBounds(rect);
+  if (splashView) splashView.setBounds(rect);
 }
 
-function createMainWindow() {
+function dismissSplashSmoothly() {
+  if (!splashView) return;
+  const minDisplayMs = 1550;
+  const waitMs = Math.max(0, minDisplayMs - (Date.now() - splashShownAt));
+  setTimeout(() => {
+    if (!splashView) return;
+    try {
+      splashView.webContents.send("splash:status", "__FADE_OUT__");
+    } catch (_) {}
+    setTimeout(() => {
+      if (!splashView) return;
+      try {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.contentView.removeChildView(splashView);
+        }
+        splashView.webContents.close();
+      } catch (_) {}
+      splashView = null;
+    }, 430);
+  }, waitMs);
+}
+
+/**
+ * Industry-standard Single-Window Dual-WebContentsView architecture (Discord / Figma / Linear style):
+ * - ONE opaque hardware-accelerated BrowserWindow at the exact final size (zero aspect jump, zero DWM lag!)
+ * - Top `splashView` covers 100% of the window and plays pure-GPU 60fps Celestial Aperture reveal
+ * - Bottom `appView` loads the real Vesperloom workbench silently underneath
+ * - Once `appView` finishes first paint + minimum splash beat, `splashView` crossfades out and unmounts cleanly!
+ */
+function createUnifiedMainWindow() {
   const ws = loadWindowState();
+  const cfg = readStudioConfig();
+  const useSplash = cfg.splash_enabled !== false;
+
   mainWindow = new BrowserWindow({
     title: "Vesperloom — Obsidian Atelier",
     width: ws.width,
@@ -312,9 +319,14 @@ function createMainWindow() {
     minWidth: 1080,
     minHeight: 700,
     frame: false,
-    backgroundColor: IS_DARK ? "#0c0f16" : "#f8fafc",
+    transparent: false,
+    backgroundColor: IS_DARK ? "#060911" : "#f8fafc",
     icon: ICON_ICO_PATH,
     show: false,
+  });
+
+  // 1. Bottom Layer: Main Vesperloom Workbench WebContentsView
+  appView = new WebContentsView({
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -322,8 +334,10 @@ function createMainWindow() {
       spellcheck: false,
     },
   });
+  appView.setBackgroundColor(IS_DARK ? "#060911" : "#f8fafc");
+  mainWindow.contentView.addChildView(appView);
 
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+  appView.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//i.test(url) && !url.startsWith(BASE_URL)) {
       shell.openExternal(url);
       return { action: "deny" };
@@ -331,7 +345,7 @@ function createMainWindow() {
     return { action: "allow" };
   });
 
-  mainWindow.webContents.on("context-menu", (_ev, params) => {
+  appView.webContents.on("context-menu", (_ev, params) => {
     const items = [];
     if (params.isEditable) {
       items.push(
@@ -348,7 +362,7 @@ function createMainWindow() {
       if (items.length) items.push({ type: "separator" });
       items.push({
         label: "复制图像",
-        click: () => mainWindow.webContents.copyImageAt(params.x, params.y),
+        click: () => appView.webContents.copyImageAt(params.x, params.y),
       });
     }
     if (items.length) {
@@ -356,17 +370,43 @@ function createMainWindow() {
     }
   });
 
+  // 2. Top Layer: Seamless Full-Window Splash Overlay (same exact aspect ratio & bounds!)
+  if (useSplash) {
+    splashShownAt = Date.now();
+    splashView = new WebContentsView({
+      webPreferences: {
+        preload: path.join(__dirname, "preload.js"),
+        contextIsolation: true,
+        nodeIntegration: false,
+      },
+    });
+    splashView.setBackgroundColor("#00000000");
+    mainWindow.contentView.addChildView(splashView);
+    const artUrl = resolveSplashArtFileUrl();
+    splashView.webContents.loadFile(path.join(__dirname, "splash.html"), { query: { art: artUrl } });
+  }
+
+  syncChildViewBounds();
+  if (ws.isMaximized) mainWindow.maximize();
+  syncChildViewBounds();
+  mainWindow.show();
+  mainWindow.focus();
+
+  mainWindow.on("resize", () => {
+    syncChildViewBounds();
+    saveWindowState(mainWindow);
+  });
+  mainWindow.on("move", () => saveWindowState(mainWindow));
   mainWindow.on("maximize", () => {
-    mainWindow.webContents.send("window:maximized-changed", true);
+    syncChildViewBounds();
+    appView?.webContents.send("window:maximized-changed", true);
     saveWindowState(mainWindow);
   });
   mainWindow.on("unmaximize", () => {
-    mainWindow.webContents.send("window:maximized-changed", false);
+    syncChildViewBounds();
+    appView?.webContents.send("window:maximized-changed", false);
     saveWindowState(mainWindow);
   });
-  mainWindow.on("resize", () => saveWindowState(mainWindow));
-  mainWindow.on("move", () => saveWindowState(mainWindow));
-
   mainWindow.on("close", (e) => {
     saveWindowState(mainWindow);
     if (!isQuitting) {
@@ -375,33 +415,7 @@ function createMainWindow() {
     }
   });
 
-  mainWindow.once("ready-to-show", () => {
-    const revealMain = () => {
-      if (ws.isMaximized) mainWindow.maximize();
-      mainWindow.show();
-      mainWindow.focus();
-    };
-    if (splashWindow && !splashWindow.isDestroyed()) {
-      const minDisplayMs = 1750;
-      const waitMs = Math.max(0, minDisplayMs - (Date.now() - splashShownAt));
-      setTimeout(() => {
-        if (splashWindow && !splashWindow.isDestroyed()) {
-          splashWindow.webContents.send("splash:status", "__FADE_OUT__");
-        }
-        setTimeout(() => {
-          if (splashWindow && !splashWindow.isDestroyed()) {
-            splashWindow.close();
-            splashWindow = null;
-          }
-          revealMain();
-        }, 360);
-      }, waitMs);
-    } else {
-      revealMain();
-    }
-  });
-
-  mainWindow.loadURL(BASE_URL);
+  return appView;
 }
 
 function showMainWindow() {
@@ -429,7 +443,7 @@ function createTray() {
         stopBackendProcess();
         try {
           await ensureBackendRunning();
-          if (mainWindow && !mainWindow.isDestroyed()) mainWindow.reload();
+          if (appView) appView.webContents.reload();
         } catch (err) {
           dialog.showErrorBox("Vesperloom 后端重启失败", String(err.message || err));
         }
@@ -446,7 +460,7 @@ function createTray() {
   tray.setContextMenu(menu);
 }
 
-// IPC handlers for frameless window controls & desktop actions
+// IPC handlers
 ipcMain.handle("window:minimize", () => mainWindow?.minimize());
 ipcMain.handle("window:toggle-maximize", () => {
   if (!mainWindow) return false;
@@ -469,7 +483,6 @@ ipcMain.handle("desktop:get-info", () => ({
   baseUrl: BASE_URL,
 }));
 
-// Single-instance lock (skip only during isolated smoke test)
 const gotLock = SMOKE_TEST ? true : app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
@@ -495,15 +508,23 @@ if (!gotLock) {
       return;
     }
 
-    createSplashWindow();
+    // Show the ONE unified window immediately (splashView covers 100% of exact final bounds!)
+    createUnifiedMainWindow();
+    createTray();
+
     try {
       await ensureBackendRunning();
-      createTray();
-      createMainWindow();
+      if (appView) {
+        appView.webContents.once("did-finish-load", () => {
+          // Give the workbench 140ms to settle initial paint underneath, then crossfade splash out smoothly
+          setTimeout(dismissSplashSmoothly, 140);
+        });
+        appView.webContents.loadURL(BASE_URL);
+      }
     } catch (err) {
       logDesktop(`Startup error: ${err.stack || err}`);
-      if (splashWindow && !splashWindow.isDestroyed()) splashWindow.close();
-      dialog.showErrorBox("NAI Studio 启动失败", String(err.message || err));
+      dismissSplashSmoothly();
+      dialog.showErrorBox("Vesperloom 启动失败", String(err.message || err));
       isQuitting = true;
       app.quit();
     }
