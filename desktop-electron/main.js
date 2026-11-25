@@ -293,11 +293,12 @@ function resolveSplashArtFileUrl() {
       if (fs.existsSync(SPLASH_FAVORITES_CACHE)) {
         const list = JSON.parse(fs.readFileSync(SPLASH_FAVORITES_CACHE, "utf-8"));
         if (Array.isArray(list) && list.length) {
+          const outRoot = path.resolve(OUTPUTS_DIR) + path.sep;
           const valid = list
             .map((rel) => path.join(OUTPUTS_DIR, String(rel || "").replace(/^[/\\]+/, "")))
             .filter((p) => {
               const resolved = path.resolve(p);
-              return resolved.startsWith(path.resolve(OUTPUTS_DIR)) && fs.existsSync(resolved);
+              return resolved.startsWith(outRoot) && fs.existsSync(resolved);
             });
           if (valid.length) {
             const pick = valid[Math.floor(Math.random() * valid.length)];

@@ -236,10 +236,13 @@ async def api_update_config(body: Dict[str, Any]) -> Dict[str, Any]:
             if k in ("api_token", "llm_api_key", "external_agent_token") and "..." in str(body[k]):
                 continue
             if k == "base_url":
+                from urllib.parse import urlparse as _urlparse
                 new_url = str(body[k]).strip().rstrip("/")
                 old_url = str(cfg.get("base_url") or "").strip().rstrip("/")
+                parsed_new = _urlparse(new_url)
+                is_official_nai = parsed_new.scheme == "https" and parsed_new.hostname == "image.novelai.net"
                 # Prevent silent redirect of stored NAI api_token to an arbitrary third-party host
-                if new_url != old_url and not new_url.startswith("https://image.novelai.net"):
+                if new_url != old_url and not is_official_nai:
                     supplied_tok = str(body.get("api_token") or "").strip()
                     if not supplied_tok or "..." in supplied_tok:
                         raise HTTPException(status_code=400, detail="修改非官方 NAI Base URL 时必须同时重新填写 API Token")

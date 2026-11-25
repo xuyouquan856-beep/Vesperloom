@@ -8178,7 +8178,7 @@ function applyLlmProviderPreset(key, target = "settings") {
   if (ctx) ctx.value = p.context;
   if (maxOut) maxOut.value = p.maxOut;
   state.llmModels = [...p.models];
-  if (typeof renderLlmModelSelectMenu === "function") renderLlmModelSelectMenu();
+  if (typeof renderLlmModelSelect === "function") renderLlmModelSelect();
   showToast(`已套用 ${p.label} 预设，填写 API Key 后点击保存即可`);
 }
 
@@ -8225,16 +8225,20 @@ async function testOnboardingNaiConnection() {
   try {
     const payload = tok.includes("...") ? {} : { api_token: tok };
     if (Object.keys(payload).length) {
-      await fetch("/api/config", {
+      const cfgRes = await fetch("/api/config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+      if (cfgRes.ok) {
+        const cfgData = await cfgRes.json();
+        if (cfgData.config) state.config = cfgData.config;
+      }
     }
     const res = await fetch("/api/account");
     const acc = await res.json();
     state.account = acc;
-    if (typeof renderAccountBadge === "function") renderAccountBadge();
+    if (typeof renderAccountHeader === "function") renderAccountHeader();
     if (acc.connected) {
       if (badge) { badge.textContent = `已连通 · ${acc.tier_name || "Opus"} (${acc.total_anlas ?? 0} Anlas)`; badge.style.color = "var(--status-success)"; }
       showToast("NovelAI 连接成功！");
@@ -8329,9 +8333,9 @@ async function saveApiOnboarding() {
     if (data.config) state.config = data.config;
     if (data.account) {
       state.account = data.account;
-      if (typeof renderAccountBadge === "function") renderAccountBadge();
+      if (typeof renderAccountHeader === "function") renderAccountHeader();
     }
-    if (typeof syncSettingsUiFromConfig === "function") syncSettingsUiFromConfig();
+    if (typeof populateSettingsForm === "function") populateSettingsForm();
     if (typeof renderAgentModelPill === "function") renderAgentModelPill();
     closeApiOnboardingModal();
     showToast("API 配置已保存，欢迎开始创作！");

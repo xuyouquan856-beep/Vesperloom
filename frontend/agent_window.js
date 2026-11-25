@@ -122,7 +122,7 @@ function renderAgentQuickModelList() {
 
   listEl.innerHTML = pool.slice(0, 24).map((m) => {
     const active = m === current;
-    return `<button type="button" data-quick-model="${escapeHtml(m)}" class="w-full text-left px-2 py-1.5 rounded-[6px] font-mono text-[11.5px] flex items-center justify-between gap-2 transition-colors ${active ? "bg-[var(--accent-soft,rgba(56,189,248,0.14))] text-[var(--accent)] font-semibold" : "text-[var(--text-secondary)] hover:bg-[var(--btn-hover-bg)] hover:text-[var(--text-primary)]"}">
+    return `<button type="button" data-quick-model="${escapeHtml(m)}" class="w-full text-left px-2 py-1.5 rounded-[6px] font-mono text-[11.5px] flex items-center justify-between gap-2 transition-colors ${active ? "agent-quick-model-active font-semibold" : "text-[var(--text-secondary)] hover:bg-[var(--btn-hover-bg)] hover:text-[var(--text-primary)]"}">
       <span class="truncate">${escapeHtml(m)}</span>
       ${active ? '<span class="text-[10px] shrink-0">✓</span>' : ""}
     </button>`;

@@ -2219,10 +2219,18 @@ html.is-electron-desktop header #bg-menu {
   max-width: 680px;
   max-height: 90vh;
 }
+#api-onboarding-modal .px-5 {
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
+}
+#api-onboarding-modal .pr-2 {
+  padding-right: 0.5rem;
+}
 #agent-model-pill {
   max-width: 148px;
 }
 #agent-quick-model-popover {
+  top: 100%;
   width: 256px;
   z-index: 60;
 }
@@ -2231,4 +2239,8 @@ html.is-electron-desktop header #bg-menu {
 }
 #agent-quick-model-list {
   max-height: 196px;
+}
+.agent-quick-model-active {
+  background: var(--accent-primary-tint);
+  color: var(--accent-primary);
 }
