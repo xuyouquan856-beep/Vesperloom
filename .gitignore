@@ -26,6 +26,10 @@ data/backups/
 data/agent_memory.md
 data/webview_cache/
 data/desktop_window.json
+data/electron_data/
+data/electron_window.json
+desktop-electron/node_modules/
+dist-desktop/
 node_modules/
 
 # === Generated Artworks, Artist Previews & Large Media ===

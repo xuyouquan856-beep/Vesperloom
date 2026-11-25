@@ -7922,4 +7922,30 @@ function importWorkbenchRecipeJson() {
   }
 }
 
-window.addEventListener("DOMContentLoaded", bootstrapApp);
+function initElectronDesktopChrome() {
+  if (!window.naiDesktop || !window.naiDesktop.isElectron) return;
+  document.documentElement.classList.add("is-electron-desktop");
+  const ctrl = document.getElementById("electron-win-controls");
+  if (ctrl) {
+    ctrl.classList.remove("hidden");
+    ctrl.classList.add("flex");
+  }
+  const maxBtn = document.getElementById("electron-max-btn");
+  const setMaxIcon = (isMax) => {
+    if (!maxBtn) return;
+    maxBtn.innerHTML = isMax
+      ? '<svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.25"><rect x="2" y="3.5" width="6.5" height="6.5" rx="0.8"/><path d="M3.8 3.5V2.3a.8.8 0 0 1 .8-.8h5.1a.8.8 0 0 1 .8.8v5.1a.8.8 0 0 1-.8.8H8.5"/></svg>'
+      : '<svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2.2" y="2.2" width="7.6" height="7.6" rx="1"/></svg>';
+  };
+  if (typeof window.naiDesktop.isMaximized === "function") {
+    window.naiDesktop.isMaximized().then(setMaxIcon).catch(() => {});
+  }
+  if (typeof window.naiDesktop.onMaximizeChange === "function") {
+    window.naiDesktop.onMaximizeChange(setMaxIcon);
+  }
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+  initElectronDesktopChrome();
+  bootstrapApp();
+});

@@ -141,6 +141,19 @@
         </button>
       </div>
 
+      <!-- Electron 原生桌面端融合窗口控制按钮（浏览器模式下自动隐藏） -->
+      <div id="electron-win-controls" class="hidden items-center pl-1.5 ml-0.5 border-l border-[var(--border-hairline)] shrink-0 gap-0.5">
+        <button type="button" onclick="window.naiDesktop?.minimize()" aria-label="最小化" title="最小化" class="electron-win-btn w-7 h-7 rounded-[6px] flex items-center justify-center text-[var(--text-secondary)] hover:bg-[var(--btn-hover-bg)] hover:text-[var(--text-primary)] transition-colors">
+          <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 6h8"/></svg>
+        </button>
+        <button id="electron-max-btn" type="button" onclick="window.naiDesktop?.toggleMaximize()" aria-label="最大化或还原" title="最大化 / 还原" class="electron-win-btn w-7 h-7 rounded-[6px] flex items-center justify-center text-[var(--text-secondary)] hover:bg-[var(--btn-hover-bg)] hover:text-[var(--text-primary)] transition-colors">
+          <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2.2" y="2.2" width="7.6" height="7.6" rx="1"/></svg>
+        </button>
+        <button type="button" onclick="window.naiDesktop?.close()" aria-label="隐藏到系统托盘" title="隐藏到系统托盘（MCP/A2A 保持运行）" class="electron-win-btn electron-win-close w-7 h-7 rounded-[6px] flex items-center justify-center text-[var(--text-secondary)] transition-colors">
+          <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7"/></svg>
+        </button>
+      </div>
+
       <!-- 外观定制浮层 -->
       <div id="bg-menu" class="hidden absolute right-0 top-9 w-[328px] max-w-[calc(100vw-24px)] liquid-popover rounded-[12px] p-4 space-y-3.5 z-50">
         <div class="flex items-center justify-between gap-2 pb-2.5 border-b border-[var(--border-hairline)]">

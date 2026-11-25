@@ -2082,3 +2082,20 @@ html.theme-sync * {
     scroll-behavior: auto !important;
   }
 }
+
+/* Electron Native Frameless Desktop Titlebar Integration */
+html.is-electron-desktop header {
+  -webkit-app-region: drag;
+  user-select: none;
+}
+html.is-electron-desktop header button,
+html.is-electron-desktop header a,
+html.is-electron-desktop header input,
+html.is-electron-desktop header select,
+html.is-electron-desktop header #bg-menu {
+  -webkit-app-region: no-drag;
+}
+.electron-win-close:hover {
+  background: rgba(239, 68, 68, 0.9) !important;
+  color: #ffffff !important;
+}
