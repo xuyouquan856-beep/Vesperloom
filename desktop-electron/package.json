@@ -1,8 +1,8 @@
 {
-  "name": "nai-studio-desktop",
-  "productName": "NAI Studio",
+  "name": "vesperloom-desktop",
+  "productName": "Vesperloom",
   "version": "3.0.0",
-  "description": "NAI Studio — Obsidian Atelier Native Desktop Workbench for NovelAI V5/V4.5, Studio Agent, MCP & A2A",
+  "description": "Vesperloom — Obsidian Atelier Native Desktop Workbench for NovelAI V5/V4.5, Studio Agent, MCP & A2A",
   "main": "main.js",
   "private": true,
   "scripts": {
@@ -16,8 +16,8 @@
     "electron-builder": "^25.1.8"
   },
   "build": {
-    "appId": "com.naistudio.desktop",
-    "productName": "NAI Studio",
+    "appId": "com.vesperloom.desktop",
+    "productName": "Vesperloom",
     "directories": {
       "output": "../dist-desktop"
     },
@@ -35,8 +35,8 @@
           "arch": ["x64"]
         }
       ],
-      "icon": "assets/nai_studio.ico",
-      "executableName": "NAI Studio"
+      "icon": "assets/vesperloom.ico",
+      "executableName": "Vesperloom"
     },
     "nsis": {
       "oneClick": false,

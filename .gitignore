@@ -28,6 +28,7 @@ data/webview_cache/
 data/desktop_window.json
 data/electron_data/
 data/electron_window.json
+data/splash/
 desktop-electron/node_modules/
 dist-desktop/
 node_modules/

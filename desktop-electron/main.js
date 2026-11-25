@@ -4,6 +4,7 @@ const fs = require("fs");
 const http = require("http");
 const net = require("net");
 const path = require("path");
+const { pathToFileURL } = require("url");
 
 function resolveStudioRoot() {
   const candidates = [
@@ -31,8 +32,10 @@ const LOGS_DIR = path.join(STUDIO_ROOT, "logs");
 const ELECTRON_DATA_DIR = path.join(DATA_DIR, "electron_data");
 const WINDOW_STATE_PATH = path.join(DATA_DIR, "electron_window.json");
 const CONFIG_PATH = path.join(DATA_DIR, "config.json");
-const ICON_ICO_PATH = path.join(__dirname, "assets", "nai_studio.ico");
-const ICON_PNG_PATH = path.join(__dirname, "assets", "nai_studio_icon.png");
+const SPLASH_DIR = path.join(DATA_DIR, "splash");
+const ICON_ICO_PATH = path.join(__dirname, "assets", "vesperloom.ico");
+const ICON_PNG_PATH = path.join(__dirname, "assets", "vesperloom_icon.png");
+const DEFAULT_SPLASH_PATH = path.join(__dirname, "assets", "default_splash.jpg");
 
 for (const d of [DATA_DIR, OUTPUTS_DIR, TMP_DIR, LOGS_DIR, ELECTRON_DATA_DIR]) {
   fs.mkdirSync(d, { recursive: true });
@@ -49,7 +52,7 @@ app.setPath("userData", ELECTRON_DATA_DIR);
 app.setPath("sessionData", path.join(ELECTRON_DATA_DIR, "session"));
 app.setPath("temp", TMP_DIR);
 app.setPath("logs", LOGS_DIR);
-app.setName("NAI Studio");
+app.setName("Vesperloom");
 
 const SMOKE_TEST = process.argv.includes("--smoke-test");
 
@@ -238,10 +241,50 @@ function stopBackendProcess() {
   ownedBackend = false;
 }
 
+let splashShownAt = 0;
+
+function resolveSplashArtFileUrl() {
+  const cfg = readStudioConfig();
+  const mode = String(cfg.splash_mode || "default").toLowerCase();
+  const customRel = String(cfg.splash_custom_image || "").trim();
+  if (mode === "custom" && customRel) {
+    if (customRel.startsWith("splash:")) {
+      const f = path.join(SPLASH_DIR, path.basename(customRel.slice(7)));
+      if (fs.existsSync(f)) return pathToFileURL(f).href;
+    } else {
+      const fOut = path.join(OUTPUTS_DIR, customRel.replace(/^[/\\]+/, ""));
+      if (fs.existsSync(fOut)) return pathToFileURL(fOut).href;
+      const fSp = path.join(SPLASH_DIR, path.basename(customRel));
+      if (fs.existsSync(fSp)) return pathToFileURL(fSp).href;
+    }
+  }
+  if (mode === "favorites") {
+    try {
+      // Lightweight recursive pick of recent outputs PNGs if favorites mode is enabled before backend is up
+      const dayDirs = fs.readdirSync(OUTPUTS_DIR, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name).sort().reverse().slice(0, 6);
+      const candidates = [];
+      for (const dd of dayDirs) {
+        const fullDir = path.join(OUTPUTS_DIR, dd);
+        for (const fn of fs.readdirSync(fullDir)) {
+          if (/\.(png|jpg|jpeg|webp)$/i.test(fn)) candidates.push(path.join(fullDir, fn));
+        }
+      }
+      if (candidates.length) {
+        const pick = candidates[Math.floor(Math.random() * candidates.length)];
+        return pathToFileURL(pick).href;
+      }
+    } catch (_) {}
+  }
+  return pathToFileURL(DEFAULT_SPLASH_PATH).href;
+}
+
 function createSplashWindow() {
+  const cfg = readStudioConfig();
+  if (cfg.splash_enabled === false) return;
+  splashShownAt = Date.now();
   splashWindow = new BrowserWindow({
-    width: 390,
-    height: 250,
+    width: 740,
+    height: 416,
     frame: false,
     transparent: true,
     resizable: false,
@@ -254,13 +297,14 @@ function createSplashWindow() {
       nodeIntegration: false,
     },
   });
-  splashWindow.loadFile(path.join(__dirname, "splash.html"));
+  const artUrl = resolveSplashArtFileUrl();
+  splashWindow.loadFile(path.join(__dirname, "splash.html"), { query: { art: artUrl } });
 }
 
 function createMainWindow() {
   const ws = loadWindowState();
   mainWindow = new BrowserWindow({
-    title: "NAI Studio — 个人创作工作台",
+    title: "Vesperloom — Obsidian Atelier",
     width: ws.width,
     height: ws.height,
     x: ws.x,
@@ -332,13 +376,29 @@ function createMainWindow() {
   });
 
   mainWindow.once("ready-to-show", () => {
+    const revealMain = () => {
+      if (ws.isMaximized) mainWindow.maximize();
+      mainWindow.show();
+      mainWindow.focus();
+    };
     if (splashWindow && !splashWindow.isDestroyed()) {
-      splashWindow.close();
-      splashWindow = null;
+      const minDisplayMs = 1750;
+      const waitMs = Math.max(0, minDisplayMs - (Date.now() - splashShownAt));
+      setTimeout(() => {
+        if (splashWindow && !splashWindow.isDestroyed()) {
+          splashWindow.webContents.send("splash:status", "__FADE_OUT__");
+        }
+        setTimeout(() => {
+          if (splashWindow && !splashWindow.isDestroyed()) {
+            splashWindow.close();
+            splashWindow = null;
+          }
+          revealMain();
+        }, 360);
+      }, waitMs);
+    } else {
+      revealMain();
     }
-    if (ws.isMaximized) mainWindow.maximize();
-    mainWindow.show();
-    mainWindow.focus();
   });
 
   mainWindow.loadURL(BASE_URL);
@@ -354,12 +414,12 @@ function showMainWindow() {
 function createTray() {
   const icon = nativeImage.createFromPath(fs.existsSync(ICON_PNG_PATH) ? ICON_PNG_PATH : ICON_ICO_PATH);
   tray = new Tray(icon.resize({ width: 16, height: 16 }));
-  tray.setToolTip(`NAI Studio · 运行中 (127.0.0.1:${PORT} · MCP/A2A)`);
+  tray.setToolTip(`Vesperloom · 运行中 (127.0.0.1:${PORT} · MCP/A2A)`);
   tray.on("click", showMainWindow);
   tray.on("double-click", showMainWindow);
 
   const menu = Menu.buildFromTemplate([
-    { label: "打开 NAI Studio", click: showMainWindow },
+    { label: "打开 Vesperloom", click: showMainWindow },
     { label: "打开作品目录 (outputs)", click: () => shell.openPath(OUTPUTS_DIR) },
     { label: "在浏览器中打开", click: () => shell.openExternal(BASE_URL) },
     { type: "separator" },
@@ -371,12 +431,12 @@ function createTray() {
           await ensureBackendRunning();
           if (mainWindow && !mainWindow.isDestroyed()) mainWindow.reload();
         } catch (err) {
-          dialog.showErrorBox("NAI Studio 后端重启失败", String(err.message || err));
+          dialog.showErrorBox("Vesperloom 后端重启失败", String(err.message || err));
         }
       },
     },
     {
-      label: "退出 NAI Studio（停止 MCP / A2A）",
+      label: "退出 Vesperloom（停止 MCP / A2A）",
       click: () => {
         isQuitting = true;
         app.quit();

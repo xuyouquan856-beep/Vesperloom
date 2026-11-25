@@ -7945,7 +7945,112 @@ function initElectronDesktopChrome() {
   }
 }
 
+let _splashInfoCache = null;
+
+async function loadDesktopSplashConfig() {
+  try {
+    const res = await fetch("/api/desktop/splash");
+    if (!res.ok) return;
+    const info = await res.json();
+    _splashInfoCache = info;
+    const thumb = document.getElementById("splash-preview-thumb");
+    if (thumb && info.image_url) thumb.src = info.image_url;
+    const badge = document.getElementById("splash-mode-badge");
+    const modeLabel = { default: "默认星夜图", custom: "自定义插画", favorites: "随机收藏画廊" }[info.mode] || "默认星夜图";
+    if (badge) badge.textContent = modeLabel;
+    const tog = document.getElementById("splash-enabled-toggle");
+    if (tog) tog.checked = info.enabled !== false;
+    ["default", "favorites"].forEach(k => {
+      const btn = document.getElementById(`splash-btn-${k}`);
+      if (btn) btn.classList.toggle("is-active", info.mode === k);
+    });
+  } catch (e) {}
+}
+
+async function setDesktopSplashMode(mode) {
+  try {
+    const res = await fetch("/api/desktop/splash/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode }),
+    });
+    if (!res.ok) return;
+    await loadDesktopSplashConfig();
+    showToast(mode === "favorites" ? "已切换为「每次启动随机展示收藏作品」" : "已恢复默认星夜开屏插画");
+  } catch (e) {}
+}
+
+async function toggleDesktopSplashEnabled() {
+  const enabled = !!document.getElementById("splash-enabled-toggle")?.checked;
+  try {
+    await fetch("/api/desktop/splash/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled }),
+    });
+    showToast(enabled ? "已开启桌面端星环光圈开屏动画" : "已关闭桌面端开屏动画");
+  } catch (e) {}
+}
+
+async function uploadDesktopSplashFile(event) {
+  const file = event?.target?.files?.[0];
+  if (!file) return;
+  const fd = new FormData();
+  fd.append("file", file);
+  try {
+    const res = await fetch("/api/desktop/splash/upload", { method: "POST", body: fd });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.detail || "上传失败");
+    await loadDesktopSplashConfig();
+    showToast("已更新自定义桌面开屏插画，下次启动自动自适应配色");
+  } catch (e) {
+    showToast("上传开屏插画失败: " + e.message);
+  } finally {
+    if (event.target) event.target.value = "";
+  }
+}
+
+async function setDetailGalleryAsSplash() {
+  const item = typeof getActiveGalleryDetailItem === "function" ? getActiveGalleryDetailItem() : findGalleryItemById(state.galleryDetailId);
+  if (!item?.id) return;
+  try {
+    const res = await fetch("/api/desktop/splash/select-gallery", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ item_id: item.id }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.detail || "设置失败");
+    await loadDesktopSplashConfig();
+    showToast("已将该作品设为 Vesperloom 桌面端启动开屏插画");
+  } catch (e) {
+    showToast("设置开屏图失败: " + e.message);
+  }
+}
+
+async function openSplashPreviewModal() {
+  await loadDesktopSplashConfig();
+  const imgUrl = _splashInfoCache?.image_url || "/static/default_splash.jpg";
+  let overlay = document.getElementById("vesperloom-splash-preview-overlay");
+  if (overlay) overlay.remove();
+  overlay = document.createElement("div");
+  overlay.id = "vesperloom-splash-preview-overlay";
+  overlay.className = "fixed inset-0 z-[90] bg-black/75 backdrop-blur-md flex flex-col items-center justify-center gap-4 p-4";
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  const frameUrl = `/static/vesperloom_splash.html?art=${encodeURIComponent(imgUrl)}&t=${Date.now()}`;
+  overlay.innerHTML = `
+    <div class="w-full max-w-[760px] aspect-video rounded-[18px] overflow-hidden shadow-2xl">
+      <iframe id="vesperloom-splash-iframe" src="${frameUrl}" class="w-full h-full border-0 bg-transparent"></iframe>
+    </div>
+    <div class="flex items-center gap-2">
+      <button type="button" onclick="document.getElementById('vesperloom-splash-iframe').src='${frameUrl}&r='+Date.now()" class="spring-btn px-3.5 py-1.5 rounded-[8px] ui-btn-accent text-[12.5px]">↻ 重播动画</button>
+      <button type="button" onclick="document.getElementById('vesperloom-splash-preview-overlay')?.remove()" class="spring-btn px-3.5 py-1.5 rounded-[8px] ui-btn text-[12.5px]">关闭预览</button>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
 window.addEventListener("DOMContentLoaded", () => {
   initElectronDesktopChrome();
   bootstrapApp();
+  loadDesktopSplashConfig();
 });

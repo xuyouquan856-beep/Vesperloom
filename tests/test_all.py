@@ -1325,7 +1325,7 @@ def test_stage3_streamable_http_mcp_and_a2a_server(tmp_path, monkeypatch):
     rc = client.get("/.well-known/agent-card.json")
     assert rc.status_code == 200
     card = rc.json()
-    assert card["name"] == "NAI Studio Art Director"
+    assert card["name"] == "Vesperloom Art Director"
     assert card["capabilities"]["streaming"] is True
     assert any(s["id"] == "art-direction" for s in card["skills"])
     assert "securitySchemes" not in card

@@ -49,6 +49,9 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "external_agent_opus_guard": True,
     "external_agent_allow_generate": True,
     "external_agent_vision_qa": False,
+    "splash_mode": "default",
+    "splash_custom_image": "",
+    "splash_enabled": True,
 }
 
 

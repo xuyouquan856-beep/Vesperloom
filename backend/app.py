@@ -215,6 +215,9 @@ async def api_update_config(body: Dict[str, Any]) -> Dict[str, Any]:
         "external_agent_opus_guard",
         "external_agent_allow_generate",
         "external_agent_vision_qa",
+        "splash_mode",
+        "splash_custom_image",
+        "splash_enabled",
     ):
         if k in body and body[k] is not None:
             if k in ("api_token", "llm_api_key", "external_agent_token") and "..." in str(body[k]):
@@ -976,6 +979,121 @@ async def api_generate_external_agent_token() -> Dict[str, Any]:
 @app.get("/api/external-agent/tasks")
 async def api_list_external_agent_tasks(limit: int = Query(20, ge=1, le=100)) -> Dict[str, Any]:
     return {"tasks": list_a2a_tasks(limit=limit)}
+
+
+# ================= Desktop Splash Artwork Management (Vesperloom) =================
+SPLASH_DIR = DATA_DIR / "splash"
+SPLASH_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _resolve_splash_info(cfg: Dict[str, Any]) -> Dict[str, Any]:
+    mode = str(cfg.get("splash_mode") or "default").strip().lower()
+    if mode not in ("default", "custom", "favorites"):
+        mode = "default"
+    enabled = bool(cfg.get("splash_enabled", True))
+    custom_rel = str(cfg.get("splash_custom_image") or "").strip()
+    image_url = "/static/default_splash.jpg"
+    resolved_path = str((FRONTEND_DIR / "default_splash.jpg").resolve())
+
+    if mode == "custom" and custom_rel:
+        cand_splash = (SPLASH_DIR / Path(custom_rel).name).resolve()
+        cand_out = (OUTPUTS_DIR / custom_rel.lstrip("/\\")).resolve()
+        if custom_rel.startswith("splash:") and cand_splash.is_file():
+            image_url = f"/api/desktop/splash/file/{cand_splash.name}?v={int(cand_splash.stat().st_mtime)}"
+            resolved_path = str(cand_splash)
+        elif cand_out.is_file() and cand_out.is_relative_to(OUTPUTS_DIR.resolve()):
+            rel_posix = cand_out.relative_to(OUTPUTS_DIR.resolve()).as_posix()
+            image_url = f"/outputs/{rel_posix}"
+            resolved_path = str(cand_out)
+        elif cand_splash.is_file():
+            image_url = f"/api/desktop/splash/file/{cand_splash.name}?v={int(cand_splash.stat().st_mtime)}"
+            resolved_path = str(cand_splash)
+    elif mode == "favorites":
+        import random as _rnd
+        favs = [
+            g for g in list_gallery(favorite_only=True, limit=60, offset=0)
+            if g.get("rel_path") and (OUTPUTS_DIR / g["rel_path"]).is_file()
+        ]
+        if favs:
+            pick = _rnd.choice(favs)
+            image_url = f"/outputs/{pick['rel_path']}"
+            resolved_path = str((OUTPUTS_DIR / pick["rel_path"]).resolve())
+
+    return {
+        "mode": mode,
+        "enabled": enabled,
+        "custom_image": custom_rel,
+        "image_url": image_url,
+        "file_path": resolved_path,
+    }
+
+
+@app.get("/api/desktop/splash")
+async def api_get_desktop_splash() -> Dict[str, Any]:
+    return _resolve_splash_info(load_config())
+
+
+@app.get("/api/desktop/splash/file/{filename}")
+async def api_get_desktop_splash_file(filename: str) -> FileResponse:
+    safe_name = Path(filename).name
+    fpath = (SPLASH_DIR / safe_name).resolve()
+    if not fpath.is_file() or not fpath.is_relative_to(SPLASH_DIR.resolve()):
+        raise HTTPException(status_code=404, detail="开屏图片不存在")
+    return FileResponse(fpath)
+
+
+@app.post("/api/desktop/splash/config")
+async def api_update_desktop_splash_config(body: Dict[str, Any]) -> Dict[str, Any]:
+    cfg = load_config()
+    if "mode" in body and body["mode"] in ("default", "custom", "favorites"):
+        cfg["splash_mode"] = str(body["mode"])
+    if "enabled" in body:
+        cfg["splash_enabled"] = bool(body["enabled"])
+    saved = save_config(cfg)
+    return {"ok": True, **_resolve_splash_info(saved)}
+
+
+@app.post("/api/desktop/splash/upload")
+async def api_upload_desktop_splash(file: UploadFile = File(...)) -> Dict[str, Any]:
+    raw = await file.read()
+    if not raw or len(raw) > 25 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="图片为空或超过 25MB 限制")
+    try:
+        im = Image.open(io.BytesIO(raw))
+        im = ImageOps.exif_transpose(im)
+        if im.mode not in ("RGB", "RGBA"):
+            im = im.convert("RGB")
+        # Save crisp high-res JPEG for instant splash rendering
+        if im.mode == "RGBA":
+            bg = Image.new("RGB", im.size, (10, 14, 24))
+            bg.paste(im, mask=im.split()[-1])
+            im = bg
+        if max(im.size) > 1920:
+            im.thumbnail((1920, 1920), Image.Resampling.LANCZOS)
+        dst = SPLASH_DIR / "custom_splash.jpg"
+        im.save(dst, format="JPEG", quality=92, optimize=True)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"图片解析失败: {exc}")
+    cfg = load_config()
+    cfg["splash_mode"] = "custom"
+    cfg["splash_custom_image"] = "splash:custom_splash.jpg"
+    saved = save_config(cfg)
+    return {"ok": True, **_resolve_splash_info(saved)}
+
+
+@app.post("/api/desktop/splash/select-gallery")
+async def api_select_gallery_splash(body: Dict[str, Any]) -> Dict[str, Any]:
+    item_id = body.get("item_id")
+    if not item_id:
+        raise HTTPException(status_code=400, detail="缺少 item_id")
+    item = get_gallery_item(int(item_id))
+    if not item or not item.get("rel_path"):
+        raise HTTPException(status_code=404, detail="作品不存在")
+    cfg = load_config()
+    cfg["splash_mode"] = "custom"
+    cfg["splash_custom_image"] = str(item["rel_path"])
+    saved = save_config(cfg)
+    return {"ok": True, **_resolve_splash_info(saved)}
 
 
 # ================= Streamable HTTP MCP Endpoint (/mcp) =================

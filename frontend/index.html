@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NAI Studio — 个人创作工作台</title>
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23111318'/%3E%3Cpath d='M20 44V20l24 24V20' stroke='%23ffffff' stroke-width='6' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E" />
+  <title>Vesperloom — Obsidian Atelier</title>
+  <link rel="icon" href="/static/vesperloom.ico" />
   <link rel="stylesheet" href="/static/tailwind.generated.css" />
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
@@ -75,11 +75,12 @@
     <div class="flex items-center gap-3 min-w-0">
       <div class="flex items-center gap-2 shrink-0">
         <div class="w-6 h-6 rounded-[6px] brand-mark flex items-center justify-center">
-          <svg class="w-3.5 h-3.5 stroke-current fill-none" viewBox="0 0 16 16" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M4 12V4l8 8V4"/>
+          <svg class="w-3.5 h-3.5 stroke-current fill-none" viewBox="0 0 16 16" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3.2 4.2L8 12.8L12.8 4.2"/>
+            <circle cx="8" cy="3.2" r="1" fill="currentColor" stroke="none"/>
           </svg>
         </div>
-        <span class="ui-brand whitespace-nowrap">NAI Studio</span>
+        <span class="ui-brand whitespace-nowrap">Vesperloom</span>
       </div>
 
       <span class="h-4 w-px bg-[var(--border-hairline)] hidden sm:inline-block"></span>
@@ -1442,6 +1443,42 @@
           </div>
         </div>
 
+        <div id="sec-settings-splash" class="min-w-0 studio-panel rounded-[12px] border border-[var(--border-hairline)] p-5 space-y-3.5">
+          <div class="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-[var(--border-hairline)]">
+            <div class="min-w-0">
+              <div class="flex items-center gap-2">
+                <h3 class="ui-title">桌面端开屏动画 (Vesperloom Splash)</h3>
+                <span id="splash-mode-badge" class="ui-badge px-2 py-0.5 rounded-[6px] text-[11px] font-mono text-[var(--text-secondary)]">默认星夜图</span>
+              </div>
+              <p class="text-[12px] text-[var(--text-muted)] mt-0.5">自适应「星环光圈」开屏引擎：自动提取画作主色与深浅明度，无进度条、无杂讯；也可在作品图库详情页一键将任意成图设为开屏。</p>
+            </div>
+            <button type="button" onclick="openSplashPreviewModal()" class="spring-btn inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[7px] ui-btn-accent text-[12px] font-medium shrink-0">
+              <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-sparkles"/></svg>
+              <span>预览开屏动画</span>
+            </button>
+          </div>
+          <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
+            <div class="w-full sm:w-44 aspect-video rounded-[9px] overflow-hidden border border-[var(--border-control)] bg-[var(--bg-canvas-well)] shrink-0">
+              <img id="splash-preview-thumb" src="/static/default_splash.jpg" alt="开屏封面预览" class="w-full h-full object-cover" />
+            </div>
+            <div class="flex-1 min-w-0 space-y-2.5">
+              <div class="flex flex-wrap gap-1.5">
+                <button id="splash-btn-default" type="button" onclick="setDesktopSplashMode('default')" class="spring-btn px-2.5 py-1.5 rounded-[7px] ui-btn text-[12px]">默认星夜图</button>
+                <button id="splash-btn-favorites" type="button" onclick="setDesktopSplashMode('favorites')" class="spring-btn px-2.5 py-1.5 rounded-[7px] ui-btn text-[12px]">随机收藏画廊</button>
+                <label class="spring-btn inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-[7px] ui-btn text-[12px] cursor-pointer">
+                  <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-image"/></svg>
+                  <span>上传自定义插画</span>
+                  <input type="file" accept="image/png,image/jpeg,image/webp" class="hidden" onchange="uploadDesktopSplashFile(event)" />
+                </label>
+              </div>
+              <label class="inline-flex items-center gap-2 text-[12px] text-[var(--text-secondary)] cursor-pointer">
+                <input id="splash-enabled-toggle" type="checkbox" checked onchange="toggleDesktopSplashEnabled()" class="accent-[var(--accent-primary)]" />
+                <span>启动桌面端时播放星环光圈开屏动画</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
         <div id="sec-settings-mcp" class="min-w-0 studio-panel rounded-[12px] border border-[var(--border-hairline)] p-5 space-y-4">
           <div class="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-[var(--border-hairline)]">
             <div class="min-w-0">
@@ -1758,6 +1795,10 @@
           <button id="gd-fav-btn" type="button" onclick="toggleDetailGalleryFav()" class="spring-btn inline-flex items-center gap-1 px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">
             <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-star"/></svg>
             <span id="gd-fav-label">收藏</span>
+          </button>
+          <button id="gd-splash-btn" type="button" onclick="setDetailGalleryAsSplash()" class="spring-btn inline-flex items-center gap-1 px-2.5 py-1 rounded-[6px] ui-btn text-[12px]" title="将此作品设为 Vesperloom 桌面端启动开屏插画">
+            <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-sparkles"/></svg>
+            <span>设为开屏图</span>
           </button>
           <button id="gd-next-btn" type="button" onclick="navigateGalleryDetail(1)" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[12px]">下一张 →</button>
         </div>

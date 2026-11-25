@@ -106,17 +106,17 @@ def build_agent_card(base_url: str) -> Dict[str, Any]:
     root = str(base_url or "http://127.0.0.1:8780").rstrip("/")
     auth_on = bool(cfg.get("external_agent_auth_enabled") and cfg.get("external_agent_token"))
     card: Dict[str, Any] = {
-        "name": "NAI Studio Art Director",
+        "name": "Vesperloom Art Director",
         "description": (
-            "专业 NovelAI V5 / V4.5 视觉创作与画师混搭 Agent。"
-            "外部 Agent 只需用自然语言描述画面目标、风格与用途，NAI Studio 会自动结合用户审美记忆本、"
+            "Vesperloom（NovelAI V5 / V4.5）专业视觉创作与画师混搭 Agent。"
+            "外部 Agent 只需用自然语言描述画面目标、风格与用途，Vesperloom 会自动结合用户审美记忆本、"
             "本地画师图鉴与 V5 提示词规范完成构思、配方生成、出图与结构化 Artifact 交付。"
         ),
         "url": f"{root}/a2a",
         "version": A2A_AGENT_VERSION,
         "protocolVersion": A2A_PROTOCOL_VERSION,
         "provider": {
-            "organization": "NAI Studio (Local Workbench)",
+            "organization": "Vesperloom (Obsidian Atelier)",
             "url": root,
         },
         "capabilities": {
