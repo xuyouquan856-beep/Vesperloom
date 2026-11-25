@@ -7,7 +7,7 @@ from .config import DATA_DIR
 SKILLS_DIR = DATA_DIR / "skills"
 SKILLS_DIR.mkdir(parents=True, exist_ok=True)
 
-CURRENT_SKILL_VERSION = 5
+CURRENT_SKILL_VERSION = 6
 
 BUILTIN_SKILLS: List[Dict[str, str]] = [
     {
@@ -32,10 +32,34 @@ BUILTIN_SKILLS: List[Dict[str, str]] = [
 - **V3 兼容红线**：V3 **严禁** `::` 数值权重，仅允许 `{tag}` (+5%) 与 `[tag]` (-5%)。
 - **全局禁令**：绝不输出 SD WebUI `(tag:1.2)`、`BREAK`、`AND` 或夹杂中文标签。
 
-## 3. 质量体检与防“炸图”检查
-1. 排查互相冲突的时间/天气/光影词（如 `sunset` 与 `midnight`、`simple background` 与 `detailed cityscape`）。
-2. 检查画师权重是否过高导致五官或手部崩坏（强风格画师建议 `0.7`–`0.95`）。
-3. 每次写入后务必检查 lint 结果，确保 0 语法错误。
+## 3. 质量体检与防“炸图 / 塑料感”检查
+1. **避免空画师串**：除非用户明确要求“不加画师/纯白模”，否则务必先调用 `search_artist_catalog` 从本地画师库挑选 1~2 位契合画风的画师写入 `artist` 区块；V5 裸跑极易退化为平庸默认赛璐璐。
+2. **排查词条冲突**：核对互相冲突的时间/天气/光影词（如 `sunset` 与 `midnight`、`simple background` 与 `detailed cityscape`）。
+3. **防强画师伪签名与手部崩坏**：强风格画师建议权重 `0.7`–`0.95`，并在 `negative` 中明确保留 `signature, artist name, watermark, twitter username, bad hands`。
+4. **每次写入后检查 lint**：确保 0 语法错误；若用户表达了长期审美偏好/雷区，主动调用 `update_creator_memory` 记住。
+""",
+    },
+    {
+        "name": "character-fanart-research",
+        "title": "同人角色考据与精准还原",
+        "description": "画动漫/游戏具体角色前先查 Danbooru 官方角色 Tag、作品 Tag 与高分作品真实外貌/服装特征，杜绝凭记忆瞎编发色或服饰。",
+        "triggers": "角色, 同人, 还原, 考据, 动漫, 游戏, 二创, 原作, 人物设定, Danbooru, 魔女审判",
+        "content": """# Anime & Game Character Fanart Research Protocol
+
+当用户要求画某部动漫、轻小说或游戏的具体角色（尤其是新番/新游角色）时，**严禁凭记忆猜发色、瞳色或服装细节**，必须严格执行以下三步：
+
+## 1. 先查 Danbooru 真实角色档案
+- 立即调用 `lookup_danbooru_character(character_query=..., series_query=...)`（支持罗马音、英文、日文原名，如 `tachibana_sherry` / `橘シェリー`）。
+- 从返回结果中提取：
+  1. **官方角色 Tag 与作品 Tag**（如 `tachibana sherry, mahou shoujo no majo saiban`），写入 `character` 区块头部（紧跟 `1girl, solo` 之后）。
+  2. **`top_appearance_tags` 与 `wiki_excerpt`** 中的真实发型、发色、瞳色、帽子/发饰与标志性服装标签（例如 `short hair, blue hair, braided hair rings, orange eyes, deerstalker, black capelet`）。
+
+## 2. 结合熟度决定补强策略
+- **高熟度角色（`post_count >= 200`）**：以官方角色 Tag 为核心，补强 4~6 个关键标志性外观词即可，避免冗余词反而锁死动作。
+- **新作品/低熟度角色（`post_count < 200`）**：在官方 Tag 之外，必须把 `top_appearance_tags` 里验证过的发型、发色、瞳色与服装结构完整写出，确保 V5 精准还原原作神韵。
+
+## 3. 优先检索原作人设师或契合画师
+- 随后调用 `search_artist_catalog` 搜索本地画师库，优先检查是否已收录**该作官方人设师**或氛围高度匹配的画师，配权 `0.75–0.9` 写入 `artist` 区块，再按场景氛围搭配构图与光影。
 """,
     },
     {
@@ -71,9 +95,9 @@ BUILTIN_SKILLS: List[Dict[str, str]] = [
 当用户表达「没想法 / 随便画点 / 帮我构思」时，扮演审美敏锐、不啰嗦的插画艺术总监：
 
 ## 互动法则
-1. 给出 **3 个反差鲜明的具体视觉提案**（例如：清透日系青春 / 戏剧暗黑奇幻 / 霓虹雨夜都市），每个提案用 1–2 句话点出「人物反差 + 场景光影 + 预期画风」。
-2. 末尾务必附带 `[QUICK_REPLIES: 选方案A | 选方案B | 选方案C]` 让用户一键拍板，或引导用户一句补充偏好（如“选 B，发色改银白”）。
-3. 一旦用户拍板，立即检索本地画师库（`search_artist_catalog`）并调用 `patch_prompt_blocks` 一次性落地完整四区块，最后提供「直接生成图片」快捷选项。
+1. 先参考 `<creator_memory>` 中的用户长期审美偏好与雷区，避免推荐用户讨厌的风格。
+2. 优先调用 **`present_creative_proposals`** 推送 **3 套反差鲜明、可一键「试套用 / 套用生图」的交互式灵感方案卡片**（每套包含已配好的 `artist / character / lighting / negative` 四区块与建议参数），同时在文字中用 1 句话点出三套方案的风格反差。
+3. 若用户在「咨询模式」下，方案卡同样可点击一键套用；若用户已明确选定某一方向，立即落地工作台并可询问是否用 `run_xyz_matrix` 做画师权重或 CFG 对比测试。
 """,
     },
     {
@@ -97,10 +121,12 @@ BUILTIN_SKILLS: List[Dict[str, str]] = [
 - **双画师互补（推荐）**：高熟度结构主画师（`post_count` 较高）`0.85–0.9` + 色彩/氛围/光影辅画师 `0.55–0.7`。
 - **三画师调色盘**：主 `0.85` + 辅 `0.6` + 点缀 `0.4`（切忌超过 4 位同权重画师互相抵消）。
 
-## 3. 画风不满意精准调参
+## 3. 画风不满意精准调参与长期记忆
 - 嫌厚重/偏写实：降厚涂画师权重或从 `style_tags` 检索「清透水彩 / 轻小说封面 / 赛璐璐平涂」，必要时加 `-0.8::oil painting::`。
 - 嫌平淡/色脏：叠加「高饱和幻彩 / 强烈光影 / 空气感透光」类辅画师并精简多余环境词。
 - 仅换画风时只改 `artist` 区块（`patch_prompt_blocks(artist=..., mode="replace")`），绝不误改人物与光影。
+- 想系统对比不同 CFG/步数/画师配比效果时，调用 `run_xyz_matrix` 一键预填 X/Y 参数矩阵。
+- 当用户明确表示“以后都偏好/不要某类画风”时，主动调用 `update_creator_memory(action="append", ...)` 沉淀到个人审美记忆本。
 """,
     },
     {
@@ -145,7 +171,7 @@ BUILTIN_SKILLS: List[Dict[str, str]] = [
 - 明确人数与性别组合在最前：`1girl, 1boy` 或 `2girls, multiple girls`。
 - 用明确空间锚定分开人物：`on the left`, `on the right`, `standing side by side`, `facing each other`, `foreground and background`。
 - 在 V4.5/V5 中，可在 `character` 区块用简洁英文短句绑定各自特征（如 `the silver-haired girl on the left in white dress, leaning toward the dark-haired boy on the right in black coat`），显著降低发色/服饰互相染色。
-- 若用户提到本地 OC 角色，先调用 `list_oc_and_snippets` 确认并用 `load_oc_character` 精准载入。
+- 若用户提到本地 OC 角色，先调用 `list_oc_and_snippets` 确认并用 `load_oc_character` 精准载入；若对话中新设计出满意的原创角色，可主动调用 `save_oc_character` 保存为 OC 角色卡方便后续多图复用。
 """,
     },
     {

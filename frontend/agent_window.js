@@ -994,6 +994,39 @@ function _fmtDurationMs(ms) {
   return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`;
 }
 
+const AGENT_TOOL_LABELS = {
+  read_skill: "读取创作技能",
+  search_artist_catalog: "检索本地画师库",
+  search_danbooru_tags: "检索标签词典",
+  lookup_danbooru_character: "Danbooru 角色考据",
+  lookup_danbooru_artists: "Danbooru 画师情报",
+  list_oc_and_snippets: "读取 OC 与词条库",
+  query_gallery: "检索作品图库",
+  get_current_model_rules: "读取模型规范",
+  validate_and_lint_prompt: "语法与权重体检",
+  patch_prompt_blocks: "写入四区块提示词",
+  remove_prompt_tags: "精简移除标签",
+  set_workbench_params: "调整工作台参数",
+  set_workbench_mode: "切换画布模式",
+  load_oc_character: "载入 OC 角色卡",
+  save_oc_character: "保存 OC 角色卡",
+  run_director_tool: "执行 Director 后处理",
+  run_xyz_matrix: "预填 X/Y 参数矩阵",
+  trigger_generate_image: "触发工作台出图",
+  manage_artist_catalog: "维护本地画师库",
+  manage_mix_presets: "管理画师混搭预设",
+  manage_gallery_items: "整理作品图库",
+  inspect_artist_previews: "视觉分析画师预览",
+  inspect_canvas_stage: "视觉诊断当前画布",
+  inspect_gallery_images: "视觉对比图库作品",
+  update_creator_memory: "更新个人审美记忆",
+  present_creative_proposals: "生成灵感方案卡片",
+};
+
+function _friendlyToolLabel(name) {
+  return AGENT_TOOL_LABELS[name] || name;
+}
+
 function renderToolTimelineHtml(events, activeTools = [], isActiveTurn = false, existingOpen = null) {
   const list = Array.isArray(events) ? events : [];
   const runningList = Array.isArray(activeTools) ? activeTools : [];
@@ -1001,12 +1034,12 @@ function renderToolTimelineHtml(events, activeTools = [], isActiveTurn = false, 
   const count = list.length + runningList.length;
   const activeStep = runningList[runningList.length - 1];
   const latest = activeStep
-    ? `执行 ${activeStep.name}...`
+    ? `正在执行 · ${_friendlyToolLabel(activeStep.name)}`
     : list.length
-    ? list[list.length - 1].summary || list[list.length - 1].name
-    : "分析当前工作台上下文...";
+    ? list[list.length - 1].summary || _friendlyToolLabel(list[list.length - 1].name)
+    : "正在分析工作台与创作上下文...";
   const label = isActiveTurn
-    ? `<span class="inline-flex items-center gap-1.5 min-w-0"><span class="agent-thinking-dots text-[var(--text-secondary)]" aria-hidden="true"><span></span><span></span><span></span></span><span class="truncate">${escapeHtml(latest)}</span></span>`
+    ? `<span class="inline-flex items-center gap-2 min-w-0"><span class="agent-orbital-spinner" aria-hidden="true"></span><span class="agent-shimmer-text font-medium truncate">${escapeHtml(latest)}</span></span>`
     : `<span class="truncate">已执行 ${list.length} 项步骤 · ${escapeHtml(latest)}</span>`;
 
   const doneStepsHtml = list
@@ -1014,7 +1047,7 @@ function renderToolTimelineHtml(events, activeTools = [], isActiveTurn = false, 
       const dur = _fmtDurationMs(t.duration_ms);
       return `
       <div class="agent-timeline-step ${t.ok !== false ? "is-ok" : ""}">
-        <span class="truncate">${escapeHtml(t.summary || t.name)}</span>
+        <span class="truncate">${escapeHtml(t.summary || _friendlyToolLabel(t.name))}</span>
         <span class="text-[10.5px] ${t.ok !== false ? "text-[var(--text-muted)]" : "text-[var(--status-warning)]"} shrink-0">${dur ? `${dur} · ` : ""}${t.ok !== false ? "完成" : "提示"}</span>
       </div>
     `;
@@ -1025,8 +1058,8 @@ function renderToolTimelineHtml(events, activeTools = [], isActiveTurn = false, 
     .map(
       t => `
       <div class="agent-timeline-step is-running">
-        <span class="truncate">${escapeHtml(t.name)}...</span>
-        <span class="text-[10.5px] text-[var(--status-warning)] shrink-0">运行中</span>
+        <span class="agent-shimmer-text truncate">${escapeHtml(_friendlyToolLabel(t.name))}...</span>
+        <span class="text-[10.5px] text-[var(--accent-primary)] shrink-0">执行中</span>
       </div>
     `
     )
@@ -1034,7 +1067,7 @@ function renderToolTimelineHtml(events, activeTools = [], isActiveTurn = false, 
 
   const isOpen = existingOpen !== null ? existingOpen : isActiveTurn;
   return `
-    <details class="agent-timeline" ${isOpen ? "open" : ""}>
+    <details class="agent-timeline ${isActiveTurn ? "is-active" : ""}" ${isOpen ? "open" : ""}>
       <summary>
         <div class="flex items-center gap-1.5 min-w-0">
           <svg class="w-3.5 h-3.5 agent-timeline-chevron text-[var(--text-muted)] shrink-0 stroke-current fill-none" stroke-width="1.8" viewBox="0 0 16 16" aria-hidden="true"><use href="#ic-chevron-right"/></svg>
@@ -1050,12 +1083,13 @@ function renderToolTimelineHtml(events, activeTools = [], isActiveTurn = false, 
 function renderReasoningBlockHtml(reasoning, isActiveTurn = false, hasContent = false, existingOpen = null) {
   const txt = String(reasoning || "").trim();
   if (!txt) return "";
-  const isOpen = existingOpen !== null ? existingOpen : isActiveTurn && !hasContent;
+  const isThinkingNow = isActiveTurn && !hasContent;
+  const isOpen = existingOpen !== null ? existingOpen : isThinkingNow;
   return `
-    <details class="agent-reasoning" ${isOpen ? "open" : ""}>
+    <details class="agent-reasoning ${isThinkingNow ? "is-thinking" : ""}" ${isOpen ? "open" : ""}>
       <summary>
-        ${isActiveTurn && !hasContent ? '<span class="agent-thinking-dots" aria-hidden="true"><span></span><span></span><span></span></span>' : ""}
-        <span>思考过程 (${txt.length} 字)</span>
+        ${isThinkingNow ? '<span class="agent-orbital-spinner" aria-hidden="true"></span>' : ""}
+        <span class="${isThinkingNow ? "agent-shimmer-text font-medium" : ""}">${isThinkingNow ? `深度思考中 · ${txt.length} 字` : `已思考 (${txt.length} 字)`}</span>
       </summary>
       <div class="agent-reasoning-body custom-scroll">${escapeHtml(txt)}</div>
     </details>
@@ -1279,6 +1313,8 @@ function abortAgentStream() {
 function setAgentStreamStatus(text, show = true) {
   const wrap = document.getElementById("agent-stream-status");
   const txt = document.getElementById("agent-stream-status-text");
+  const dot = document.getElementById("agent-live-dot");
+  if (dot) dot.classList.toggle("is-busy", Boolean(show));
   if (!wrap) return;
   wrap.classList.toggle("hidden", !show);
   if (txt && text !== undefined) txt.textContent = text;

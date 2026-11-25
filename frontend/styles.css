@@ -1788,17 +1788,34 @@ html.light .agent-prose th {
 
 /* Claude Desktop / Cursor Collapsible Tool Timeline */
 .agent-timeline {
+  position: relative;
   border: 1px solid var(--border-hairline);
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.02);
   overflow: hidden;
-  transition: border-color 0.14s ease, background-color 0.14s ease;
+  transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
 }
 html.light .agent-timeline {
   background: rgba(15, 23, 42, 0.02);
 }
 .agent-timeline[open] {
   border-color: var(--border-control);
+}
+.agent-timeline.is-active {
+  border-color: var(--accent-primary-border);
+  box-shadow: 0 0 0 1px var(--accent-primary-tint);
+}
+.agent-timeline.is-active::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1.5px;
+  background: linear-gradient(90deg, transparent 0%, var(--accent-primary) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: agentProgressSweep 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  pointer-events: none;
 }
 .agent-timeline > summary {
   list-style: none;
@@ -1830,15 +1847,15 @@ html.light .agent-timeline > summary:hover {
   transform: rotate(90deg);
 }
 .agent-timeline-steps {
-  padding: 4px 10px 9px 18px;
+  padding: 5px 10px 9px 18px;
   border-top: 1px solid var(--border-hairline);
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
 }
 .agent-timeline-step {
   position: relative;
-  padding-left: 12px;
+  padding-left: 14px;
   font-size: 11.5px;
   font-family: var(--font-mono);
   color: var(--text-secondary);
@@ -1846,11 +1863,12 @@ html.light .agent-timeline > summary:hover {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  animation: agentStepEnter 0.18s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 .agent-timeline-step::before {
   content: "";
   position: absolute;
-  left: 0;
+  left: 1px;
   top: 6px;
   width: 5px;
   height: 5px;
@@ -1860,18 +1878,38 @@ html.light .agent-timeline > summary:hover {
 .agent-timeline-step.is-ok::before {
   background-color: var(--status-success);
 }
+.agent-timeline-step.is-running {
+  color: var(--text-primary);
+}
 .agent-timeline-step.is-running::before {
-  background-color: var(--status-warning);
-  animation: agentPulseDot 1s ease-in-out infinite;
+  background-color: var(--accent-primary);
+  box-shadow: 0 0 8px var(--accent-primary);
+}
+.agent-timeline-step.is-running::after {
+  content: "";
+  position: absolute;
+  left: -2px;
+  top: 3px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 1.5px solid var(--accent-primary);
+  animation: agentRadarPing 1.35s cubic-bezier(0, 0, 0.2, 1) infinite;
+  pointer-events: none;
 }
 
 /* Live Collapsible Reasoning Trace */
 .agent-reasoning {
   border-left: 2px solid var(--border-control);
-  padding-left: 9px;
+  padding-left: 10px;
   margin: 2px 0;
   font-size: 11.5px;
   color: var(--text-muted);
+  transition: border-color 0.25s ease;
+}
+.agent-reasoning.is-thinking {
+  border-left-color: var(--accent-primary);
+  animation: agentRailBreathe 1.8s ease-in-out infinite;
 }
 .agent-reasoning > summary {
   list-style: none;
@@ -2023,6 +2061,69 @@ html.light .agent-composer-shell:focus-within {
 }
 .agent-thinking-dots span:nth-child(2) { animation-delay: 0.16s; }
 .agent-thinking-dots span:nth-child(3) { animation-delay: 0.32s; }
+
+/* Flagship Agent Thinking & Execution Motion System */
+.agent-orbital-spinner {
+  position: relative;
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 1.5px solid var(--accent-primary-tint);
+  border-top-color: var(--accent-primary);
+  border-right-color: var(--accent-primary);
+  animation: agentOrbitalSpin 0.85s cubic-bezier(0.45, 0.15, 0.55, 0.85) infinite;
+  flex-shrink: 0;
+}
+.agent-shimmer-text {
+  background: linear-gradient(
+    90deg,
+    var(--text-secondary) 0%,
+    var(--text-secondary) 35%,
+    var(--text-primary) 50%,
+    var(--text-secondary) 65%,
+    var(--text-secondary) 100%
+  );
+  background-size: 240% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: agentTextShimmer 1.9s linear infinite;
+}
+#agent-live-dot.is-busy {
+  background-color: var(--accent-primary) !important;
+  box-shadow: 0 0 0 0 var(--accent-primary);
+  animation: agentLiveBeacon 1.5s ease-out infinite;
+}
+
+@keyframes agentOrbitalSpin {
+  to { transform: rotate(360deg); }
+}
+@keyframes agentTextShimmer {
+  0% { background-position: 120% 0; }
+  100% { background-position: -120% 0; }
+}
+@keyframes agentProgressSweep {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@keyframes agentRadarPing {
+  0% { transform: scale(0.65); opacity: 0.9; }
+  80%, 100% { transform: scale(1.75); opacity: 0; }
+}
+@keyframes agentRailBreathe {
+  0%, 100% { border-left-color: var(--accent-primary); }
+  50% { border-left-color: var(--accent-primary-tint); }
+}
+@keyframes agentStepEnter {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes agentLiveBeacon {
+  0% { box-shadow: 0 0 0 0 var(--accent-primary-border); }
+  75% { box-shadow: 0 0 0 5px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
 
 @keyframes blockAgentFlash {
   0% {

@@ -617,8 +617,9 @@ def test_agent_v2_skills_and_library_curation_tools(tmp_path, monkeypatch):
 
     skills = sk_mod.list_skills()
     names = {s["name"] for s in skills}
-    expected_8 = {
+    expected_9 = {
         "nai-v5-prompt-craft",
+        "character-fanart-research",
         "colloquial-to-danbooru",
         "creative-interview",
         "artist-style-blending",
@@ -627,7 +628,9 @@ def test_agent_v2_skills_and_library_curation_tools(tmp_path, monkeypatch):
         "cinematography-and-lighting",
         "library-curator",
     }
-    assert expected_8.issubset(names)
+    assert expected_9.issubset(names)
+    fanart_sk = sk_mod.get_skill("character-fanart-research")
+    assert fanart_sk and "lookup_danbooru_character" in fanart_sk["content"]
 
     v5_sk = sk_mod.get_skill("nai-v5-prompt-craft")
     assert v5_sk and "-1.2::" in v5_sk["content"]
