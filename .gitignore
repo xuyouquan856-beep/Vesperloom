@@ -29,6 +29,7 @@ data/desktop_window.json
 data/electron_data/
 data/electron_window.json
 data/splash/
+data/splash_favorites.json
 desktop-electron/node_modules/
 dist-desktop/
 node_modules/

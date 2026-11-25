@@ -681,12 +681,15 @@ async def api_fav_gallery(item_id: int) -> Dict[str, Any]:
     item = toggle_gallery_favorite(item_id)
     if not item:
         raise HTTPException(status_code=404, detail="未找到该图库记录")
+    _sync_splash_favorites_cache()
     return {"ok": True, "item": item}
 
 
 @app.delete("/api/gallery/{item_id}")
 async def api_del_gallery(item_id: int, delete_file: bool = True) -> Dict[str, Any]:
     ok = delete_gallery_item(item_id, delete_file=delete_file)
+    if ok:
+        _sync_splash_favorites_cache()
     return {"ok": ok, "total": count_gallery(), "storage": _get_storage_stats()}
 
 
@@ -713,6 +716,8 @@ async def api_batch_del_gallery(body: Optional[Dict[str, Any]] = None) -> Dict[s
     unfav_only = bool(b.get("unfav_only", True))
     delete_file = bool(b.get("delete_file", True))
     removed = batch_delete_gallery(unfav_only=unfav_only, delete_file=delete_file, ids=ids)
+    if removed:
+        _sync_splash_favorites_cache()
     return {"ok": True, "removed": removed, "total": count_gallery(), "storage": _get_storage_stats()}
 
 
@@ -721,6 +726,7 @@ async def api_batch_fav_gallery(body: Dict[str, Any]) -> Dict[str, Any]:
     ids = body.get("ids") if isinstance(body.get("ids"), list) else []
     favorite = bool(body.get("favorite", True))
     updated = batch_favorite_gallery(ids, favorite=favorite)
+    _sync_splash_favorites_cache()
     return {"ok": True, "updated": updated}
 
 
@@ -984,6 +990,20 @@ async def api_list_external_agent_tasks(limit: int = Query(20, ge=1, le=100)) ->
 # ================= Desktop Splash Artwork Management (Vesperloom) =================
 SPLASH_DIR = DATA_DIR / "splash"
 SPLASH_DIR.mkdir(parents=True, exist_ok=True)
+SPLASH_FAVORITES_CACHE = DATA_DIR / "splash_favorites.json"
+
+
+def _sync_splash_favorites_cache() -> List[str]:
+    try:
+        favs = [
+            str(g["rel_path"])
+            for g in list_gallery(favorite_only=True, limit=120, offset=0)
+            if g.get("rel_path") and (OUTPUTS_DIR / g["rel_path"]).is_file()
+        ]
+        SPLASH_FAVORITES_CACHE.write_text(json.dumps(favs, ensure_ascii=False), encoding="utf-8")
+        return favs
+    except Exception:
+        return []
 
 
 def _resolve_splash_info(cfg: Dict[str, Any]) -> Dict[str, Any]:
@@ -1050,6 +1070,8 @@ async def api_update_desktop_splash_config(body: Dict[str, Any]) -> Dict[str, An
     if "enabled" in body:
         cfg["splash_enabled"] = bool(body["enabled"])
     saved = save_config(cfg)
+    if saved.get("splash_mode") == "favorites":
+        _sync_splash_favorites_cache()
     return {"ok": True, **_resolve_splash_info(saved)}
 
 

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, WebContentsView, Tray, Menu, ipcMain, shell, nativeImage, dialog } = require("electron");
+const { app, BrowserWindow, WebContentsView, Tray, Menu, ipcMain, shell, nativeImage, dialog, screen } = require("electron");
 const { spawn, execFileSync } = require("child_process");
 const fs = require("fs");
 const http = require("http");
@@ -33,6 +33,7 @@ const ELECTRON_DATA_DIR = path.join(DATA_DIR, "electron_data");
 const WINDOW_STATE_PATH = path.join(DATA_DIR, "electron_window.json");
 const CONFIG_PATH = path.join(DATA_DIR, "config.json");
 const SPLASH_DIR = path.join(DATA_DIR, "splash");
+const SPLASH_FAVORITES_CACHE = path.join(DATA_DIR, "splash_favorites.json");
 const ICON_ICO_PATH = path.join(__dirname, "assets", "vesperloom.ico");
 const ICON_PNG_PATH = path.join(__dirname, "assets", "vesperloom_icon.png");
 const DEFAULT_SPLASH_PATH = path.join(__dirname, "assets", "default_splash.jpg");
@@ -86,16 +87,33 @@ function logDesktop(msg) {
   } catch (_) {}
 }
 
+function isRectVisibleOnAnyDisplay(x, y, width, height) {
+  try {
+    const displays = screen.getAllDisplays();
+    for (const d of displays) {
+      const wa = d.workArea;
+      const overlapX = Math.max(0, Math.min(x + width, wa.x + wa.width) - Math.max(x, wa.x));
+      const overlapY = Math.max(0, Math.min(y + height, wa.y + wa.height) - Math.max(y, wa.y));
+      if (overlapX >= 120 && overlapY >= 80) return true;
+    }
+  } catch (_) {}
+  return false;
+}
+
 function loadWindowState() {
   const def = { width: 1480, height: 920, x: undefined, y: undefined, isMaximized: false };
   try {
     if (fs.existsSync(WINDOW_STATE_PATH)) {
       const raw = JSON.parse(fs.readFileSync(WINDOW_STATE_PATH, "utf-8"));
+      const width = Math.max(1080, Math.min(3840, Number(raw.width) || 1480));
+      const height = Math.max(700, Math.min(2160, Number(raw.height) || 920));
+      const hasCoords = typeof raw.x === "number" && typeof raw.y === "number" && Number.isFinite(raw.x) && Number.isFinite(raw.y);
+      const visible = hasCoords && isRectVisibleOnAnyDisplay(raw.x, raw.y, width, height);
       return {
-        width: Math.max(1080, Math.min(3840, Number(raw.width) || 1480)),
-        height: Math.max(700, Math.min(2160, Number(raw.height) || 920)),
-        x: typeof raw.x === "number" && raw.x >= -100 && raw.x <= 3600 ? raw.x : undefined,
-        y: typeof raw.y === "number" && raw.y >= -50 && raw.y <= 2000 ? raw.y : undefined,
+        width,
+        height,
+        x: visible ? raw.x : undefined,
+        y: visible ? raw.y : undefined,
         isMaximized: Boolean(raw.isMaximized),
       };
     }
@@ -103,23 +121,38 @@ function loadWindowState() {
   return def;
 }
 
-function saveWindowState(win) {
+let saveWindowStateTimer = null;
+function saveWindowState(win, immediate = false) {
   if (!win || win.isDestroyed()) return;
-  try {
-    const isMax = win.isMaximized();
-    const bounds = isMax ? win.getNormalBounds() : win.getBounds();
-    fs.writeFileSync(
-      WINDOW_STATE_PATH,
-      JSON.stringify({
-        width: bounds.width,
-        height: bounds.height,
-        x: bounds.x,
-        y: bounds.y,
-        isMaximized: isMax,
-      }, null, 2),
-      "utf-8"
-    );
-  } catch (_) {}
+  const doWrite = () => {
+    saveWindowStateTimer = null;
+    if (!win || win.isDestroyed()) return;
+    try {
+      const isMax = win.isMaximized();
+      const bounds = isMax ? win.getNormalBounds() : win.getBounds();
+      fs.writeFileSync(
+        WINDOW_STATE_PATH,
+        JSON.stringify({
+          width: bounds.width,
+          height: bounds.height,
+          x: bounds.x,
+          y: bounds.y,
+          isMaximized: isMax,
+        }, null, 2),
+        "utf-8"
+      );
+    } catch (_) {}
+  };
+  if (immediate) {
+    if (saveWindowStateTimer) {
+      clearTimeout(saveWindowStateTimer);
+      saveWindowStateTimer = null;
+    }
+    doWrite();
+    return;
+  }
+  if (saveWindowStateTimer) clearTimeout(saveWindowStateTimer);
+  saveWindowStateTimer = setTimeout(doWrite, 250);
 }
 
 function isPortListening(port) {
@@ -172,9 +205,15 @@ function findVerifiedPython() {
 
 async function ensureBackendRunning() {
   if (await isPortListening(PORT)) {
-    logDesktop(`Backend already listening on 127.0.0.1:${PORT}; attaching.`);
-    ownedBackend = false;
-    return true;
+    const isVesperloom = await httpGetOk(`${BASE_URL}/api/mcp/info`);
+    if (isVesperloom) {
+      logDesktop(`Vesperloom backend already listening on 127.0.0.1:${PORT}; attaching.`);
+      ownedBackend = false;
+      return true;
+    }
+    throw new Error(
+      `本地端口 ${PORT} 已被其他程序占用，无法启动 Vesperloom 后端服务。请关闭占用该端口的程序，或在 data/config.json 中修改 port 后重试。`
+    );
   }
 
   const pyExe = findVerifiedPython();
@@ -251,17 +290,20 @@ function resolveSplashArtFileUrl() {
   }
   if (mode === "favorites") {
     try {
-      const dayDirs = fs.readdirSync(OUTPUTS_DIR, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name).sort().reverse().slice(0, 6);
-      const candidates = [];
-      for (const dd of dayDirs) {
-        const fullDir = path.join(OUTPUTS_DIR, dd);
-        for (const fn of fs.readdirSync(fullDir)) {
-          if (/\.(png|jpg|jpeg|webp)$/i.test(fn)) candidates.push(path.join(fullDir, fn));
+      if (fs.existsSync(SPLASH_FAVORITES_CACHE)) {
+        const list = JSON.parse(fs.readFileSync(SPLASH_FAVORITES_CACHE, "utf-8"));
+        if (Array.isArray(list) && list.length) {
+          const valid = list
+            .map((rel) => path.join(OUTPUTS_DIR, String(rel || "").replace(/^[/\\]+/, "")))
+            .filter((p) => {
+              const resolved = path.resolve(p);
+              return resolved.startsWith(path.resolve(OUTPUTS_DIR)) && fs.existsSync(resolved);
+            });
+          if (valid.length) {
+            const pick = valid[Math.floor(Math.random() * valid.length)];
+            return pathToFileURL(pick).href;
+          }
         }
-      }
-      if (candidates.length) {
-        const pick = candidates[Math.floor(Math.random() * candidates.length)];
-        return pathToFileURL(pick).href;
       }
     } catch (_) {}
   }
@@ -462,7 +504,7 @@ function createUnifiedMainWindow() {
     saveWindowState(mainWindow);
   });
   mainWindow.on("close", (e) => {
-    saveWindowState(mainWindow);
+    saveWindowState(mainWindow, true);
     if (!isQuitting) {
       e.preventDefault();
       mainWindow.hide();
@@ -489,6 +531,7 @@ function createTray() {
   const menu = Menu.buildFromTemplate([
     { label: "打开 Vesperloom", click: showMainWindow },
     { label: "打开作品目录 (outputs)", click: () => shell.openPath(OUTPUTS_DIR) },
+    { label: "打开日志目录 (logs)", click: () => shell.openPath(LOGS_DIR) },
     { label: "在浏览器中打开", click: () => shell.openExternal(BASE_URL) },
     { type: "separator" },
     {
@@ -569,8 +612,14 @@ if (!gotLock) {
     try {
       await ensureBackendRunning();
       if (appView) {
-        // Wait for REAL hydrated app:ready from bootstrapApp() (with 4s safety fallback)
-        ipcMain.once("app:ready", () => dismissSplashSmoothly());
+        // Handle initial hydrated app:ready AND subsequent reloads (Ctrl+R / backend restart)
+        ipcMain.on("app:ready", () => {
+          if (!splashDismissed) {
+            dismissSplashSmoothly();
+          } else {
+            try { appView?.webContents.send("app:reveal"); } catch (_) {}
+          }
+        });
         appView.webContents.once("did-finish-load", () => {
           setTimeout(() => dismissSplashSmoothly(), 4000);
         });
@@ -587,7 +636,7 @@ if (!gotLock) {
 
   app.on("before-quit", () => {
     isQuitting = true;
-    saveWindowState(mainWindow);
+    saveWindowState(mainWindow, true);
     stopBackendProcess();
   });
 

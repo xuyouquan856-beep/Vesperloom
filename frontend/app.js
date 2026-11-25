@@ -7926,13 +7926,17 @@ function initElectronDesktopChrome() {
   if (!window.naiDesktop || !window.naiDesktop.isElectron) return;
   document.documentElement.classList.add("is-electron-desktop");
   document.body.classList.add("electron-pre-reveal");
+  const revealBody = () => {
+    if (!document.body.classList.contains("electron-pre-reveal")) return;
+    document.body.classList.add("electron-revealing");
+    document.body.classList.remove("electron-pre-reveal");
+    setTimeout(() => document.body.classList.remove("electron-revealing"), 550);
+  };
   if (typeof window.naiDesktop.onAppReveal === "function") {
-    window.naiDesktop.onAppReveal(() => {
-      document.body.classList.add("electron-revealing");
-      document.body.classList.remove("electron-pre-reveal");
-      setTimeout(() => document.body.classList.remove("electron-revealing"), 550);
-    });
+    window.naiDesktop.onAppReveal(revealBody);
   }
+  // Safety fallback so reloads/disabled-splash can never stay stuck in pre-reveal
+  setTimeout(revealBody, 2500);
   const ctrl = document.getElementById("electron-win-controls");
   if (ctrl) {
     ctrl.classList.remove("hidden");
