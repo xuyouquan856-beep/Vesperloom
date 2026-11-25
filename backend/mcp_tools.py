@@ -215,11 +215,16 @@ MCP_EXAMPLE_ARGS: Dict[str, Dict[str, Any]] = {
 }
 
 
+_ALLOWED_LOCAL_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
+_MAX_LOCAL_IMAGE_BYTES = 30 * 1024 * 1024
+
+
 def _resolve_existing_local_file(raw_path: str) -> Path:
     cleaned = str(raw_path or "").strip().strip('"').strip("'")
     if not cleaned:
         raise ValueError("file_path 不能为空")
     candidate = Path(cleaned)
+    allowed_roots = [OUTPUTS_DIR.resolve(), ARTISTS_DIR.resolve()]
     search_order: List[Path] = []
     if candidate.is_absolute():
         search_order.append(candidate)
@@ -229,11 +234,20 @@ def _resolve_existing_local_file(raw_path: str) -> Path:
             search_order.append(BASE_DIR / rel_clean)
         search_order.append(OUTPUTS_DIR / rel_clean)
         search_order.append(ARTISTS_DIR / rel_clean)
-        search_order.append(BASE_DIR / rel_clean)
     for p in search_order:
-        if p.exists() and p.is_file():
-            return p
-    raise FileNotFoundError(f"文件不存在: {search_order[0]}")
+        try:
+            resolved = p.resolve()
+        except Exception:
+            continue
+        if not any(resolved.is_relative_to(root) for root in allowed_roots):
+            continue
+        if resolved.exists() and resolved.is_file():
+            if resolved.suffix.lower() not in _ALLOWED_LOCAL_IMAGE_EXTS:
+                raise ValueError(f"不支持的文件类型: {resolved.suffix}（仅允许 PNG/JPG/WebP）")
+            if resolved.stat().st_size > _MAX_LOCAL_IMAGE_BYTES:
+                raise ValueError("图片文件过大（上限 30MB）")
+            return resolved
+    raise FileNotFoundError(f"受限目录内未找到合法图片文件: {cleaned}")
 
 
 def _build_studio_overview(cfg: Dict[str, Any]) -> Dict[str, Any]:

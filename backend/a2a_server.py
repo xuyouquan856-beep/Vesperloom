@@ -798,6 +798,9 @@ async def run_delegated_art_task(
     }
 
 
+_ACTIVE_A2A_TASKS: Dict[str, asyncio.Task] = {}
+
+
 async def handle_a2a_jsonrpc(body: Dict[str, Any], base_url: str) -> Dict[str, Any]:
     """Handle standard A2A JSON-RPC 2.0 requests (message/send, tasks/get, tasks/cancel, tasks/list)."""
     req_id = body.get("id")
@@ -848,6 +851,9 @@ async def handle_a2a_jsonrpc(body: Dict[str, Any], base_url: str) -> Dict[str, A
             return _err(-32001, f"Task not found: {tid}")
         if row["state"] in ("completed", "failed", "canceled"):
             return _ok(_format_a2a_task(row, base_url))
+        active_t = _ACTIVE_A2A_TASKS.pop(tid, None)
+        if active_t and not active_t.done():
+            active_t.cancel()
         updated = update_a2a_task(tid, state="canceled", result_text="任务已由外部 Agent 取消")
         return _ok(_format_a2a_task(updated or row, base_url))
 
@@ -937,6 +943,13 @@ async def stream_a2a_jsonrpc_sse(body: Dict[str, Any], base_url: str) -> AsyncGe
                     },
                 }
             )
+        except asyncio.CancelledError:
+            if task_id:
+                try:
+                    update_a2a_task(task_id, state="canceled", result_text="任务已取消或连接已断开")
+                except Exception:
+                    pass
+            raise
         except Exception as exc:
             await queue.put(
                 {
@@ -946,9 +959,13 @@ async def stream_a2a_jsonrpc_sse(body: Dict[str, Any], base_url: str) -> AsyncGe
                 }
             )
         finally:
+            if task_id:
+                _ACTIVE_A2A_TASKS.pop(task_id, None)
             await queue.put(None)
 
     runner_task = asyncio.create_task(_runner())
+    if task_id:
+        _ACTIVE_A2A_TASKS[task_id] = runner_task
     try:
         while True:
             item = await queue.get()

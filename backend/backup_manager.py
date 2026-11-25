@@ -74,7 +74,7 @@ def build_backup_payload() -> Dict[str, Any]:
             "name": s["name"],
             "title": s.get("title") or s["name"],
             "description": s.get("description") or "",
-            "tags": s.get("tags") or [],
+            "triggers": s.get("triggers") or "",
             "content": s.get("content") or "",
         }
         for s in list_skills(include_content=True)
@@ -354,11 +354,14 @@ def restore_backup_bytes(
         if not sname:
             continue
         try:
+            raw_triggers = sk.get("triggers")
+            if raw_triggers is None and isinstance(sk.get("tags"), list):
+                raw_triggers = ", ".join(str(t) for t in sk.get("tags") if t)
             save_skill(
                 name=sname,
                 title=str(sk.get("title") or sname),
                 description=str(sk.get("description") or ""),
-                tags=sk.get("tags") or [],
+                triggers=str(raw_triggers or ""),
                 content=str(sk.get("content") or ""),
             )
             skills_restored += 1

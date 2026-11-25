@@ -475,12 +475,21 @@ async def generate_image(req: Dict[str, Any], cfg: Optional[Dict[str, Any]] = No
         if "transparent background" not in full_prompt.lower():
             full_prompt = f"{full_prompt}, transparent background" if full_prompt else "transparent background"
 
-    if req.get("auto_quality_tags", cfg.get("auto_quality_tags", True)):
+    auto_quality = req.get("auto_quality_tags")
+    if auto_quality is None and "quality_toggle" in req:
+        auto_quality = req.get("quality_toggle")
+    if auto_quality is None:
+        auto_quality = cfg.get("auto_quality_tags", True)
+    auto_quality = bool(auto_quality)
+
+    if auto_quality:
         qtags = spec["quality_tags"]
         if qtags:
             full_prompt = _merge_tags_dedup(full_prompt, qtags)
 
-    uc_preset_key = str(req.get("uc_preset") or "heavy")
+    _uc_int_map = {"0": "heavy", "1": "light", "2": "human", "3": "none"}
+    raw_uc_preset = req.get("uc_preset")
+    uc_preset_key = _uc_int_map.get(str(raw_uc_preset).strip(), str(raw_uc_preset or "heavy").strip().lower())
     uc_preset_obj = spec["uc_presets"].get(uc_preset_key) or spec["uc_presets"]["heavy"]
     user_uc = str(req.get("uc") or "").strip()
     preset_uc = uc_preset_obj["tags"]
@@ -519,7 +528,8 @@ async def generate_image(req: Dict[str, Any], cfg: Optional[Dict[str, Any]] = No
         has_precise_ref=bool(precise_refs),
         is_opus=True,
     )
-    if cfg.get("opus_free_guard", True) and not cost_est["is_opus_free"]:
+    enforce_opus_guard = bool(req.get("opus_free_guard")) if "opus_free_guard" in req else bool(cfg.get("opus_free_guard", True))
+    if enforce_opus_guard and not cost_est["is_opus_free"]:
         reason_str = "；".join(cost_est["reasons"])
         raise ValueError(f"【Opus 0点数免费保护已拦截】当前参数预计消耗 {cost_est['anlas_cost']} Anlas（原因：{reason_str}）。请保持步数≤28、尺寸≤1024²、单次1张，或在右上角关闭免费保护锁。")
 
@@ -534,7 +544,7 @@ async def generate_image(req: Dict[str, Any], cfg: Optional[Dict[str, Any]] = No
         "steps": steps,
         "n_samples": n_samples,
         "ucPreset": uc_preset_obj["id"],
-        "qualityToggle": bool(req.get("auto_quality_tags", True)),
+        "qualityToggle": auto_quality,
         "autoSmea": False,
         "dynamic_thresholding": bool(req.get("decrisper", False)) if spec["supports_decrisper"] else False,
         "controlnet_strength": 1.0,
@@ -571,8 +581,8 @@ async def generate_image(req: Dict[str, Any], cfg: Optional[Dict[str, Any]] = No
                 continue
             cp = expand_dynamic_prompt(raw_cp, seed=seed + idx + 1)["expanded"]
             cn = str(ch.get("uc") or "").strip()
-            cx = _num(ch.get("x"), 0.5, float)
-            cy = _num(ch.get("y"), 0.5, float)
+            cx = _num(ch.get("x") if ch.get("x") is not None else ch.get("center_x"), 0.5, float)
+            cy = _num(ch.get("y") if ch.get("y") is not None else ch.get("center_y"), 0.5, float)
             char_captions_pos.append({
                 "char_caption": cp,
                 "centers": [{"x": round(cx, 2), "y": round(cy, 2)}],

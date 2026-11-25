@@ -112,11 +112,21 @@ OC_AVATARS_DIR.mkdir(parents=True, exist_ok=True)
 init_db()
 ensure_builtin_skills()
 
-app = FastAPI(title="NAI Studio — Liquid Glass Workbench API", version="2.3.0")
+app = FastAPI(title="Vesperloom — Obsidian Atelier Workbench API", version="3.0.0")
+
+_cfg_port = int(load_config().get("port") or 8780)
+_ALLOWED_ORIGINS = sorted({
+    f"http://127.0.0.1:{_cfg_port}",
+    f"http://localhost:{_cfg_port}",
+    "http://127.0.0.1:8780",
+    "http://localhost:8780",
+    "http://127.0.0.1:8783",
+    "http://localhost:8783",
+})
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_ALLOWED_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -140,7 +150,9 @@ def _get_storage_stats() -> Dict[str, Any]:
 def _sanitize_config_for_client(cfg: Dict[str, Any]) -> Dict[str, Any]:
     out = dict(cfg)
     out["api_token_masked"] = mask_token(cfg.get("api_token", ""))
+    out["api_token_set"] = bool(str(cfg.get("api_token") or "").strip())
     out["llm_api_key_masked"] = mask_token(cfg.get("llm_api_key", ""))
+    out["llm_api_key_set"] = bool(str(cfg.get("llm_api_key") or "").strip())
     out["external_agent_token_masked"] = mask_token(cfg.get("external_agent_token", ""))
     out["external_agent_token_set"] = bool(str(cfg.get("external_agent_token") or "").strip())
     # Never echo raw secret keys to frontend state
@@ -218,9 +230,21 @@ async def api_update_config(body: Dict[str, Any]) -> Dict[str, Any]:
         "splash_mode",
         "splash_custom_image",
         "splash_enabled",
+        "onboarding_completed",
     ):
         if k in body and body[k] is not None:
             if k in ("api_token", "llm_api_key", "external_agent_token") and "..." in str(body[k]):
+                continue
+            if k == "base_url":
+                new_url = str(body[k]).strip().rstrip("/")
+                old_url = str(cfg.get("base_url") or "").strip().rstrip("/")
+                # Prevent silent redirect of stored NAI api_token to an arbitrary third-party host
+                if new_url != old_url and not new_url.startswith("https://image.novelai.net"):
+                    supplied_tok = str(body.get("api_token") or "").strip()
+                    if not supplied_tok or "..." in supplied_tok:
+                        raise HTTPException(status_code=400, detail="修改非官方 NAI Base URL 时必须同时重新填写 API Token")
+                cfg[k] = new_url
+                account_check_needed = True
                 continue
             if k in ("api_token", "output_dir"):
                 account_check_needed = True

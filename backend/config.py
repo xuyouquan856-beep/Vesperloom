@@ -52,6 +52,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "splash_mode": "default",
     "splash_custom_image": "",
     "splash_enabled": True,
+    "onboarding_completed": False,
 }
 
 

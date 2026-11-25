@@ -1278,11 +1278,30 @@
             <!-- 右列：LLM API 与一体化 Combobox 模型配置 -->
             <div class="space-y-2.5">
               <div class="space-y-1">
-                <label class="text-[12.5px] font-medium">LLM API Base URL (OpenAI 兼容)</label>
-                <input id="settings-llm-url" type="text" placeholder="https://maas.qianwenaiapi.com/compatible-mode/v1" class="w-full ui-well rounded-[6px] px-3 py-1.5 font-mono text-[12.5px]" />
+                <div class="flex items-center justify-between gap-2">
+                  <label class="text-[12px] text-[var(--text-secondary)]">常用供应商一键预设</label>
+                  <button type="button" onclick="openApiOnboardingModal(true)" class="spring-btn text-[11px] px-2 py-0.5 rounded-[5px] ui-btn text-[var(--accent)]">打开 API 快速向导</button>
+                </div>
+                <div class="flex flex-wrap gap-1" id="settings-llm-provider-presets">
+                  <button type="button" onclick="applyLlmProviderPreset('deepseek','settings')" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn text-[11px]">DeepSeek</button>
+                  <button type="button" onclick="applyLlmProviderPreset('dashscope','settings')" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn text-[11px]">阿里云百炼</button>
+                  <button type="button" onclick="applyLlmProviderPreset('siliconflow','settings')" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn text-[11px]">硅基流动</button>
+                  <button type="button" onclick="applyLlmProviderPreset('openrouter','settings')" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn text-[11px]">OpenRouter</button>
+                  <button type="button" onclick="applyLlmProviderPreset('moonshot','settings')" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn text-[11px]">Kimi</button>
+                  <button type="button" onclick="applyLlmProviderPreset('zhipu','settings')" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn text-[11px]">智谱 GLM</button>
+                  <button type="button" onclick="applyLlmProviderPreset('openai','settings')" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn text-[11px]">OpenAI</button>
+                  <button type="button" onclick="applyLlmProviderPreset('ollama','settings')" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn text-[11px]">Ollama</button>
+                </div>
               </div>
               <div class="space-y-1">
-                <label class="text-[12.5px] font-medium">LLM API Key</label>
+                <label class="text-[12.5px] font-medium">LLM API Base URL (OpenAI 兼容)</label>
+                <input id="settings-llm-url" type="text" placeholder="https://api.deepseek.com/v1" class="w-full ui-well rounded-[6px] px-3 py-1.5 font-mono text-[12.5px]" />
+              </div>
+              <div class="space-y-1">
+                <div class="flex items-center justify-between">
+                  <label class="text-[12.5px] font-medium">LLM API Key</label>
+                  <button type="button" onclick="toggleSecretInputVisibility('settings-llm-key', this)" class="text-[11px] text-[var(--text-muted)] hover:text-[var(--text-primary)]">显示</button>
+                </div>
                 <input id="settings-llm-key" type="password" placeholder="sk-..." class="w-full ui-well rounded-[6px] px-3 py-1.5 font-mono text-[12.5px]" />
               </div>
               <div class="space-y-1">
@@ -2146,7 +2165,23 @@
       <div class="flex items-center gap-2 min-w-0">
         <span id="agent-live-dot" class="w-2 h-2 rounded-full bg-[var(--status-success)] shrink-0"></span>
         <span class="font-semibold text-[13px] tracking-[-0.01em] text-[var(--text-primary)] truncate">Studio Agent</span>
-        <span id="agent-model-pill" class="px-1.5 py-0.5 rounded-[5px] bg-[var(--surface-subgroup)] border border-[var(--border-hairline)] font-mono text-[10.5px] text-[var(--text-muted)] truncate max-w-[118px]">qwen4-max</span>
+        <div class="relative min-w-0" onpointerdown="event.stopPropagation()">
+          <button id="agent-model-pill" type="button" onclick="toggleAgentQuickModelMenu(event)" class="spring-btn px-2 py-0.5 rounded-[5px] bg-[var(--surface-subgroup)] hover:bg-[var(--btn-hover-bg)] border border-[var(--border-hairline)] font-mono text-[10.5px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] inline-flex items-center gap-1 max-w-[148px] transition-colors" title="点击快速切换 Agent 模型或配置 LLM API">
+            <span id="agent-model-pill-text" class="truncate">qwen4-max</span>
+            <span class="text-[9px] opacity-70 shrink-0">▾</span>
+          </button>
+          <div id="agent-quick-model-popover" class="hidden absolute left-0 top-full mt-1.5 w-[256px] liquid-popover rounded-[10px] border border-[var(--border-hairline)] p-2 shadow-2xl z-[60] space-y-1.5">
+            <div class="flex items-center justify-between gap-2 px-1.5 pb-1 border-b border-[var(--border-hairline)]">
+              <span class="text-[11px] font-semibold text-[var(--text-primary)]">切换 Agent 模型</span>
+              <span id="agent-quick-provider-host" class="text-[10px] font-mono text-[var(--text-muted)] truncate max-w-[130px]">—</span>
+            </div>
+            <div id="agent-quick-model-list" class="custom-scroll max-h-[196px] overflow-y-auto space-y-0.5"></div>
+            <div class="flex items-center justify-between gap-1.5 pt-1.5 border-t border-[var(--border-hairline)]">
+              <button type="button" onclick="refreshAgentQuickModels(event)" class="spring-btn flex-1 px-2 py-1 rounded-[6px] ui-btn text-[11px]">↻ 拉取列表</button>
+              <button type="button" onclick="closeAgentQuickModelMenu(); openApiOnboardingModal(true);" class="spring-btn flex-1 px-2 py-1 rounded-[6px] ui-btn-accent text-[11px]">⚙ 配置 API</button>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="flex items-center gap-0.5 shrink-0" onpointerdown="event.stopPropagation()">
         <button type="button" onclick="startNewAgentSession()" class="agent-icon-btn" title="新建对话">
@@ -2340,6 +2375,98 @@
     <!-- 右下角拖拽缩放手柄 -->
     <div id="agent-resize-handle" class="agent-resize-handle" title="拖拽调整窗口大小"></div>
   </section>
+
+  <!-- ================= 首次启动 & 快速 API 配置向导弹窗 (NAI + LLM Agent) ================= -->
+  <div id="api-onboarding-modal" class="fixed inset-0 z-[85] hidden bg-black/70 backdrop-blur-md flex items-center justify-center p-4" onclick="if (event.target === this) closeApiOnboardingModal()">
+    <div class="studio-panel w-full max-w-[680px] max-h-[90vh] rounded-[14px] border border-[var(--border-hairline)] shadow-2xl flex flex-col overflow-hidden">
+      <div class="px-5 py-4 border-b border-[var(--border-hairline)] flex items-start justify-between gap-3 shrink-0">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="text-[15px] font-semibold text-[var(--text-primary)]">欢迎使用 Vesperloom · 快速配置 API</span>
+            <span class="px-2 py-0.5 rounded-[5px] ui-badge text-[10.5px] font-mono text-[var(--accent)]">本地加密存储</span>
+          </div>
+          <p class="text-[12px] text-[var(--text-muted)] mt-1">一次性配置 NovelAI 图像引擎与内置 Studio Agent 大模型，所有密钥仅存于本地 <span class="font-mono">data/config.json</span>。</p>
+        </div>
+        <button type="button" onclick="closeApiOnboardingModal()" class="agent-icon-btn shrink-0" title="关闭">
+          <svg class="ui-ic-sm ui-ic" aria-hidden="true"><use href="#ic-close"/></svg>
+        </button>
+      </div>
+
+      <div class="custom-scroll flex-1 overflow-y-auto p-5 space-y-4">
+        <!-- 卡片 1：NovelAI 官方 API Token -->
+        <div class="rounded-[10px] ui-subgroup border border-[var(--border-hairline)] p-4 space-y-2.5">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <span class="text-[13.5px] font-semibold text-[var(--text-primary)]">1. NovelAI 图像引擎（核心必配）</span>
+            </div>
+            <span id="onboard-nai-status" class="px-2 py-0.5 rounded-[5px] ui-badge text-[11px] font-mono text-[var(--text-muted)]">未配置</span>
+          </div>
+          <p class="text-[11.5px] text-[var(--text-muted)] leading-relaxed">打开 NovelAI 官网 → Account → <span class="font-mono text-[var(--text-secondary)]">Get Persistent API Token</span> 复制粘贴到下方（以 <span class="font-mono">pst-</span> 开头）。</p>
+          <div class="flex items-center gap-2">
+            <div class="relative flex-1 min-w-0 flex items-center ui-well rounded-[6px] pr-2">
+              <input id="onboard-nai-token" type="password" placeholder="pst-..." class="flex-1 min-w-0 bg-transparent px-3 py-2 font-mono text-[12.5px] focus:outline-none" />
+              <button type="button" onclick="toggleSecretInputVisibility('onboard-nai-token', this)" class="text-[11px] text-[var(--text-muted)] hover:text-[var(--text-primary)] shrink-0">显示</button>
+            </div>
+            <button type="button" id="onboard-nai-test-btn" onclick="testOnboardingNaiConnection()" class="spring-btn px-3 py-2 rounded-[6px] ui-btn text-[12px] shrink-0">测试连接</button>
+          </div>
+        </div>
+
+        <!-- 卡片 2：内置 Studio Agent LLM API -->
+        <div class="rounded-[10px] ui-subgroup border border-[var(--border-hairline)] p-4 space-y-3">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-[13.5px] font-semibold text-[var(--text-primary)]">2. 内置 Studio Agent 大模型（OpenAI 兼容）</span>
+            <span id="onboard-llm-status" class="px-2 py-0.5 rounded-[5px] ui-badge text-[11px] font-mono text-[var(--text-muted)]">未配置</span>
+          </div>
+
+          <div class="space-y-1">
+            <div class="text-[11.5px] text-[var(--text-muted)]">选择供应商自动填入接口地址与推荐模型：</div>
+            <div class="flex flex-wrap gap-1.5">
+              <button type="button" onclick="applyLlmProviderPreset('deepseek','onboard')" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[11.5px]">DeepSeek</button>
+              <button type="button" onclick="applyLlmProviderPreset('dashscope','onboard')" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[11.5px]">阿里云百炼</button>
+              <button type="button" onclick="applyLlmProviderPreset('siliconflow','onboard')" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[11.5px]">硅基流动</button>
+              <button type="button" onclick="applyLlmProviderPreset('openrouter','onboard')" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[11.5px]">OpenRouter</button>
+              <button type="button" onclick="applyLlmProviderPreset('moonshot','onboard')" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[11.5px]">Kimi</button>
+              <button type="button" onclick="applyLlmProviderPreset('zhipu','onboard')" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[11.5px]">智谱 GLM</button>
+              <button type="button" onclick="applyLlmProviderPreset('openai','onboard')" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[11.5px]">OpenAI</button>
+              <button type="button" onclick="applyLlmProviderPreset('ollama','onboard')" class="spring-btn px-2.5 py-1 rounded-[6px] ui-btn text-[11.5px]">Ollama 本地</button>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div class="space-y-1">
+              <label class="text-[12px] font-medium">API Base URL</label>
+              <input id="onboard-llm-url" type="text" placeholder="https://api.deepseek.com/v1" class="w-full ui-well rounded-[6px] px-3 py-1.5 font-mono text-[12px]" />
+            </div>
+            <div class="space-y-1">
+              <div class="flex items-center justify-between">
+                <label class="text-[12px] font-medium">LLM API Key</label>
+                <button type="button" onclick="toggleSecretInputVisibility('onboard-llm-key', this)" class="text-[11px] text-[var(--text-muted)] hover:text-[var(--text-primary)]">显示</button>
+              </div>
+              <input id="onboard-llm-key" type="password" placeholder="sk-..." class="w-full ui-well rounded-[6px] px-3 py-1.5 font-mono text-[12px]" />
+            </div>
+          </div>
+
+          <div class="space-y-1">
+            <div class="flex items-center justify-between gap-2">
+              <label class="text-[12px] font-medium">推理模型 (Model ID)</label>
+              <div class="flex items-center gap-1.5">
+                <button type="button" id="onboard-llm-fetch-btn" onclick="fetchOnboardingLlmModels()" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn text-[11px]">↻ 拉取模型列表</button>
+                <button type="button" id="onboard-llm-test-btn" onclick="testOnboardingLlmConnection()" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn text-[11px]">测试连通性</button>
+              </div>
+            </div>
+            <input id="onboard-llm-model" type="text" list="onboard-llm-model-datalist" placeholder="deepseek-chat / qwen-max / gpt-4o" class="w-full ui-well rounded-[6px] px-3 py-1.5 font-mono text-[12.5px]" />
+            <datalist id="onboard-llm-model-datalist"></datalist>
+            <div id="onboard-llm-model-chips" class="flex flex-wrap gap-1 pt-1"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="px-5 py-3.5 border-t border-[var(--border-hairline)] flex items-center justify-between gap-3 shrink-0">
+        <button type="button" onclick="skipApiOnboarding()" class="spring-btn px-3 py-1.5 rounded-[6px] ui-btn text-[12px] text-[var(--text-muted)]">稍后配置（不再自动弹出）</button>
+        <button type="button" id="onboard-save-btn" onclick="saveApiOnboarding()" class="liquid-cta spring-btn px-5 py-1.5 rounded-[6px] text-[12.5px] font-semibold">保存并开始创作</button>
+      </div>
+    </div>
+  </div>
 
   <div id="studio-tooltip" role="tooltip" aria-hidden="true"></div>
 

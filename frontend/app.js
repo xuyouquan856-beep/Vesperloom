@@ -151,7 +151,8 @@ function escapeHtml(str) {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function uiIcon(name, cls = "") {
@@ -8061,12 +8062,319 @@ async function openSplashPreviewModal() {
   document.body.appendChild(overlay);
 }
 
+// ================= LLM Provider Quick Presets & First-Run API Onboarding =================
+const LLM_PROVIDER_PRESETS = {
+  deepseek: {
+    label: "DeepSeek",
+    baseUrl: "https://api.deepseek.com/v1",
+    model: "deepseek-chat",
+    models: ["deepseek-chat", "deepseek-reasoner"],
+    context: 64000,
+    maxOut: 8192,
+  },
+  dashscope: {
+    label: "阿里云百炼",
+    baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    model: "qwen-max",
+    models: ["qwen-max", "qwen-plus", "qwq-plus", "qwen3-235b-a22b"],
+    context: 128000,
+    maxOut: 16384,
+  },
+  siliconflow: {
+    label: "硅基流动",
+    baseUrl: "https://api.siliconflow.cn/v1",
+    model: "deepseek-ai/DeepSeek-V3",
+    models: ["deepseek-ai/DeepSeek-V3", "deepseek-ai/DeepSeek-R1", "Qwen/Qwen2.5-72B-Instruct"],
+    context: 64000,
+    maxOut: 8192,
+  },
+  openrouter: {
+    label: "OpenRouter",
+    baseUrl: "https://openrouter.ai/api/v1",
+    model: "anthropic/claude-3.7-sonnet",
+    models: ["anthropic/claude-3.7-sonnet", "openai/gpt-4o", "google/gemini-2.5-pro", "deepseek/deepseek-chat-v3-0324"],
+    context: 200000,
+    maxOut: 16384,
+  },
+  moonshot: {
+    label: "Kimi (Moonshot)",
+    baseUrl: "https://api.moonshot.cn/v1",
+    model: "moonshot-v1-128k",
+    models: ["moonshot-v1-128k", "moonshot-v1-32k", "kimi-k2-0711-preview"],
+    context: 128000,
+    maxOut: 16384,
+  },
+  zhipu: {
+    label: "智谱 GLM",
+    baseUrl: "https://open.bigmodel.cn/api/paas/v4",
+    model: "glm-4-plus",
+    models: ["glm-4-plus", "glm-4-air", "glm-z1-plus"],
+    context: 128000,
+    maxOut: 16384,
+  },
+  openai: {
+    label: "OpenAI",
+    baseUrl: "https://api.openai.com/v1",
+    model: "gpt-4o",
+    models: ["gpt-4o", "gpt-4.1", "o4-mini"],
+    context: 128000,
+    maxOut: 16384,
+  },
+  ollama: {
+    label: "Ollama 本地",
+    baseUrl: "http://127.0.0.1:11434/v1",
+    model: "qwen2.5:14b",
+    models: ["qwen2.5:14b", "qwen2.5:7b", "deepseek-r1:14b"],
+    context: 32000,
+    maxOut: 8192,
+  },
+};
+
+function toggleSecretInputVisibility(inputId, btnEl) {
+  const el = document.getElementById(inputId);
+  if (!el) return;
+  const nextType = el.type === "password" ? "text" : "password";
+  el.type = nextType;
+  if (btnEl) btnEl.textContent = nextType === "text" ? "隐藏" : "显示";
+}
+
+function renderOnboardingModelChips(models) {
+  const wrap = document.getElementById("onboard-llm-model-chips");
+  const dl = document.getElementById("onboard-llm-model-datalist");
+  const list = Array.isArray(models) ? models.slice(0, 12) : [];
+  if (dl) {
+    dl.innerHTML = list.map((m) => `<option value="${escapeHtml(m)}"></option>`).join("");
+  }
+  if (!wrap) return;
+  wrap.innerHTML = list.slice(0, 6).map((m) =>
+    `<button type="button" data-onboard-model="${escapeHtml(m)}" class="spring-btn px-2 py-0.5 rounded-[5px] ui-btn font-mono text-[10.5px]">${escapeHtml(m)}</button>`
+  ).join("");
+  wrap.querySelectorAll("[data-onboard-model]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const inp = document.getElementById("onboard-llm-model");
+      if (inp) inp.value = btn.getAttribute("data-onboard-model") || "";
+    });
+  });
+}
+
+function applyLlmProviderPreset(key, target = "settings") {
+  const p = LLM_PROVIDER_PRESETS[key];
+  if (!p) return;
+  if (target === "onboard") {
+    const u = document.getElementById("onboard-llm-url");
+    const m = document.getElementById("onboard-llm-model");
+    if (u) u.value = p.baseUrl;
+    if (m) m.value = p.model;
+    renderOnboardingModelChips(p.models);
+    showToast(`已填入 ${p.label} 推荐接口与模型（请填写对应 API Key）`);
+    return;
+  }
+  const u = document.getElementById("settings-llm-url");
+  const m = document.getElementById("settings-llm-model-custom");
+  const ctx = document.getElementById("settings-llm-context");
+  const maxOut = document.getElementById("settings-llm-max-output");
+  if (u) u.value = p.baseUrl;
+  if (m) m.value = p.model;
+  if (ctx) ctx.value = p.context;
+  if (maxOut) maxOut.value = p.maxOut;
+  state.llmModels = [...p.models];
+  if (typeof renderLlmModelSelectMenu === "function") renderLlmModelSelectMenu();
+  showToast(`已套用 ${p.label} 预设，填写 API Key 后点击保存即可`);
+}
+
+function openApiOnboardingModal(manual = false) {
+  const modal = document.getElementById("api-onboarding-modal");
+  if (!modal) return;
+  const cfg = state.config || {};
+  const naiInput = document.getElementById("onboard-nai-token");
+  const llmUrl = document.getElementById("onboard-llm-url");
+  const llmKey = document.getElementById("onboard-llm-key");
+  const llmModel = document.getElementById("onboard-llm-model");
+  const naiBadge = document.getElementById("onboard-nai-status");
+  const llmBadge = document.getElementById("onboard-llm-status");
+
+  if (naiInput) naiInput.value = cfg.api_token_masked || "";
+  if (llmUrl) llmUrl.value = cfg.llm_base_url || "https://api.deepseek.com/v1";
+  if (llmKey) llmKey.value = cfg.llm_api_key_masked || "";
+  if (llmModel) llmModel.value = cfg.llm_model || "deepseek-chat";
+
+  if (naiBadge) {
+    naiBadge.textContent = cfg.api_token_set ? "已配置" : "未配置";
+    naiBadge.style.color = cfg.api_token_set ? "var(--status-success)" : "var(--status-warn, #f59e0b)";
+  }
+  if (llmBadge) {
+    llmBadge.textContent = cfg.llm_api_key_set ? "已配置" : "未配置";
+    llmBadge.style.color = cfg.llm_api_key_set ? "var(--status-success)" : "var(--status-warn, #f59e0b)";
+  }
+  renderOnboardingModelChips(state.llmModels || ["deepseek-chat", "qwen-max", "gpt-4o"]);
+  modal.dataset.manual = manual ? "1" : "0";
+  modal.classList.remove("hidden");
+}
+
+function closeApiOnboardingModal() {
+  const modal = document.getElementById("api-onboarding-modal");
+  if (modal) modal.classList.add("hidden");
+}
+
+async function testOnboardingNaiConnection() {
+  const btn = document.getElementById("onboard-nai-test-btn");
+  const badge = document.getElementById("onboard-nai-status");
+  const tok = (document.getElementById("onboard-nai-token")?.value || "").trim();
+  if (!tok) { showToast("请先输入 NovelAI Persistent API Token"); return; }
+  if (btn) { btn.disabled = true; btn.textContent = "测试中..."; }
+  try {
+    const payload = tok.includes("...") ? {} : { api_token: tok };
+    if (Object.keys(payload).length) {
+      await fetch("/api/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    }
+    const res = await fetch("/api/account");
+    const acc = await res.json();
+    state.account = acc;
+    if (typeof renderAccountBadge === "function") renderAccountBadge();
+    if (acc.connected) {
+      if (badge) { badge.textContent = `已连通 · ${acc.tier_name || "Opus"} (${acc.total_anlas ?? 0} Anlas)`; badge.style.color = "var(--status-success)"; }
+      showToast("NovelAI 连接成功！");
+    } else {
+      if (badge) { badge.textContent = "验证失败"; badge.style.color = "var(--status-danger)"; }
+      showToast("NovelAI 验证失败：" + (acc.error || "请检查 Token 是否有效"));
+    }
+  } catch (e) {
+    showToast("连接测试失败：" + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "测试连接"; }
+  }
+}
+
+async function fetchOnboardingLlmModels() {
+  const btn = document.getElementById("onboard-llm-fetch-btn");
+  const baseUrl = (document.getElementById("onboard-llm-url")?.value || "").trim();
+  const apiKey = (document.getElementById("onboard-llm-key")?.value || "").trim();
+  if (btn) { btn.disabled = true; btn.textContent = "拉取中..."; }
+  try {
+    const res = await fetch("/api/llm/models", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ llm_base_url: baseUrl, llm_api_key: apiKey }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "拉取失败");
+    const list = data.recommended?.length ? data.recommended : (data.all_models || []);
+    if (list.length) {
+      state.llmModels = list;
+      renderOnboardingModelChips(list);
+      const modelEl = document.getElementById("onboard-llm-model");
+      if (modelEl && !modelEl.value.trim()) modelEl.value = list[0];
+      showToast(`已拉取 ${list.length} 个模型，点击下方标签即可快选`);
+    } else {
+      showToast("该接口未返回模型列表，可直接手动输入 Model ID");
+    }
+  } catch (e) {
+    showToast(e.message || "拉取模型失败");
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "↻ 拉取模型列表"; }
+  }
+}
+
+async function testOnboardingLlmConnection() {
+  const btn = document.getElementById("onboard-llm-test-btn");
+  const badge = document.getElementById("onboard-llm-status");
+  const baseUrl = (document.getElementById("onboard-llm-url")?.value || "").trim();
+  const apiKey = (document.getElementById("onboard-llm-key")?.value || "").trim();
+  const model = (document.getElementById("onboard-llm-model")?.value || "").trim();
+  if (btn) { btn.disabled = true; btn.textContent = "测试中..."; }
+  try {
+    const res = await fetch("/api/llm/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ llm_base_url: baseUrl, llm_api_key: apiKey, llm_model: model }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.detail || "连接失败");
+    if (badge) { badge.textContent = `已连通 · ${data.latency_ms}ms`; badge.style.color = "var(--status-success)"; }
+    showToast(`LLM 连通成功 (${data.latency_ms}ms)`);
+  } catch (e) {
+    if (badge) { badge.textContent = "连接失败"; badge.style.color = "var(--status-danger)"; }
+    showToast("LLM 测试失败：" + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "测试连通性"; }
+  }
+}
+
+async function saveApiOnboarding() {
+  const btn = document.getElementById("onboard-save-btn");
+  const tok = (document.getElementById("onboard-nai-token")?.value || "").trim();
+  const llmUrl = (document.getElementById("onboard-llm-url")?.value || "").trim();
+  const llmKey = (document.getElementById("onboard-llm-key")?.value || "").trim();
+  const llmModel = (document.getElementById("onboard-llm-model")?.value || "").trim();
+
+  const payload = { onboarding_completed: true };
+  if (tok && !tok.includes("...")) payload.api_token = tok;
+  if (llmUrl) payload.llm_base_url = llmUrl;
+  if (llmKey && !llmKey.includes("...")) payload.llm_api_key = llmKey;
+  if (llmModel) payload.llm_model = llmModel;
+
+  if (btn) { btn.disabled = true; btn.textContent = "保存中..."; }
+  try {
+    const res = await fetch("/api/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "保存失败");
+    if (data.config) state.config = data.config;
+    if (data.account) {
+      state.account = data.account;
+      if (typeof renderAccountBadge === "function") renderAccountBadge();
+    }
+    if (typeof syncSettingsUiFromConfig === "function") syncSettingsUiFromConfig();
+    if (typeof renderAgentModelPill === "function") renderAgentModelPill();
+    closeApiOnboardingModal();
+    showToast("API 配置已保存，欢迎开始创作！");
+  } catch (e) {
+    showToast("保存失败：" + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "保存并开始创作"; }
+  }
+}
+
+async function skipApiOnboarding() {
+  closeApiOnboardingModal();
+  try {
+    const res = await fetch("/api/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ onboarding_completed: true }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.config) state.config = data.config;
+    }
+  } catch (_) {}
+  showToast("随时可在「设置」或 Agent 顶部模型栏中打开 API 配置向导");
+}
+
+function maybeShowFirstRunOnboarding() {
+  const cfg = state.config || {};
+  if (cfg.onboarding_completed) return;
+  const needsNai = !cfg.api_token_set;
+  const needsLlm = !cfg.llm_api_key_set;
+  if (!needsNai && !needsLlm) return;
+  // Wait until splash crossfade finishes so modal enters gracefully
+  setTimeout(() => openApiOnboardingModal(false), 900);
+}
+
 window.addEventListener("DOMContentLoaded", async () => {
   initElectronDesktopChrome();
   try {
     await bootstrapApp();
   } finally {
     loadDesktopSplashConfig();
+    maybeShowFirstRunOnboarding();
     if (window.naiDesktop && typeof window.naiDesktop.notifyAppReady === "function") {
       // Wait 2 animation frames so initial hydrated DOM paints cleanly before splash crossfades out
       requestAnimationFrame(() => requestAnimationFrame(() => window.naiDesktop.notifyAppReady()));

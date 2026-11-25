@@ -77,8 +77,139 @@ function initStudioAgentWindow(bootstrapData = {}) {
 
 function renderAgentModelPill() {
   const pill = document.getElementById("agent-model-pill");
-  if (pill) pill.textContent = state.config?.llm_model || "qwen4-max";
+  const txt = document.getElementById("agent-model-pill-text");
+  const hasKey = Boolean(state.config?.llm_api_key_set || state.config?.llm_api_key_masked);
+  const modelName = state.config?.llm_model || "qwen4-max";
+  if (txt) {
+    txt.textContent = hasKey ? modelName : "未配置 LLM";
+  } else if (pill) {
+    pill.textContent = hasKey ? modelName : "未配置 LLM";
+  }
+  if (pill) {
+    pill.style.borderColor = hasKey ? "" : "rgba(245, 158, 11, 0.55)";
+    pill.style.color = hasKey ? "" : "var(--status-warn, #f59e0b)";
+  }
 }
+
+function closeAgentQuickModelMenu() {
+  const pop = document.getElementById("agent-quick-model-popover");
+  if (pop) pop.classList.add("hidden");
+}
+
+function renderAgentQuickModelList() {
+  const listEl = document.getElementById("agent-quick-model-list");
+  const hostEl = document.getElementById("agent-quick-provider-host");
+  if (!listEl) return;
+  const baseUrl = String(state.config?.llm_base_url || "").trim();
+  if (hostEl) {
+    try {
+      hostEl.textContent = baseUrl ? new URL(baseUrl).host : "未配置地址";
+    } catch (_) {
+      hostEl.textContent = baseUrl || "未配置地址";
+    }
+  }
+  const current = String(state.config?.llm_model || "qwen4-max").trim();
+  const pool = [];
+  const seen = new Set();
+  const pushM = (m) => {
+    const s = String(m || "").trim();
+    if (!s || seen.has(s)) return;
+    seen.add(s);
+    pool.push(s);
+  };
+  pushM(current);
+  (state.llmModels || []).forEach(pushM);
+
+  listEl.innerHTML = pool.slice(0, 24).map((m) => {
+    const active = m === current;
+    return `<button type="button" data-quick-model="${escapeHtml(m)}" class="w-full text-left px-2 py-1.5 rounded-[6px] font-mono text-[11.5px] flex items-center justify-between gap-2 transition-colors ${active ? "bg-[var(--accent-soft,rgba(56,189,248,0.14))] text-[var(--accent)] font-semibold" : "text-[var(--text-secondary)] hover:bg-[var(--btn-hover-bg)] hover:text-[var(--text-primary)]"}">
+      <span class="truncate">${escapeHtml(m)}</span>
+      ${active ? '<span class="text-[10px] shrink-0">✓</span>' : ""}
+    </button>`;
+  }).join("");
+  listEl.querySelectorAll("[data-quick-model]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const targetModel = btn.getAttribute("data-quick-model");
+      if (targetModel) selectAgentQuickModel(targetModel);
+    });
+  });
+}
+
+function toggleAgentQuickModelMenu(event) {
+  if (event) event.stopPropagation();
+  const pop = document.getElementById("agent-quick-model-popover");
+  if (!pop) return;
+  const willOpen = pop.classList.contains("hidden");
+  if (willOpen) {
+    renderAgentQuickModelList();
+    pop.classList.remove("hidden");
+  } else {
+    pop.classList.add("hidden");
+  }
+}
+
+async function selectAgentQuickModel(modelId) {
+  const m = String(modelId || "").trim();
+  if (!m) return;
+  closeAgentQuickModelMenu();
+  state.config.llm_model = m;
+  renderAgentModelPill();
+  const customInput = document.getElementById("settings-llm-model-custom");
+  if (customInput) customInput.value = m;
+  const lbl = document.getElementById("llm-model-select-label");
+  if (lbl) lbl.textContent = m;
+  try {
+    const res = await fetch("/api/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ llm_model: m }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.config) state.config = data.config;
+      renderAgentModelPill();
+      showToast(`已切换 Agent 模型：${m}`);
+    }
+  } catch (e) {
+    showToast("切换模型失败：" + e.message);
+  }
+}
+
+async function refreshAgentQuickModels(event) {
+  if (event) event.stopPropagation();
+  const btn = event?.currentTarget;
+  if (btn) { btn.disabled = true; btn.textContent = "拉取中..."; }
+  try {
+    const res = await fetch("/api/llm/models", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "拉取失败");
+    const list = data.recommended?.length ? data.recommended : (data.all_models || []);
+    if (list.length) {
+      state.llmModels = list;
+      renderAgentQuickModelList();
+      showToast(`已获取 ${list.length} 个可用模型`);
+    } else {
+      showToast("未返回模型列表，可手动在配置中输入 Model ID");
+    }
+  } catch (e) {
+    showToast(e.message || "拉取模型失败，请先配置 LLM API");
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "↻ 拉取列表"; }
+  }
+}
+
+document.addEventListener("click", (ev) => {
+  const pop = document.getElementById("agent-quick-model-popover");
+  const pill = document.getElementById("agent-model-pill");
+  if (!pop || pop.classList.contains("hidden")) return;
+  if (!pop.contains(ev.target) && (!pill || !pill.contains(ev.target))) {
+    pop.classList.add("hidden");
+  }
+});
 
 function syncAgentDockClasses() {
   const win = document.getElementById("agent-window");

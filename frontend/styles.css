@@ -2210,3 +2210,25 @@ html.is-electron-desktop header #bg-menu {
   background: rgba(239, 68, 68, 0.9) !important;
   color: #ffffff !important;
 }
+
+/* First-Run API Onboarding Modal & Agent Quick Model Switcher */
+#api-onboarding-modal {
+  z-index: 85;
+}
+#api-onboarding-modal > .studio-panel {
+  max-width: 680px;
+  max-height: 90vh;
+}
+#agent-model-pill {
+  max-width: 148px;
+}
+#agent-quick-model-popover {
+  width: 256px;
+  z-index: 60;
+}
+#agent-quick-provider-host {
+  max-width: 130px;
+}
+#agent-quick-model-list {
+  max-height: 196px;
+}

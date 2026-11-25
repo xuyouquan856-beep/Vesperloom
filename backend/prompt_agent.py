@@ -151,12 +151,16 @@ def _rank_models(model_ids: List[str]) -> List[str]:
 
 async def fetch_llm_models(base_url: Optional[str] = None, api_key: Optional[str] = None) -> Dict[str, Any]:
     cfg = load_config()
-    url = _clean_base_url(base_url or cfg.get("llm_base_url") or "")
+    saved_url = _clean_base_url(cfg.get("llm_base_url") or "")
+    url = _clean_base_url(base_url or saved_url)
     key = (api_key or "").strip()
     if not key or "..." in key:
-        key = str(cfg.get("llm_api_key") or "").strip()
+        if not base_url or url == saved_url:
+            key = str(cfg.get("llm_api_key") or "").strip()
+        else:
+            key = ""
     if not url or not key:
-        raise ValueError("请先配置 LLM API Base URL 与 API Key")
+        raise ValueError("请先配置 LLM API Base URL 与 API Key（修改 Base URL 时需重新填写对应 API Key）")
 
     client = _get_llm_client()
     r = await client.get(
@@ -183,13 +187,17 @@ async def test_llm_connection(
     model: Optional[str] = None,
 ) -> Dict[str, Any]:
     cfg = load_config()
-    url = _clean_base_url(base_url or cfg.get("llm_base_url") or "")
+    saved_url = _clean_base_url(cfg.get("llm_base_url") or "")
+    url = _clean_base_url(base_url or saved_url)
     key = (api_key or "").strip()
     if not key or "..." in key:
-        key = str(cfg.get("llm_api_key") or "").strip()
+        if not base_url or url == saved_url:
+            key = str(cfg.get("llm_api_key") or "").strip()
+        else:
+            key = ""
     chosen_model = str(model or cfg.get("llm_model") or "qwen4-max").strip()
     if not url or not key:
-        raise ValueError("请先填写 LLM Base URL 与 API Key")
+        raise ValueError("请先填写 LLM Base URL 与 API Key（修改 Base URL 时需重新填写对应 API Key）")
 
     t0 = time.perf_counter()
     client = _get_llm_client()
