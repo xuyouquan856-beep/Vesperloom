@@ -7925,6 +7925,14 @@ function importWorkbenchRecipeJson() {
 function initElectronDesktopChrome() {
   if (!window.naiDesktop || !window.naiDesktop.isElectron) return;
   document.documentElement.classList.add("is-electron-desktop");
+  document.body.classList.add("electron-pre-reveal");
+  if (typeof window.naiDesktop.onAppReveal === "function") {
+    window.naiDesktop.onAppReveal(() => {
+      document.body.classList.add("electron-revealing");
+      document.body.classList.remove("electron-pre-reveal");
+      setTimeout(() => document.body.classList.remove("electron-revealing"), 550);
+    });
+  }
   const ctrl = document.getElementById("electron-win-controls");
   if (ctrl) {
     ctrl.classList.remove("hidden");
@@ -8049,8 +8057,15 @@ async function openSplashPreviewModal() {
   document.body.appendChild(overlay);
 }
 
-window.addEventListener("DOMContentLoaded", () => {
+window.addEventListener("DOMContentLoaded", async () => {
   initElectronDesktopChrome();
-  bootstrapApp();
-  loadDesktopSplashConfig();
+  try {
+    await bootstrapApp();
+  } finally {
+    loadDesktopSplashConfig();
+    if (window.naiDesktop && typeof window.naiDesktop.notifyAppReady === "function") {
+      // Wait 2 animation frames so initial hydrated DOM paints cleanly before splash crossfades out
+      requestAnimationFrame(() => requestAnimationFrame(() => window.naiDesktop.notifyAppReady()));
+    }
+  }
 });

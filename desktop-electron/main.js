@@ -276,15 +276,64 @@ function syncChildViewBounds() {
   if (splashView) splashView.setBounds(rect);
 }
 
-function dismissSplashSmoothly() {
-  if (!splashView) return;
-  const minDisplayMs = 1550;
-  const waitMs = Math.max(0, minDisplayMs - (Date.now() - splashShownAt));
-  setTimeout(() => {
-    if (!splashView) return;
+let windowRevealed = false;
+let splashDismissed = false;
+
+function fadeInMainWindow(ws) {
+  if (windowRevealed || !mainWindow || mainWindow.isDestroyed()) return;
+  windowRevealed = true;
+  splashShownAt = Date.now();
+  try {
+    mainWindow.setOpacity(0);
+  } catch (_) {}
+  if (ws && ws.isMaximized) mainWindow.maximize();
+  syncChildViewBounds();
+  mainWindow.show();
+  mainWindow.focus();
+  if (splashView) {
     try {
-      splashView.webContents.send("splash:status", "__FADE_OUT__");
+      splashView.webContents.send("splash:status", "__PLAY__");
     } catch (_) {}
+  }
+  // Smooth 140ms native window fade-in eliminates harsh DWM snap-in
+  let step = 0;
+  const totalSteps = 9;
+  const timer = setInterval(() => {
+    step += 1;
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      clearInterval(timer);
+      return;
+    }
+    const t = Math.min(1, step / totalSteps);
+    // Ease-out cubic
+    const eased = 1 - Math.pow(1 - t, 3);
+    try {
+      mainWindow.setOpacity(eased);
+    } catch (_) {
+      clearInterval(timer);
+      return;
+    }
+    if (step >= totalSteps) clearInterval(timer);
+  }, 16);
+}
+
+function dismissSplashSmoothly() {
+  if (splashDismissed) return;
+  splashDismissed = true;
+  if (!splashView) {
+    try { appView?.webContents.send("app:reveal"); } catch (_) {}
+    return;
+  }
+  const minDisplayMs = 1650;
+  const elapsed = splashShownAt ? (Date.now() - splashShownAt) : minDisplayMs;
+  const waitMs = Math.max(0, minDisplayMs - elapsed);
+  setTimeout(() => {
+    // Synchronized dual-layer crossfade on the exact same tick
+    try { appView?.webContents.send("app:reveal"); } catch (_) {}
+    if (splashView) {
+      try { splashView.webContents.send("splash:status", "__FADE_OUT__"); } catch (_) {}
+    }
+    // Wait 560ms (480ms dissolve + 80ms invisible buffer) before detaching splashView
     setTimeout(() => {
       if (!splashView) return;
       try {
@@ -294,7 +343,7 @@ function dismissSplashSmoothly() {
         splashView.webContents.close();
       } catch (_) {}
       splashView = null;
-    }, 430);
+    }, 560);
   }, waitMs);
 }
 
@@ -372,7 +421,6 @@ function createUnifiedMainWindow() {
 
   // 2. Top Layer: Seamless Full-Window Splash Overlay (same exact aspect ratio & bounds!)
   if (useSplash) {
-    splashShownAt = Date.now();
     splashView = new WebContentsView({
       webPreferences: {
         preload: path.join(__dirname, "preload.js"),
@@ -383,14 +431,20 @@ function createUnifiedMainWindow() {
     splashView.setBackgroundColor("#00000000");
     mainWindow.contentView.addChildView(splashView);
     const artUrl = resolveSplashArtFileUrl();
+    ipcMain.once("splash:ready", () => fadeInMainWindow(ws));
+    // Safety fallback if splash image takes too long
+    setTimeout(() => fadeInMainWindow(ws), 650);
     splashView.webContents.loadFile(path.join(__dirname, "splash.html"), { query: { art: artUrl } });
+  } else {
+    syncChildViewBounds();
+    if (ws.isMaximized) mainWindow.maximize();
+    syncChildViewBounds();
+    mainWindow.show();
+    mainWindow.focus();
+    windowRevealed = true;
   }
 
   syncChildViewBounds();
-  if (ws.isMaximized) mainWindow.maximize();
-  syncChildViewBounds();
-  mainWindow.show();
-  mainWindow.focus();
 
   mainWindow.on("resize", () => {
     syncChildViewBounds();
@@ -515,9 +569,10 @@ if (!gotLock) {
     try {
       await ensureBackendRunning();
       if (appView) {
+        // Wait for REAL hydrated app:ready from bootstrapApp() (with 4s safety fallback)
+        ipcMain.once("app:ready", () => dismissSplashSmoothly());
         appView.webContents.once("did-finish-load", () => {
-          // Give the workbench 140ms to settle initial paint underneath, then crossfade splash out smoothly
-          setTimeout(dismissSplashSmoothly, 140);
+          setTimeout(() => dismissSplashSmoothly(), 4000);
         });
         appView.webContents.loadURL(BASE_URL);
       }

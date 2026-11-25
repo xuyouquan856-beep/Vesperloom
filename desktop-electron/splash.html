@@ -30,14 +30,17 @@
     opacity: 1;
     transform: translateZ(0);
     will-change: opacity, transform;
-    transition: opacity 0.42s cubic-bezier(0.22, 1, 0.36, 1), transform 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+    transition: opacity 0.48s cubic-bezier(0.16, 1, 0.3, 1), transform 0.48s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .splash.is-waiting * {
+    animation-play-state: paused !important;
   }
   .splash.is-light {
     background: #f1f5f9;
   }
   .splash.is-fading-out {
     opacity: 0;
-    transform: scale(1.02) translateZ(0);
+    transform: scale(1.035) translateZ(0);
     pointer-events: none;
   }
 
@@ -421,22 +424,49 @@
     requestAnimationFrame(tick);
   }
 
+  // Hold at frame 0 until image is GPU-decoded & main process fades window in
+  const isElectronSplash = Boolean(window.naiDesktop && typeof window.naiDesktop.notifySplashReady === "function");
+  if (isElectronSplash) {
+    rootEl.classList.add("is-waiting");
+  }
+
+  let played = false;
+  function beginPlay() {
+    if (played) return;
+    played = true;
+    rootEl.classList.remove("is-waiting");
+    startShards();
+  }
+
+  function finishImageLoad(imgOrNull) {
+    artEl.style.backgroundImage = `url("${imgOrNull ? artSrc : "./assets/default_splash.jpg"}")`;
+    if (imgOrNull) analyzeArtwork(imgOrNull);
+    if (isElectronSplash) {
+      window.naiDesktop.notifySplashReady();
+      // Safety fallback in case splash:play signal is delayed
+      setTimeout(beginPlay, 450);
+    } else {
+      beginPlay();
+    }
+  }
+
   const loader = new Image();
   loader.crossOrigin = "anonymous";
   loader.onload = () => {
-    artEl.style.backgroundImage = `url("${artSrc}")`;
-    analyzeArtwork(loader);
-    startShards();
+    if (typeof loader.decode === "function") {
+      loader.decode().then(() => finishImageLoad(loader)).catch(() => finishImageLoad(loader));
+    } else {
+      finishImageLoad(loader);
+    }
   };
-  loader.onerror = () => {
-    artEl.style.backgroundImage = `url("./assets/default_splash.jpg")`;
-    startShards();
-  };
+  loader.onerror = () => finishImageLoad(null);
   loader.src = artSrc;
 
   if (window.naiDesktop && typeof window.naiDesktop.onSplashStatus === "function") {
     window.naiDesktop.onSplashStatus((sig) => {
-      if (sig === "__FADE_OUT__") {
+      if (sig === "__PLAY__") {
+        beginPlay();
+      } else if (sig === "__FADE_OUT__") {
         stopped = true;
         rootEl.classList.add("is-fading-out");
       }

@@ -22,4 +22,12 @@ contextBridge.exposeInMainWorld("naiDesktop", {
     ipcRenderer.on("splash:status", handler);
     return () => ipcRenderer.removeListener("splash:status", handler);
   },
+  notifySplashReady: () => ipcRenderer.send("splash:ready"),
+  notifyAppReady: () => ipcRenderer.send("app:ready"),
+  onAppReveal: (cb) => {
+    if (typeof cb !== "function") return () => {};
+    const handler = () => cb();
+    ipcRenderer.on("app:reveal", handler);
+    return () => ipcRenderer.removeListener("app:reveal", handler);
+  },
 });

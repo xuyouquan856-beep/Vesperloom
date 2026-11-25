@@ -2185,6 +2185,16 @@ html.theme-sync * {
 }
 
 /* Electron Native Frameless Desktop Titlebar Integration */
+html.is-electron-desktop body.electron-pre-reveal {
+  opacity: 0.92;
+  transform: scale(0.992);
+  transform-origin: center center;
+}
+html.is-electron-desktop body.electron-revealing {
+  opacity: 1;
+  transform: scale(1);
+  transition: opacity 0.48s cubic-bezier(0.16, 1, 0.3, 1), transform 0.48s cubic-bezier(0.16, 1, 0.3, 1);
+}
 html.is-electron-desktop header {
   -webkit-app-region: drag;
   user-select: none;
