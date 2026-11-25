@@ -46,6 +46,9 @@ artists/
 *.zip
 *.tar
 *.gz
+!desktop-electron/assets/*.png
+!desktop-electron/assets/*.jpg
+!frontend/default_splash.jpg
 
 # === Logs, Temp, Checkpoints & Caches ===
 logs/

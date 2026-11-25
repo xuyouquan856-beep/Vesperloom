@@ -3,8 +3,8 @@ import os
 from pathlib import Path
 from typing import Any, Dict
 
-# Force all temporary files and caches onto D:\NAI-Studio\tmp so C: drive is NEVER touched
-BASE_DIR = Path("D:/NAI-Studio").resolve()
+# Keep all temporary files and caches inside the project directory (zero C-drive pollution when installed on D:/E:)
+BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 OUTPUTS_DIR = BASE_DIR / "outputs"
 ARTISTS_DIR = BASE_DIR / "artists"
@@ -62,7 +62,7 @@ def load_config() -> Dict[str, Any]:
             data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
             merged = {**DEFAULT_CONFIG, **data}
             out_dir = Path(merged.get("output_dir") or str(OUTPUTS_DIR))
-            if out_dir.drive.upper() == "C:":
+            if out_dir.drive.upper() == "C:" and OUTPUTS_DIR.drive.upper() != "C:":
                 merged["output_dir"] = str(OUTPUTS_DIR)
             if not merged.get("api_token") and os.environ.get("NAI_API_TOKEN"):
                 merged["api_token"] = os.environ["NAI_API_TOKEN"].strip()
@@ -75,9 +75,9 @@ def load_config() -> Dict[str, Any]:
 
 def save_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
     merged = {**DEFAULT_CONFIG, **cfg}
-    # Ensure output_dir is never on C: drive unless explicitly forced, default to D:/NAI-Studio/outputs
+    # Ensure output_dir stays off C: drive when project itself lives on a non-C drive
     out_dir = Path(merged.get("output_dir") or str(OUTPUTS_DIR))
-    if out_dir.drive.upper() == "C:":
+    if out_dir.drive.upper() == "C:" and OUTPUTS_DIR.drive.upper() != "C:":
         out_dir = OUTPUTS_DIR
         merged["output_dir"] = str(OUTPUTS_DIR)
     out_dir.mkdir(parents=True, exist_ok=True)

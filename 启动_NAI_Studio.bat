@@ -31,7 +31,7 @@ set "PY_EXE="
 for %%C in (
   "%ROOT_DIR%\.venv\Scripts\python.exe"
   "%ROOT_DIR%\venv\Scripts\python.exe"
-  "C:\Users\21815\AppData\Local\Python\bin\python.exe"
+  "%LOCALAPPDATA%\Python\bin\python.exe"
 ) do (
   if not defined PY_EXE if exist "%%~C" (
     "%%~C" -c "import uvicorn, fastapi" >nul 2>&1

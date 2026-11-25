@@ -10,7 +10,7 @@ scriptPath = rootDir & "\desktop_app.py"
 candidates = Array( _
   rootDir & "\.venv\Scripts\pythonw.exe", _
   rootDir & "\venv\Scripts\pythonw.exe", _
-  "C:\Users\21815\AppData\Local\Python\bin\pythonw.exe" _
+  shell.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\Python\bin\pythonw.exe" _
 )
 
 pyw = ""

@@ -9,10 +9,10 @@ const { pathToFileURL } = require("url");
 function resolveStudioRoot() {
   const candidates = [
     process.env.NAI_STUDIO_ROOT,
+    path.dirname(process.execPath),
     path.resolve(__dirname, ".."),
     path.resolve(path.dirname(process.execPath), "..", ".."),
     path.resolve(path.dirname(process.execPath), ".."),
-    "D:\\NAI-Studio",
   ].filter(Boolean);
   for (const dir of candidates) {
     try {
@@ -21,7 +21,7 @@ function resolveStudioRoot() {
       }
     } catch (_) {}
   }
-  return "D:\\NAI-Studio";
+  return path.resolve(path.dirname(process.execPath));
 }
 
 const STUDIO_ROOT = resolveStudioRoot();
@@ -181,8 +181,8 @@ function findVerifiedPython() {
   const candidates = [
     path.join(STUDIO_ROOT, ".venv", "Scripts", "python.exe"),
     path.join(STUDIO_ROOT, "venv", "Scripts", "python.exe"),
-    "C:\\Users\\21815\\AppData\\Local\\Python\\bin\\python.exe",
-  ];
+    process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, "Python", "bin", "python.exe") : "",
+  ].filter(Boolean);
   try {
     const out = execFileSync("where", ["python"], { encoding: "utf-8", windowsHide: true });
     for (const ln of out.split(/\r?\n/)) {
