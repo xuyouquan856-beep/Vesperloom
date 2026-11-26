@@ -1,8 +1,6 @@
-# NAI Studio runtime dependencies
+# Vesperloom runtime dependencies
 fastapi>=0.115.0,<1.0.0
 uvicorn>=0.32.0,<1.0.0
 httpx>=0.27.0,<1.0.0
 pillow>=10.0.0
 python-multipart>=0.0.9
-pywebview>=6.0.0
-pystray>=0.19.5

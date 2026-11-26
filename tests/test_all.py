@@ -1655,37 +1655,32 @@ def test_stage3_streamable_http_mcp_and_a2a_server(tmp_path, monkeypatch):
     assert t2["metadata"]["generated_count"] == 1
 
 
-def test_desktop_app_module_and_window_state(tmp_path, monkeypatch):
-    """Verify native Desktop App module: zero-C-drive WebView2 cache, icon assets, window state & bridge API."""
-    import os
-    import desktop_app as dapp
+def test_desktop_electron_assets_and_splash_api():
+    """Verify Vesperloom Electron desktop shell files, icons, default splash artwork, and splash API."""
+    from pathlib import Path
+    from fastapi.testclient import TestClient
+    from backend.app import app
+    from backend.config import BASE_DIR
 
-    # 1. Zero C-drive cache & icon assets exist
-    assert dapp.WEBVIEW_CACHE_DIR.drive.upper() != "C:"
-    assert not os.environ.get("WEBVIEW2_USER_DATA_FOLDER", "").upper().startswith("C:")
-    assert dapp.ICON_ICO_PATH.is_file() and dapp.ICON_ICO_PATH.stat().st_size > 1000
-    assert dapp.ICON_PNG_PATH.is_file() and dapp.ICON_PNG_PATH.stat().st_size > 1000
+    elec_dir = BASE_DIR / "desktop-electron"
+    for rel in (
+        "main.js",
+        "preload.js",
+        "splash.html",
+        "package.json",
+        "assets/vesperloom.ico",
+        "assets/vesperloom_icon.png",
+        "assets/default_splash.jpg",
+    ):
+        p = elec_dir / rel
+        assert p.is_file() and p.stat().st_size > 100, f"Missing Electron asset: {p}"
 
-    # 2. Window state persistence & clamping (isolated temp file)
-    temp_ws = tmp_path / "desktop_window.json"
-    monkeypatch.setattr(dapp, "WINDOW_STATE_PATH", temp_ws)
-    d0 = dapp.load_window_state()
-    assert d0["width"] == 1460 and d0["height"] == 920
-
-    saved = dapp.save_window_state(1600, 960, 120, 80)
-    assert saved == {"width": 1600, "height": 960, "x": 120, "y": 80}
-    loaded = dapp.load_window_state()
-    assert loaded == saved
-
-    # Clamp absurd values safely
-    clamped = dapp.save_window_state(200, 100, -9999, 99999)
-    assert clamped["width"] == 1080 and clamped["height"] == 700
-    assert clamped["x"] is None and clamped["y"] is None
-
-    # 3. DesktopBridge metadata
-    bridge = dapp.DesktopBridge("http://127.0.0.1:8780")
-    info = bridge.get_desktop_info()
-    assert info["is_desktop"] is True and info["url"] == "http://127.0.0.1:8780"
+    client = TestClient(app)
+    r = client.get("/api/desktop/splash")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["mode"] in ("default", "custom", "favorites")
+    assert "image_url" in data and "enabled" in data
 
 
 
